@@ -90,7 +90,7 @@ cosec-migrate-8.0.0/bin/cosec-migrate convert ...
 
 要从 CoSec 源码构建，运行 `./gradlew :migrate:installDist`；工具在 `migration/migrate/build/install/cosec-migrate/bin/cosec-migrate`。
 
-它的命令如下。退出码：`0` 完成，`1` 数据被拒绝、写入失败或 `verify-chain` 发现断链，`2` 用法错误。`publish`、`bootstrap`、`repair-references` 与 `verify-chain` 接受 `--cluster`，用于 Redis Cluster：这时 `--to-redis` 写种子节点，以逗号分隔（`redis://node-1:6379,redis://node-2:6379`）。其他命令读 Redis 的客户端不支持 Cluster：`convert`、`partition plan` 和 `api-keys` 先询问节点是否属于 Redis Cluster，是的话在读取任何东西之前就停止，因为扫描一个节点只能看到一个分片的 key（R2C-30）。每个命令只接受为它列出的选项：别的选项，例如 `publish --dry-run`，在读写任何东西之前就是用法错误，绝不会被忽略。
+它的命令如下。退出码：`0` 完成，`1` 数据被拒绝、写入失败、`verify-chain` 发现断链或 `check-patterns` 发现需要改写的模式，`2` 用法错误。`publish`、`bootstrap`、`repair-references`、`verify-chain` 与 `check-patterns` 接受 `--cluster`，用于 Redis Cluster：这时 `--to-redis` 写种子节点，以逗号分隔（`redis://node-1:6379,redis://node-2:6379`）。其他命令读 Redis 的客户端不支持 Cluster：`convert`、`partition plan` 和 `api-keys` 先询问节点是否属于 Redis Cluster，是的话在读取任何东西之前就停止，因为扫描一个节点只能看到一个分片的 key（R2C-30）。每个命令只接受为它列出的选项：别的选项，例如 `publish --dry-run`，在读写任何东西之前就是用法错误，绝不会被忽略。
 
 | 命令 | 作用 |
 |---|---|
@@ -100,6 +100,7 @@ cosec-migrate-8.0.0/bin/cosec-migrate convert ...
 | `partition plan` | 分别用 `--partition platform` 和 `by-owner` 转换两次，为每个租户写出一份计划，由控制面提交。不向 Redis 写任何东西。 |
 | `repair-references` | 把每份文档的头所引用、而反向引用索引缺少的条目补进索引，删除没有任何头引用的条目，并补全 app 列表。 |
 | `verify-chain` | 沿每份文档的修订链检查，指出记录缺失的修订，即 Redis 故障切换丢失写入留下的痕迹，以及不跟随头的链的修订索引。不写入任何东西。 |
+| `check-patterns` | 指出存储的各文档头中下一个预览版无法编译的每个模式（`DOC-15`），给出位置和写法。不写入任何东西。 |
 
 #### 转换 {#convert}
 
@@ -271,6 +272,22 @@ cosec-migrate verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-
 最后输出 `Verified <n> document(s): <b> broken, <f> could not be read.`，有索引不一致时在句号前加 `, <i> with a revision index that does not follow the head's chain`。只要有链断开、索引不一致或读不到，它就以 `1` 退出。被[保留策略](./storage.md#revisions-history-and-rollback)回收的修订不算断链：检查止于仍保留的最早修订。它只读，所以可以在控制面运行时执行，也可以随时重复执行。
 
 断链不改变实例执行的内容，实例执行的是头。它说明 Redis 丢了写入：这份文档的历史缺了那个修订，故障切换前后发布的变更也可能不在头里。把头与发布过的内容对照，把缺的部分重新发布，做法与修订回退之后相同（[排障](./troubleshooting.md#decisions-use-an-old-revision)）。
+
+#### 升级前检查模式 {#check-the-patterns-before-an-upgrade}
+
+```bash
+cosec-migrate check-patterns --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] \
+  [--document platform|app:<id>|tenant:<id>] [--prefix tenant:acme]
+```
+
+从 8.0.0-beta.8 升级之前，用新版本的 `cosec-migrate` 对你正在运行的版本的存储运行它。它读取存储列出的每份文档的头（或 `--document` 指名的那一份，或键以 `--prefix` 开头的那些），按那个版本存下的样子读（只查每份文档的当前修订：不读历史，回滚到较早的修订会把它重新发布，届时再编译），再用新规则编译其语句、限流规则和目录权限中的每个动作与资源（[保留字符](../policies/language.md#reserved-characters)，`DOC-15`）。它输出：
+
+- `ok <doc>`：这份文档的模式都能编译；
+- `PATTERN <doc> <JSON 路径>: <原因>; write <模式>, in JSON "<模式>"`：模式含保留字符；按以前的预览版读（当作文本），再按新版本的要求转义着写出；
+- `PATTERN <doc> <JSON 路径>: <原因>; no escape writes it: ...`：路径模式匹配不到任何请求路径（含 `\`、`;`、控制字符、点段，或某段超过 256 个字符），以前它也什么都拒绝不了，请按管道看到的样子写出路径；
+- `FAILED <doc>: <原因>`：头无法读取；其余文档照常检查。
+
+最后输出 `Checked <n> document(s): <p> pattern(s) to rewrite in <d> document(s), <f> could not be read.`。有需要改写的模式或有读不到的文档时，它以 `1` 退出，部署脚本可以据此停下。经控制面改写每份文档，并且只在每个实例都运行新版本之后再发布转义写法（[从 8.0.0-beta.8 升级](./upgrading-previews.md#from-8-0-0-beta-8)）。它只读，所以可以在控制面运行时运行。
 
 #### 以 Kubernetes Job 运行 {#run-as-a-kubernetes-job}
 

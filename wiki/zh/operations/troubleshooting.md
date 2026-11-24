@@ -277,6 +277,10 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
 - **无法解码的常驻记录**会让控制面主机以 `WARN` 记录 `The resident documents of instance [<instance>] do not read:
   propagation counts it unknown (<why>).`，至多每 5 秒一次。`<why>` 中是更晚的格式时，说明该实例的版本比控制面主机新
   （升级控制面）；其他情况是损坏的值：重启或停止那个实例，它的下一次写入会替换掉它。
+## 更新的版本写的记录 {#a-record-a-later-version-wrote}
+
+滚动升级期间，某个实例以 `WARN`（每分钟最多一次）记录 `The session store could not <operation>: a later CoSec wrote the session record (members [<path>] in its crit) ...`，并且 `cosec.stored.refused{reason="later"}` 上升。一个更新的实例写下了带有这个旧实例不认识、又不能忽略的成员的记录（`SNP-27`）：旧实例拒绝这一条记录，读它的刷新、登出或切换答 `503`，会话保留，绝不改写它。存储没有问题。升级这个实例；升级后的实例能读这条记录。如果上升的是 `cosec.stored.refused{reason="malformed"}`，说明有记录不成其为该类记录：检查存储，以及 CoSec 之外向它写入的东西（[存储](./storage.md#record-formats)）。
+
 ## 网关之后的服务拒绝请求 {#a-service-behind-the-gateway-refuses-requests}
 
 [`cosec.pipeline.mode=gateway`](./configuration.md#pipeline) 的服务从网关转发的 `CoSec-Identity` 头读取调用方。没有该头的请求按匿名
@@ -284,9 +288,11 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
 
 | 状态 | 原因 | 修复 |
 |---|---|---|
-| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有未知或缺失的成员、指名了带落单 UTF-16 代理项的 id（`IDN-10`）、空白的 `sub`、`tenant` 或 `rid`（`IDN-38`）或不能作为租户 id 的租户（例如含 `/`，`SCP-13`）、大于 [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
+| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有缺失的成员或不合格式的 `crit`、指名了带落单 UTF-16 代理项的 id（`IDN-10`）、空白的 `sub`、`tenant` 或 `rid`（`IDN-38`）或不能作为租户 id 的租户（例如含 `/`，`SCP-13`）、大于 [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
 | `401` `token-invalid` | 本服务不读取的版本、没有 `auth.exp`，或签发时间晚于当前时间加 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)。 | 让服务与网关一起升级；同步时钟。 |
+| `503` `unavailable` | 请求头的 `crit` 点了名、而本服务不认识的成员（`IDN-41`）：更新版本的 CoSec 网关或服务写的，本服务比它预期的旧。日志写出该成员；`cosec.identity.refused{problem=unavailable}` 计数，与存储故障分开。 | 升级本服务。 |
 | `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。在没有网关的测试中，头只生成一次并被重复使用：每个请求生成一个（[`IdentityHeader`](../integration/web.md#services-behind-the-gateway)）。 |
+| `431`，或不带 CoSec 问题体的 `400` | Web 服务器在 CoSec 读取之前就拒绝了请求：请求头合计超过 `server.max-http-request-header-size`。在读取身份的宿主上，没有设置时 starter 会推出这个上限（默认时 16 KB，`IDN-43`）；设置得比它小时，启动时以 `WARN` 写出：`server.max-http-request-header-size is <n> bytes, below cosec.pipeline.identity.max-size (<r> bytes) and 8192 bytes for the request's other headers (<d> bytes) ...`。 | 不设置它，让它推出；或者至少调到推出的值。 |
 
 在任何环境中，响应都只说明问题，从不说明原因。原因在服务的日志里，来自 logger `me.ahoo.cosec.runtime.identity.IdentityGate`：
 
@@ -377,6 +383,14 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
   或者在 `$` 处的 `The document's path pattern segments that mix *, ? or {name} with other text hold <n> tokens and literal
   characters in all, more than 2048`。把长的通配段拆成整段（单独占一段的 `*` 或 `{name}` 不计开销），让通配段中的文本保持简短，或把多条语句的模式合并成更少的几条；前导 `**` 之后的片段计两次。在数据面上，
   超出上界的已存储文档会被装入为失败，读取它的请求回答 `503`。
+
+
+## 升级后模式无法编译 {#a-pattern-does-not-compile-after-an-upgrade}
+
+- `` '<c>' is reserved for a future pattern syntax; write \<c> for the character ``：模式里有未转义的 `[ ] ( ) | ! ^ $ \` 之一（`DOC-15`），以前的预览版把它当文本读。把它转义着写，`$` 写作 `\$`，在 JSON 里反斜杠要双写（[策略语言](../policies/language.md#reserved-characters)）。消息给出了位置。从 8.0.0-beta.8 之后的预览版起，含这种字符的已存储文档会被装为失败，读它的请求答 `503`：升级前用 [`cosec-migrate check-patterns`](./upgrading.md#check-the-patterns-before-an-upgrade) 找出这样的文档（[从 8.0.0-beta.8 升级](./upgrading-previews.md#from-8-0-0-beta-8)）。
+- `` \<c> escapes nothing ``：反斜杠后面的字符不是 `[ ] ( ) | ! ^ $ \ * ? { }` 之一。
+- `` a request path holds no backslash ``、`` hold no ';' ``、`` holds no control character ``、`` holds no dot segment `` 或 `` more than the 256 a request path's segment holds ``：这个模式匹配不到管道放行的任何路径（`PIP-5`、`PIP-14`、`PIP-30`），这样写的 DENY 什么也拒绝不了。按管道看到的样子写出路径。
+- 路由图因这些消息之一而加载失败：它的路径、动作或资源模板含有这个字符，规则相同。
 
 ## 编译不结束 {#a-compilation-does-not-end}
 

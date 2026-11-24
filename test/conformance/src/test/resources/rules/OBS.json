@@ -92,7 +92,7 @@
         "spring-boot:GatewayModeMetricsTest#without cosec-micrometer or a registry the gate still counts, and nothing fails",
         "runtime:IdentityRefusalsTest#a forged header writes one bounded warning line, with nothing of the header unescaped",
         "document:IdentityCodecMessageTest#a claim name is escaped and bounded",
-        "document:IdentityCodecMessageTest#unknown members are escaped, bounded, and at most three are named",
+        "document:IdentityCodecMessageTest#members crit names and this version lacks are bounded, at most three named, and a forged entry is not quoted",
         "document:IdentityCodecMessageTest#text that is not JSON is named by where it fails, never by what it holds"
       ]
     },
@@ -151,6 +151,18 @@
         "spring-boot:SnapshotReadinessTest#listener queues are a share of the heap, and the drain a sixth of the shutdown phase",
         "spring-boot:SnapshotReadinessTest#a traced pipeline's listener queues count events at their traced size"
       ]
+    },
+    {
+      "id": "OBS-12",
+      "source": "RFC 0014 R1 on stored records and G5 (the coordinator's ruling of 2026-11-24, after the red-team review CE-9, CE-10, CE-15); RFC 0014 §5 (sentences proposed in the PR); RFC 0014 G3",
+      "statement": "Every stored record the reader's rule refuses is counted by its kind of record and its reason (cosec.stored.refused{record, reason}), both closed sets: later for a record a later version wrote (a later format, or a member its crit names that this version does not know), malformed for one that is not a record of its kind. The count is kept per process, whichever store or caller read the record, and registered with cosec-micrometer and a MeterRegistry: a non-zero rate of later during a rolling upgrade is an instance still to upgrade, and ends when every instance runs the later version.",
+      "level": "build",
+      "guards": [
+        "micrometer:StoredRefusedMetricTest#each series reads the count of its record and reason, and the series are the closed sets only",
+        "document:StoredCritTest#a member crit names that this version does not know refuses the record as a later version's, and counts it",
+        "document:StoredCritTest#a crit that is not one, or a record that is not one, is malformed, and counts as malformed"
+      ],
+      "pending": null
     }
   ]
 }

@@ -345,8 +345,22 @@ object PatternContainment {
                 text.startsWith('{') && text.indexOf('}') == text.length - 1 && text.lastIndexOf('{') == 0 ->
                     Part.Capture(text.substring(1, text.length - 1))
 
-                text.any { it == '*' || it == '?' || it == '{' } -> Part.Other(text)
+                hasSyntax(text) -> Part.Other(text)
+                // A literal keeps its escapes: a literal has one spelling (`DOC-15`), so equal text is equal literals.
                 else -> Part.Literal(text)
+            }
+
+            /** Whether [text] holds a `*`, `?` or `{` that is syntax, not escaped text. */
+            private fun hasSyntax(text: String): Boolean {
+                var index = 0
+                while (index < text.length) {
+                    when (text[index]) {
+                        '\\' -> index++
+                        '*', '?', '{' -> return true
+                    }
+                    index++
+                }
+                return false
             }
 
             private fun agrees(part: Part, element: PathElement): Boolean = when (part) {

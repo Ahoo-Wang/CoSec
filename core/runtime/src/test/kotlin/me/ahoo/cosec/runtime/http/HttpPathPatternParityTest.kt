@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.HttpPath
 import me.ahoo.cosec.engine.pattern.HttpPathPattern
 import me.ahoo.cosec.engine.pattern.InvalidPatternException
+import me.ahoo.cosec.engine.pattern.PatternEscapes
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -55,6 +56,18 @@ class HttpPathPatternParityTest {
 
         /** Half a surrogate pair in a literal (review L4 of #1200): no character, and no decoded path holds one. */
         LONE_SURROGATE("/a\uD83D*"),
+
+        /**
+         * A character reserved for a future syntax (`DOC-15`), which Spring reads as text: the engine writes it escaped
+         * (`\[`), and the oracle test of `cosec-engine` compares the escaped spelling with Spring's.
+         */
+        RESERVED_CHARACTER("/a[b]"),
+
+        /**
+         * A segment no request path's segment is (`DOC-15`): a `;`, a control character, a dot segment, or longer than
+         * any; the pipeline answers such a path 400 before a pattern reads it (PIP-5, PIP-30).
+         */
+        UNMATCHABLE_SEGMENT("/a;b"),
     }
 
     private sealed interface Outcome {
@@ -149,6 +162,7 @@ class HttpPathPatternParityTest {
         if (restNames.any { it in otherNames }) {
             return IntendedDifference.DUPLICATE_REST_VARIABLE
         }
+        reservation(pattern, segments)?.let { return it }
         val emptyMatching = segments.any { segment ->
             val captures = NAMED_CAPTURE.findAll(segment).count()
             val stars = segment.count { it == '*' }
@@ -158,6 +172,17 @@ class HttpPathPatternParityTest {
         return if (emptyMatching) IntendedDifference.EMPTY_MATCHING_SEGMENT else null
     }
 
+    /** DOC-15's refusals: a reserved character, or a segment no request path's segment is. */
+    private fun reservation(pattern: String, segments: List<String>): IntendedDifference? = when {
+        pattern.replace(ANY_CAPTURE, "").any { it in PatternEscapes.RESERVED } -> IntendedDifference.RESERVED_CHARACTER
+        segments.any(::unmatchable) -> IntendedDifference.UNMATCHABLE_SEGMENT
+        else -> null
+    }
+
+    private fun unmatchable(segment: String): Boolean =
+        ';' in segment || segment == "." || segment == ".." || segment.length > HttpPath.MAX_SEGMENT_LENGTH ||
+            segment.any { it < ' ' || it == '\u007F' }
+
     private fun isLoneSurrogate(text: String, index: Int): Boolean = when {
         text[index].isHighSurrogate() -> index + 1 >= text.length || !text[index + 1].isLowSurrogate()
         text[index].isLowSurrogate() -> index == 0 || !text[index - 1].isHighSurrogate()
@@ -165,6 +190,11 @@ class HttpPathPatternParityTest {
     }
 
     private fun check(pattern: String, path: String, options: Options): String? {
+        // A backslash escapes in the engine and is text to Spring: the oracle test of cosec-engine compares the spellings.
+        if (intendedDifference(pattern) == IntendedDifference.RESERVED_CHARACTER) {
+            val refused = cosec(pattern, path, options) == Outcome.PatternRejected
+            return if (refused || '\\' in pattern) null else "pattern [$pattern]: a reserved character compiled unescaped"
+        }
         val expected = spring(pattern, path, options)
         val actual = cosec(pattern, path, options)
         if (expected == actual) {
@@ -285,6 +315,9 @@ class HttpPathPatternParityTest {
         private const val MISMATCHES_SHOWN = 20
         private val CAPTURE_WITH_COLON = Regex("\\{[^}]*:")
         private val NAMED_CAPTURE = Regex("\\{[^*}][^}]*}")
+
+        /** A capture of either kind, whose name may hold `$` (a Java identifier part), which is no literal. */
+        private val ANY_CAPTURE = Regex("\\{[^}]*}")
 
         fun encode(value: String): String = value.toByteArray(Charsets.UTF_8)
             .joinToString("") { "%" + "%02X".format(it.toInt() and 0xFF) }

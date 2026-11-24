@@ -40,6 +40,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 import org.springframework.context.annotation.Primary
+import org.springframework.core.env.ConfigurableEnvironment
 import org.springframework.core.env.Environment
 
 private val log = KotlinLogging.logger {}
@@ -85,6 +86,17 @@ internal class CoSecGatewayModeAutoConfiguration {
             "${GatewayModeTrust.describe(environment)}: this host believes any CoSec-Identity header it receives, and " +
                 "$stated=true states that nothing but ${GatewayModeTrust.admitted(stated)} can reach it (STA-7, STA-9)."
         }
+    }
+
+    /**
+     * `IDN-43`: the web server's request-header limit, at startup: derived from `cosec.pipeline.identity.max-size`
+     * when the operator did not set it ([IdentityHeaderLimit]), at INFO; an operator's value too small for an
+     * identity header the gate accepts, with both numbers, at WARN. The operator's value stands: it is their choice.
+     */
+    @Bean
+    fun cosecIdentityHeaderLimitCheck(environment: ConfigurableEnvironment): StartupTask = StartupTask.OnCreation {
+        val (warn, line) = IdentityHeaderLimit.check(environment) ?: return@OnCreation
+        if (warn) log.warn { line } else log.info { line }
     }
 
     /** `STA-6`: no hidden-method filter in a service behind a gateway; after every singleton, for the beans of the host. */

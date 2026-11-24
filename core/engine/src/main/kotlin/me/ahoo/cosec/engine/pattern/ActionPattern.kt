@@ -22,7 +22,8 @@ import me.ahoo.cosec.model.Action
  * An action pattern (RFC 0005 §5.1): `service:verb`, `service:*` or `*`. No other wildcard exists, so containment
  * between action patterns is trivial (§5.5). HTTP actions are `http:<METHOD>` and `http:*`.
  *
- * Service and verb compare exactly, case included: `http:get` is not `http:GET`.
+ * Service and verb compare exactly, case included: `http:get` is not `http:GET`. A reserved character, or a `*` in a
+ * name, is written escaped (`DOC-15`, [PatternEscapes]): [service] and [verb] hold the text, [toString] the pattern.
  */
 @InternalCoSecApi
 class ActionPattern private constructor(
@@ -40,15 +41,17 @@ class ActionPattern private constructor(
 
     override fun toString(): String = when {
         service == null -> ANY_TEXT
-        verb == null -> "$service$SEPARATOR$ANY_TEXT"
-        else -> "$service$SEPARATOR$verb"
+        verb == null -> "${PatternEscapes.escape(service)}$SEPARATOR$ANY_TEXT"
+        else -> "${PatternEscapes.escape(service)}$SEPARATOR${PatternEscapes.escape(verb)}"
     }
 
     @InternalCoSecApi
     companion object {
         private const val SEPARATOR = ':'
         private const val ANY_TEXT = "*"
-        private const val RESERVED = ":*"
+
+        /** What a name writes escaped beyond the reserved characters: `*` is a whole name's wildcard, `?{}` other syntax. */
+        private const val NAME_SYNTAX = "*?{}"
         val ANY: ActionPattern = ActionPattern(null, null)
 
         /** Parses [pattern], or throws [InvalidPatternException]. */
@@ -60,24 +63,24 @@ class ActionPattern private constructor(
             if (separator < 0) {
                 throw InvalidPatternException(pattern, 0, "an action is service:verb, service:* or *")
             }
-            val service = pattern.substring(0, separator)
+            val service = name(pattern, pattern.substring(0, separator), 0)
             val verb = pattern.substring(separator + 1)
-            requireName(pattern, service, 0)
             if (verb == ANY_TEXT) {
                 return ActionPattern(service, null)
             }
-            requireName(pattern, verb, separator + 1)
-            return ActionPattern(service, verb)
+            return ActionPattern(service, name(pattern, verb, separator + 1))
         }
 
-        private fun requireName(pattern: String, name: String, at: Int) {
-            if (name.isEmpty()) {
+        /** [text], a service or a verb at [at], with its escapes resolved (`DOC-15`). */
+        private fun name(pattern: String, text: String, at: Int): String {
+            if (text.isEmpty()) {
                 throw InvalidPatternException(pattern, at, "service and verb must not be empty")
             }
-            for (index in name.indices) {
-                val char = name[index]
-                if (char in RESERVED || char.isWhitespace() || char.isISOControl()) {
-                    throw InvalidPatternException(pattern, at + index, "'$char' is not allowed in a service or verb")
+            return PatternEscapes.literal(pattern, text, at, NAME_SYNTAX) { char ->
+                if (char == SEPARATOR || char.isWhitespace() || char.isISOControl()) {
+                    "'${PatternEscapes.shown(char)}' is not allowed in a service or verb"
+                } else {
+                    null
                 }
             }
         }

@@ -1,0 +1,17 @@
+# Rule: OBS-12
+# Mutant: a record a later version wrote is counted as malformed, so the meter cannot tell an instance to upgrade from a broken store
+# Tests: :document:test --tests me.ahoo.cosec.document.json.StoredCritTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/json/StoredFormat.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/json/StoredFormat.kt
+index 9e1dee986..0a41a0118 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/json/StoredFormat.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/json/StoredFormat.kt
+@@ -53,7 +53,7 @@ object StoredFormat {
+             StoredCrit.check(node, members, what)
+             return format
+         } catch (refused: SnapshotFormatException) {
+-            val reason = if (refused.cause is Later) StoredRefusals.Reason.LATER else StoredRefusals.Reason.MALFORMED
++            val reason = StoredRefusals.Reason.MALFORMED
+             StoredRefusals.record(members.record, reason)
+             throw refused
+         }

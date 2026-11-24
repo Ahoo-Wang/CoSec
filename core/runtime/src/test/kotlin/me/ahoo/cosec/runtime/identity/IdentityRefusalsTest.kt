@@ -119,7 +119,8 @@ class IdentityRefusalsTest {
             """"auth":{"method":"jwt","jti":"t1","exp":${now + 3600}},"iat":$now,"rid":"r1""""
         val headers = listOf(
             "$prefix,\"claims\":{\"$forged\":{}}}",
-            "$prefix,\"$forged\":1}",
+            // A member it does not know is ignored (IDN-41); a forged entry of `crit` is refused unquoted.
+            "$prefix,\"crit\":[\"$forged\"]}",
             "{\"v\":${"a".repeat(5_000)}\nERROR forged}",
         ).map { Base64.getUrlEncoder().withoutPadding().encodeToString(it.encodeToByteArray()) }
         headers.forEach { header ->

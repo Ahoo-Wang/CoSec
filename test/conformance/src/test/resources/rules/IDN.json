@@ -409,13 +409,14 @@
     {
       "id": "IDN-31",
       "source": "Review round 2, R2C-28 (saas-open-changes-design.md §4); RFC 0009 §11.3",
-      "statement": "A session record (a token family) carries its format and is read by the reader's rule: a member a later version adds is ignored, a record written before formats is format 1, and a later format is refused, which ends that session, never reads as another one.",
+      "statement": "A session record (a token family) carries its format and is read by the reader's rule: a member a later version adds is ignored unless the record's crit names it (SNP-27), a record written before formats is format 1, and a later format, or a member crit names that this version does not know, is refused: the refresh, logout or switch that read it is answered 503, the session is kept and never rewritten, and an instance of the later version reads it; a refused record never reads as another one.",
       "level": "build",
       "guards": [
         "cocache:TokenFamilyFormatTest#a session is written with its format",
         "cocache:TokenFamilyFormatTest#a session written before formats is format 1",
         "cocache:TokenFamilyFormatTest#a member a later version adds is ignored, and a missing rotation is the first generation",
-        "cocache:TokenFamilyFormatTest#a later format, or a session that lacks what it needs, is refused as a format error"
+        "cocache:TokenFamilyFormatTest#a later format, or a session that lacks what it needs, is refused as a format error",
+        "login:LaterSessionRecordTest#a refresh of a session a later version wrote is an outage, and the record is never rewritten"
       ],
       "pending": null
     },
@@ -540,7 +541,7 @@
     {
       "id": "IDN-39",
       "source": "DR2-F-1, DR2-C-1 (the coordinator's ruling and the maintainer's word to add the member, 2026-11-23); RFC 0006 §7, RFC 0007 §10.2 (sentences proposed in the PR)",
-      "statement": "The CoSec-Identity header states the principal's whole memberships: beside `roles` (the roles of the decided space), `memberships` holds its roles in every other space (`spaces`, by space id, the default space's key empty) and the ids of the policies it attaches (`attachments`, in the order its memberships name them). CoSec's writers, the gateway's forward and HttpControlService's relay of a request's caller, always write it, empty when there is nothing more; a service identity states it empty. The decided space is never a key of `spaces`, nor `*`; a space names at least one role; a role or an attachment is a non-empty id with no unpaired surrogate, never repeated. A host that decides with policies on the identity (cosec.pipeline.caller=forwarded-identity: a control host, a service port) refuses a header without `memberships` as malformed (400 invalid-request), and builds the caller's memberships from `roles` under the decided space, `memberships.spaces` and `memberships.attachments`, so a DENY attached to the principal, or one that reads a role it holds in another space, applies there as at the gateway and in process; a service that only trusts the gateway does not require it. An identity too large for the header with them is not forwarded: the gateway fails the request (500) and the relay fails the call before it is sent, never cut short.",
+      "statement": "The CoSec-Identity header states the principal's whole memberships: beside `roles` (the roles of the decided space), `memberships` holds its roles in every other space (`spaces`, by space id, the default space's key empty) and the ids of the policies it attaches (`attachments`, in the order its memberships name them). The gateway always writes it, empty when there is nothing more, and so does HttpControlService's relay of a request's caller, unless the identity it relays did not state it (IDN-42); a service identity states it empty. The decided space is never a key of `spaces`, nor `*`; a space names at least one role; a role or an attachment is a non-empty id with no unpaired surrogate, never repeated. A host that decides with policies on the identity (cosec.pipeline.caller=forwarded-identity: a control host, a service port) refuses a header without `memberships` as malformed (400 invalid-request), and builds the caller's memberships from `roles` under the decided space, `memberships.spaces` and `memberships.attachments`, so a DENY attached to the principal, or one that reads a role it holds in another space, applies there as at the gateway and in process; a service that only trusts the gateway does not require it. An identity too large for the header with them is not forwarded: the gateway fails the request (500) and the relay fails the call before it is sent, never cut short.",
       "level": "pipeline",
       "pending": null,
       "guards": [
@@ -579,6 +580,69 @@
         "login:SwitchedLogoutTest#two sessions of one login logging out at once both end it",
         "login:SwitchedLogoutTest#a switch from the login that keeps it before the logout writes issues a session that ends at its refresh",
         "login:SwitchedLogoutTest#a root that keeps changing fails the logout before the session or the token is touched"
+      ]
+    },
+    {
+      "id": "IDN-41",
+      "source": "RFC 0014 R1 (mixed-version compatibility; the maintainer's direction of 2026-11-24, “按这个方向”, and the coordinator's decision of a 503 for an unknown must-understand member); the compatibility review of 2026-11-24 (CE-1, CE-5, §5.1)",
+      "statement": "A reader of the CoSec-Identity header ignores a member it does not know, at any level (the root, `scope`, `memberships`, `auth`, `auth.session`), unless the header's `crit` names it; nothing walks an object's members to find the unknown ones. `crit`, at the root only, lists the paths from the root of members a reader must understand, member names of lower-case letters, digits and `_` joined by `.`; a path into a map whose keys are data (a claim, a space) names no member. A member it names that this version does not know refuses the header with 503 `unavailable` (IdentityFormatException UNSUPPORTED_MEMBER), before the rest of the header is read: a later version wrote it, and this one cannot decide as it meant; never 401, which a client takes as the end of its session. The refusal is counted as `cosec.identity.refused{problem=unavailable}`, and its log line names the member (escaped and bounded) and says this service is older than its writer counted on, apart from any store outage. A `crit` that is not one is malformed, 400 `invalid-request`: not an array, more than 16 entries, an entry that is not such a path or holds an unpaired surrogate, an entry repeated, or an entry this version knows that the header does not hold; an empty list is no list. The format version `v` is unchanged; a member of the wrong type, a duplicate, an invalid or blank id and a header over the size limit are refused as before. CoSec's 8.0 writers write no `crit`, since every 8.0 member is one every 8.x reader knows (IdentityMembers). A member a hop does not know is lost when that hop rewrites the header, which is what makes it ignorable; a member `crit` names stops the chain at the first hop that does not know it.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "document:IdentityCritTest#a member this version does not know is ignored at every level, and the identity reads as without it - IDN-41",
+        "document:IdentityCritTest#an unknown member must still be JSON, and a duplicate is refused - IDN-41",
+        "document:IdentityCritTest#crit naming members this version knows and the header holds reads as without it - IDN-41",
+        "document:IdentityCritTest#crit naming a member this version does not know refuses the header as a later version's - IDN-41",
+        "document:IdentityCritTest#a crit of more than sixteen entries is malformed - IDN-41",
+        "document:IdentityCritTest#a malformed entry is refused as malformed even beside an unknown one - IDN-41",
+        "document:IdentityCritTest#CoSec's writers write no crit - IDN-41",
+        "document:IdentityCodecMessageTest#members crit names and this version lacks are bounded, at most three named, and a forged entry is not quoted",
+        "runtime:IdentityMustUnderstandTest#a member the service does not know is ignored, and the caller is the one the header states - IDN-41",
+        "runtime:IdentityMustUnderstandTest#a member crit names that the service does not know is refused with 503, counted and logged apart - IDN-41",
+        "runtime:IdentityMustUnderstandTest#a malformed crit is refused with 400, as any malformed header - IDN-41",
+        "runtime:IdentityMustUnderstandTest#an ignorable member is lost at the next hop, and the host decides as without it - IDN-41",
+        "runtime:IdentityMustUnderstandTest#a must-understand member stops the chain at the first hop that does not know it - IDN-41"
+      ]
+    },
+    {
+      "id": "IDN-42",
+      "source": "RFC 0014 R2 (mixed-version compatibility; the maintainer's direction of 2026-11-24, “按这个方向”); the compatibility review of 2026-11-24 (F2, CE-3, CE-5)",
+      "statement": "Every member of the CoSec-Identity header has a recorded meaning when absent (IdentityMembers in cosec-document, whose paths the cosec-identity format descriptor names member for member): a required member's absence is refused (400, or 401 for auth.exp); `memberships` absent is not stated, which a host that decides with policies on the identity refuses and a service that only trusts the gateway reads as the decided space's roles with no attachment; `auth.capped` absent is false, `auth.session` none, `auth.iat` unknown (which a revocation of the principal's tokens takes as revoked), and `claims` empty. A member whose being ignored would widen what a reader decides (today `memberships`, `auth.capped` and `claims`) is never added as one an older reader may ignore. A hop never states a member it did not receive: HttpControlService's relay of a request's caller writes `memberships` only when the identity it relays stated them, and leaves the member out otherwise, so a host that decides on the identity refuses that caller as it would refuse the header; the control plane's in-process facade refuses such a caller alike, as malformed (400 invalid-request), before the control plane is asked (CTL-77). Every other member the relay was forwarded arrives as it was.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "document:IdentityMembersTest#the descriptor names exactly the recorded members, and a required one is one whose absence is refused - IDN-42",
+        "document:IdentityMembersTest#a member recorded as refused when absent does not read without it - IDN-42",
+        "document:IdentityMembersTest#each optional member reads its absence as recorded - IDN-42",
+        "document:IdentityMembersTest#the members whose being ignored would widen what a reader decides are the memberships, the cap and the claims - IDN-42",
+        "runtime:IdentityRelayTest#memberships the service was not forwarded are not relayed, and the deciding host refuses the caller - IDN-42",
+        "runtime:IdentityRelayTest#memberships the service was forwarded are relayed as they were, and decide at the host - IDN-42",
+        "runtime:IdentityRelayTest#empty memberships are stated memberships, and are relayed as stated - IDN-42",
+        "runtime:IdentityRelayTest#every other member the service was forwarded is relayed as it was - IDN-42",
+        "control-http:HttpControlServiceTest#a request's caller's memberships are relayed as they were forwarded - IDN-42",
+        "control:ControlServiceTest#a caller forwarded without memberships is refused before the control plane is asked - IDN-42",
+        "spring-boot:ControlServiceParityTest#a caller forwarded without memberships is refused alike through both implementations - IDN-42"
+      ]
+    },
+    {
+      "id": "IDN-43",
+      "source": "RFC 0014 R7 (mixed-version compatibility; the coordinator's decisions of 2026-11-24 on R, W and the web server's limit); the compatibility review of 2026-11-24 (F3, CE-4)",
+      "statement": "The CoSec-Identity header has two limits. R, the largest header a reader accepts by default (`cosec.pipeline.identity.max-size`, IdentityCodec.READ_MAX_BYTES, 8 KB), is never lowered within 8.x. W, the largest header CoSec's writers write by default (`cosec.gateway.identity.max-size` and HttpControlService's relay of a request's caller, IdentityCodec.WRITE_MAX_BYTES, 6 KB), is below R by the room the members a later 8.x version adds may take: a later version may raise W, up to R and never past it, so an 8.x reader at its default reads what any 8.x writer writes at its default; a header over a writer's limit fails the request (500) or the call before it is sent, never cut short. Spring Boot's servers count every request header against `server.max-http-request-header-size` (8 KB by default on Tomcat and Reactor Netty), so on a host that reads the identity (cosec.pipeline.mode=gateway, or cosec.pipeline.caller=forwarded-identity) the starter derives that limit when the operator has not set it: R and 8 KB for the request's other headers, 16 KB at the defaults, named at startup with what it is derived from; the control API's service port, the application's server on another port (CTL-71), has the same limit. An operator's value is kept; one below R and 8 KB is named at startup at WARN with both numbers, and the host still starts. A process that holds both limits holds W to R: a host that reads the identity and relays its callers with HttpControlService does not start when its R is below the relay's W (it would relay headers larger than its own gate admits), and a gateway whose `cosec.gateway.identity.max-size` is above the R every 8.x service reads by default is named at startup at WARN with both numbers.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "document:IdentityLimitsTest#R is 8 KB and W is 6 KB, below it - IDN-43",
+        "document:IdentityLimitsTest#a header between W and R is not written by default, and is read by default - IDN-43",
+        "document:IdentityLimitsTest#a header over R is not read by default - IDN-43",
+        "runtime:IdentityRelayTest#a header the gate reads within R is relayed only within W, and fails the call beyond - IDN-43",
+        "spring-boot:IdentityHeaderLimitTest#a host that reads the identity gets R and the other headers' 8 KB, and says so - IDN-43",
+        "spring-boot:IdentityHeaderLimitTest#a host that does not read the identity keeps the server's own default - IDN-43",
+        "spring-boot:IdentityHeaderLimitTest#an operator's limit is kept, and named at startup with both numbers when it is too small - IDN-43",
+        "spring-boot:IdentityHeaderLimitTest#the derivation is registered as Spring Boot's environment post-processor - IDN-43",
+        "spring-boot:ControlServicePortSettingsTest#a host that reads the identity derives its header limit, on the service port as on its own - IDN-43",
+        "spring-boot:IdentityHeaderLimitTest#a host that reads the identity relays its callers within what it reads, or does not start - IDN-43",
+        "spring-boot:IdentityHeaderLimitTest#a gateway writer limit above what every 8x service reads by default is named with both numbers - IDN-43",
+        "spring-boot:ControlServiceChoiceTest#a host that reads the identity and relays its callers within more than it reads does not start - IDN-43"
       ]
     }
   ]

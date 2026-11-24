@@ -1195,7 +1195,7 @@ starter 在类路径上有 `cosec-control`、且 `cosec.control.enabled` 不为 
 - **门面**（`CTL-65`、`CTL-77`、`STA-11`）：应用经 `cosec-control-sdk` 的 `ControlService` 调用控制面（`ControlCaller`、`ControlRefusedException` 也在那里，包名
   `me.ahoo.cosec.control.sdk`；它不依赖 runtime 与控制面）。两种实现答得一样：进程内的 `LocalControlService`（`cosec-control`）与经控制面宿主服务端口的 `HttpControlService`
   （`cosec-control-http`）。两者把服务配置的每个调用做成同一个请求（一张路由表，`RoutedControlService`），各用一套映射声明调用方：请求的主体按网关转发身份的方式写
-  （`IdentityIssuer`），应用自己的主体写成同一个服务身份（`ServiceIdentity`，凭据名 `service`，§7.3）。转述带上调用方完整的成员关系（`IDN-39`，RFC 0006 §7.3），所以附加到调用方的 DENY、或读它在另一个空间里的角色的 DENY，经两种实现判定一致。经门面的每次调用都由管线按 `ControlCaller` 所声明的主体、按策略判定，
+  （`IdentityIssuer`），应用自己的主体写成同一个服务身份（`ServiceIdentity`，凭据名 `service`，§7.3）。转述带上调用方完整的成员关系（`IDN-39`，RFC 0006 §7.3；被转述的身份没有写成员关系时不写，进程内的门面对这样的调用方同样答 400，`IDN-42`），转述的头不超过 CoSec 写方的上限 6 KiB（`IDN-43`），所以附加到调用方的 DENY、或读它在另一个空间里的角色的 DENY，经两种实现判定一致。经门面的每次调用都由管线按 `ControlCaller` 所声明的主体、按策略判定，
   并按该主体记录，走路由自己的代码路径，没有绕过它的路；门面恰好到达服务配置提供的路由，两者共用一个定义；进程内的调用记为 `via.method: in-process`。`ControlCaller.of`
   接受任何 `SecurityContext`，不是 CoSec 的 gate 或管线所造的上下文在调用时被拒绝，在控制面被问到之前，两种实现用同样的异常与措辞（同 `PIP-29`）；HTTP 实现另外拒绝没有凭据的
   请求主体，而不是把它当匿名发出。已结束请求的调用方不被陈述：`IdentityIssuer` 只为进行中的请求签发身份，`HttpControlService` 因此在发送任何东西之前以 403（不带细节）拒绝这次调用，

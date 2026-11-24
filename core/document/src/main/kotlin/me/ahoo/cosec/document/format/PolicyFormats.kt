@@ -92,7 +92,7 @@ internal object PolicyFormats {
 
     val actionPattern = StringType(
         pattern = FormatPatterns.ACTION_PATTERN,
-        examples = listOf("*", "order:*", "order:read", "http:GET", "http:*"),
+        examples = listOf("*", "order:*", "order:read", "http:GET", "http:*", "http:M\\!"),
         counterExamples = FormatPatterns.ACTION_PATTERN_COUNTER_EXAMPLES,
         description = "`service:verb`, `service:*` or `*` (RFC 0005 §5.1). No `http` action no request can have " +
             "(`DOC-8`): not `http:HEAD`, which is decided as `http:GET`, and no verb with a lower-case letter.",
@@ -120,9 +120,17 @@ internal object PolicyFormats {
 
     val resourcePattern = StringType(
         pattern = FormatPatterns.RESOURCE_PATTERN,
-        maxLength = ResourcePattern.MAX_LENGTH,
-        examples = listOf("order/{orderId}", "order/**", "http:path:/orders/{id}", "http:path:/admin/**"),
+        maxLength = ResourcePattern.MAX_WRITTEN_LENGTH,
+        examples = listOf(
+            "order/{orderId}",
+            "order/**",
+            "http:path:/orders/{id}",
+            "http:path:/admin/**",
+            "http:path:/odata/\\${'$'}metadata",
+            "file/a\\(1\\).txt",
+        ),
         counterExamples = FormatPatterns.RESOURCE_PATTERN_COUNTER_EXAMPLES,
-        description = "`type/segment/...` or `http:path:<pattern>` (RFC 0005 §5.1, §5.2). A DENY cannot name a bare type.",
+        description = "`type/segment/...` or `http:path:<pattern>` (RFC 0005 §5.1, §5.2). A DENY cannot name a bare type. " +
+            "`[ ] ( ) | ! ^ $ \\` are reserved: a backslash writes one, or `*`, `?`, `{`, `}`, as text (`DOC-15`).",
     )
 }

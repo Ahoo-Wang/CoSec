@@ -198,6 +198,9 @@ sealed class ResourcePattern {
          */
         const val MAX_LENGTH: Int = HTTP_PREFIX.length + HttpPathPattern.MAX_LENGTH
 
+        /** The longest a resource pattern is written: each of its characters escaped (`DOC-15`). */
+        const val MAX_WRITTEN_LENGTH: Int = HTTP_PREFIX.length + 2 * HttpPathPattern.MAX_LENGTH
+
         /**
          * [pattern] without its trailing separator (`PIP-35`), or [pattern] itself: the root and a pattern without one
          * keep theirs. A pattern that ends with a double star or a `{*name}` has none, and matches either spelling.
@@ -225,7 +228,9 @@ sealed class ResourcePattern {
                 val path = pattern.substring(HTTP_PREFIX.length)
                 return Http(HttpPathPattern.compile(path, caseSensitive, decodeAndParseSegments))
             }
-            val length = pattern.codePointCount(0, pattern.length)
+            // The characters it stands for: an escape is one (`DOC-15`).
+            val escapes = pattern.length - PatternEscapes.unescapedLength(pattern)
+            val length = pattern.codePointCount(0, pattern.length) - escapes
             if (length > MAX_LENGTH) {
                 throw InvalidPatternException(
                     pattern,
@@ -312,10 +317,7 @@ private class TypedPatternParser(private val pattern: String) {
         if (type == ResourcePattern.HTTP_TYPE) {
             throw invalid(0, "http resources are matched with ${ResourcePattern.HTTP_PREFIX}<pattern>")
         }
-        requireLiteral(type, 0, "type")
-        if (':' in type) {
-            throw invalid(type.indexOf(':'), "':' is not allowed in a type")
-        }
+        val plainType = literal(type, 0, "type")
         var at = type.length + 1
         val segments = ArrayList<TypedSegment>()
         var rest = false
@@ -325,14 +327,11 @@ private class TypedPatternParser(private val pattern: String) {
                 part == "**" && index == parts.size - 1 -> rest = true
                 part == "*" -> segments.add(TypedSegment.Wildcard)
                 part.startsWith('{') && part.endsWith('}') -> segments.add(TypedSegment.Capture(variable(part, at)))
-                else -> {
-                    requireLiteral(part, at, "segment")
-                    segments.add(TypedSegment.Literal(part))
-                }
+                else -> segments.add(TypedSegment.Literal(literal(part, at, "segment")))
             }
             at += part.length + 1
         }
-        return ResourcePattern.Typed(type, segments.toTypedArray(), rest, variableNames.toList(), pattern)
+        return ResourcePattern.Typed(plainType, segments.toTypedArray(), rest, variableNames.toList(), pattern)
     }
 
     private fun variable(part: String, at: Int): Int {
@@ -345,13 +344,22 @@ private class TypedPatternParser(private val pattern: String) {
         return variableNames.size - 1
     }
 
-    private fun requireLiteral(text: String, at: Int, what: String) {
+    /**
+     * [text], the type or a literal segment at [at], with its escapes resolved (`DOC-15`): `*`, `?`, `{` and `}` are
+     * written escaped (a lone `*` is a wildcard and `**` is only allowed last), the reserved characters too, and a type
+     * holds no `:`.
+     */
+    private fun literal(text: String, at: Int, what: String): String {
         if (text.isEmpty()) {
             throw invalid(at, "the $what is empty")
         }
-        val illegal = text.indexOfFirst { it in "*?{}" || it.isWhitespace() || it.isISOControl() }
-        if (illegal >= 0) {
-            throw invalid(at + illegal, "'${text[illegal]}' is not allowed in a $what; ** is only allowed last")
+        return PatternEscapes.literal(pattern, text, at, "*?{}") { char ->
+            when {
+                char.isWhitespace() || char.isISOControl() ->
+                    "'${PatternEscapes.shown(char)}' is not allowed in a $what"
+                char == ':' && what == "type" -> "':' is not allowed in a type"
+                else -> null
+            }
         }
     }
 

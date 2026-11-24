@@ -29,8 +29,18 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 ## 从 8.0.0-beta.8 升级 {#from-8-0-0-beta-8}
 
 - **每个带 `cosec-cocache` 的 CoSec 进程都写自己的状态，并带上发布版本**（`SNP-25`，RFC 0014 R5）。受影响的是：控制面主机（`cosec-control` 镜像）、网关后面的 IAM 服务（`cosec.pipeline.mode=gateway` 且开着 JWT），以及设了 `cosec.authorization.shadow.enabled=false` 且 Redis 用户被裁掉了影子键的数据面实例，它们的 Redis 用户。它们现在都写 `<s>:shadow:status:<instance>`、`<s>:shadow:resident:<instance>` 和 `<s>:shadow:instances:*`（关闭影子时为 `shadows: false`：没有窗口等待它）。给这些用户以上键的写权限（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。没有这个权限的进程照常启动和服务：它以 `ERROR` 记一次缺的权限，计入 `cosec.instance.status.failed`，控制面看不见它。状态现在保留一小时（原为两分钟）；实例仍然只在拥有最近一分钟内的状态时才算存活，无法解码的状态也一样：它的键剩下的寿命说明它是何时写入的（`CTL-73`）。`GET /instances` 列出读方及其版本（[测试策略](../policies/testing.md#instances)）；`propagation` 现在也计入控制面主机和它持有的文档。
-
+- **存储记录的 `crit` 列出读取方必须理解的成员**（`SNP-27`、`SNP-28`、`SNP-29`、`OBS-12`）。受影响的：8.0.0-beta.8 存下的东西都不受影响，它不写 `crit`，这个预览版也不写。会话记录的 `crit` 列出本版本不认识的成员时（以后的版本可能这样写），这条记录被拒绝：读它的刷新、登出或切换答 `503`，会话保留，绝不改写，直到升级后的实例读它。更晚的格式也一样；`IDN-31` 以前说那会结束会话，实际上一直是 `503`，会话保留。format 号只随大版本改变：8.x 内会话最多是 format 2，其余记录都是 format 1。新增计量：`cosec.stored.refused{record, reason}`（[存储](./storage.md#record-formats)、[可观测性](./observability.md)）。
 - **破坏性：登出切换出来的会话，会连同它出自的登录一起结束**（`IDN-40`）。受影响的是切换租户后再登出的用户。以前登出只结束交给它的那个会话：切换之后，登录自己的会话在服务端仍然活着，客户端虽已不再持有它的令牌对，持有那一对的人仍可刷新它，直到刷新令牌过期。现在登出切换出来的会话，无论经由提供的路由，还是用访问令牌或令牌对调用 `TokenRevoker.revoke`，都先吊销登录的会话，再结束切换出来的会话：用户在所有设备上退出那个登录，从它切换出来的其他会话在下一次刷新或切换时结束。应答不变（`204`、`401`、`503`：`contract/` 没有变）；`503` 现在也表示登录没能被吊销，客户端像以前一样再次登出。在 8.0.0-beta.8 上已经登出过的切换会话保留它的登录：再次登出它会被当作已完成应答，不吊销任何东西。那个登录在它自己被登出、被吊销（[`revokeSubject`](../integration/authentication.md#revoking-every-token-of-a-principal)）或超过生命周期时结束（[切换租户与应用](../integration/authentication.md#switching-tenant-and-app)）。
+- **破坏性：`[ ] ( ) | ! ^ $ \` 在每一种模式中都被保留，用反斜杠把它们写成文本**（`DOC-15`）。受影响的是：路径、类型化资源或动作模式中含有这些字符的文档、路由图或变更（以前的预览版把它们当文本读），以及路径模式匹配不到任何请求路径的文档。它们现在都无法编译，错误点名该字符和它的位置。把字符转义着写：`http:path:/odata/\$metadata`、`http:path:/files/a\(1\).txt`，在 JSON 里反斜杠要双写（[保留字符](../policies/language.md#reserved-characters)）。含 `\`、`;`、控制字符、`.` 或 `..` 段，或某段超过 256 个字符的路径模式，以前就匹配不到任何请求路径，这样写的 DENY 什么也拒绝不了：按管道看到的样子写出路径。
+  - **升级之前**，用新版本的 [`cosec-migrate check-patterns`](./upgrading.md#check-the-patterns-before-an-upgrade) 找出存储的文档里含这样模式的：它给出每一处的位置和写法。升级后的实例会把它装为失败，读它的请求答 `503`。先在你运行的版本上改写并发布它们：`\(` 这样的转义只有这个版本认识，所以改写后的文档要等每个实例都读得懂之后再发布。
+  - **滚动升级。** 8.0.0-beta.8 把 `\(` 读成一个反斜杠加一个括号，没有请求路径含有它：在尚未升级的实例上，转义写法的 DENY 什么也拒绝不了。先升级每一个做决策的实例（网关、服务、控制面宿主），再发布带转义的模式。
+  - `cosec-migrate` 会转义 7.x 路径模式里的保留字符（7.x 把它们当文本读），转换后的策略含义不变。`cosec-openapi` 会转义规范路径中模板之外的每个这样的字符，包括 `*` 和 `?`：以前规范路径里的 `*` 或 `?` 会成为生成的路由的通配符，把别的路径映射到那个操作上。请重新生成路由图。
+- **破坏性：被转述的调用方只声明它被转发来的成员关系**（`IDN-42`）。`HttpControlService` 转述请求的调用方时，对自己的
+  `CoSec-Identity` 里没有 `memberships` 的调用方写了空的 `memberships`，于是按身份判定的宿主把它当成没有附加策略、
+  在其他空间也没有角色的调用方。现在它不写这个成员，宿主以 `400` `invalid-request` 拒绝这次调用；控制面的进程内门面对这样的调用方同样拒绝。
+  只有不带 `memberships` 的请求头会走到这里：beta.7 网关写的，或应用自己写的。先升级网关（beta.8 的网关都写这个成员），再依赖为它们的调用方发出的控制调用。
+- **服务读取带有它不认识的成员的身份头**（`IDN-41`）。`CoSec-Identity` 的读方以前不忽略任何未知成员：遇到就答 `400`，这正是 beta.8 的 `memberships` 需要在网关与其后的服务之间排顺序的原因。现在它忽略不认识的成员，不论在哪一层，除非请求头新增的 `crit` 点了它的名：那是更新的版本要求每个读方都理解的成员。`crit` 点了名而服务不认识的成员以 `503` `unavailable` 拒绝，计入 `cosec.identity.refused{problem=unavailable}`，日志写出该成员。8.0 的写方都不写 `crit`。应用自己写的请求头若拼错了成员名，现在会被忽略而不是被拒绝。
+- **破坏性：身份头有读方的上限和更小的写方上限**（`IDN-43`）。网关现在默认最多写 6 KB（`cosec.gateway.identity.max-size`，原为 8 KB），`HttpControlService` 的转述也是；服务仍读 8 KB（`cosec.pipeline.identity.max-size`），8.x 的任何版本都不调低它。身份在 6 到 8 KB 之间的主体，现在在网关上答 `500`，除非你把 `cosec.gateway.identity.max-size` 调高（最多 8 KB）；在服务器默认的请求头上限下，这样的头本来也到不了服务。读取身份的宿主（`gateway` 模式，或 `cosec.pipeline.caller=forwarded-identity`）在你没有设置 `server.max-http-request-header-size` 时会得到推出的值，默认时 16 KB；你设置的值保留不变，比它小时启动时以 `WARN` 写出。
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 

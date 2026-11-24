@@ -1,0 +1,16 @@
+# Rule: IDN-41
+# Mutant: a reader refuses a member it does not know at the root, so a later writer's ignorable member is a refusal of every request again
+# Tests: :document:test --tests me.ahoo.cosec.document.identity.IdentityCritTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt
+index 8f5a5da3b..521fe3f24 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt
+@@ -153,6 +153,7 @@ object IdentityCodec {
+         // Members this version does not know are ignored, unless `crit` names one (IDN-41): nothing walks the members
+         // to find them, so an identity costs no more to read than before, and less.
+         root.objectAt("$")
++        if (root.propertyNames().any { it !in IdentityMembers.BY_PATH }) throw malformed("$ has an unknown member")
+         val version = root.need("v")
+         if (!version.isIntegralNumber || version.asLong() != VERSION.toLong()) {
+             throw IdentityFormatException(

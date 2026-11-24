@@ -116,6 +116,10 @@ object DocumentFormats {
 
     private fun id(vararg examples: String) = StringType(minLength = 1, examples = examples.toList())
 
+    /** What an identity's object holds besides its fields: members a later 8.x version adds (IDN-41). */
+    private const val IDENTITY_EXTENSION = "A member a later 8.x version adds: a reader that does not know it ignores " +
+        "it, unless `crit` names it."
+
     private val epochSeconds = IntegerType(minimum = 0, description = "Epoch seconds, up to the end of year 9999.")
 
     /**
@@ -150,6 +154,7 @@ object DocumentFormats {
                             Field("app", StringType(examples = listOf("order", "")), required = true),
                             Field("space", StringType(examples = listOf("", "team-a")), required = true),
                         ),
+                        extension = IDENTITY_EXTENSION,
                     ),
                     required = true,
                     description = "The scope the gateway decided in, resolved; empty strings for no app and the default space.",
@@ -182,9 +187,11 @@ object DocumentFormats {
                                     "memberships name them.",
                             ),
                         ),
+                        extension = IDENTITY_EXTENSION,
                     ),
                     description = "What the principal is a member of besides `roles` (IDN-39), empty when nothing: " +
-                        "CoSec's writers always write it, and a host that decides on the identity refuses one without it.",
+                        "CoSec's writers write it, but for a relay of an identity forwarded without it, which leaves it " +
+                        "out (IDN-42); a host that decides on the identity refuses one without it.",
                 ),
                 Field(
                     "auth",
@@ -240,11 +247,13 @@ object DocumentFormats {
                                             description = "Which generation of the session the token is.",
                                         ),
                                     ),
+                                    extension = IDENTITY_EXTENSION,
                                 ),
                                 description = "The session of CoSec's own token (method jwt, with iat), which a tenant " +
                                     "switch behind the gateway issues from. Absent for any other credential.",
                             ),
                         ),
+                        extension = IDENTITY_EXTENSION,
                     ),
                     required = true,
                 ),
@@ -269,7 +278,24 @@ object DocumentFormats {
                     ),
                     description = "The token claims `cosec.gateway.identity.claims` names.",
                 ),
+                Field(
+                    "crit",
+                    ArrayType(
+                        StringType(
+                            pattern = "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$",
+                            // Members every header holds: a generated document names only what it has.
+                            examples = listOf("v", "rid"),
+                            counterExamples = listOf("Kind", "auth..kind", "auth.kind.", "claims.x y"),
+                        ),
+                        maxItems = 16,
+                        uniqueItems = true,
+                    ),
+                    description = "The paths of the members a reader must understand (IDN-41): a reader that does " +
+                        "not know one refuses the header (503) rather than read it without the member. Absent when " +
+                        "there is none, as from every 8.0 writer: every member of 8.0 is one every 8.x reader knows.",
+                ),
             ),
+            extension = IDENTITY_EXTENSION,
         ),
     )
 

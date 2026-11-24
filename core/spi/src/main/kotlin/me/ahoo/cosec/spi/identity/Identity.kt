@@ -230,6 +230,12 @@ class IdentityFormatException(
 
         /** No `auth.exp`: an identity whose credential never expires cannot be bounded downstream: 401. */
         UNBOUNDED,
+
+        /**
+         * A member `crit` names that this service does not understand (`IDN-41`): a later version wrote it, and this one
+         * cannot decide as it meant. 503, since it passes once this service is upgraded; never read without the member.
+         */
+        UNSUPPORTED_MEMBER,
     }
 }
 
