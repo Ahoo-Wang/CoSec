@@ -1,0 +1,16 @@
+# Rule: CTL-86
+# Mutant: a rebuild of an index from its head drops a lost revision without telling, so once a publish reused its number nothing reports it
+# Tests: :control:test --tests me.ahoo.cosec.control.store.LostHeadsTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
+@@ -88,7 +88,7 @@ internal class HistoryRepair(
+         val walk = walk(key, stored, indexed.floor, compared, sound.mapTo(HashSet()) { it.revision })
+         // What the chain replaces is no longer listed after the write, and with it the evidence of a lost head: told now.
+         walk.found.mapNotNull { found -> compared[found.revision]?.takeIf { it.digest != found.digest } }
+-            .takeIf { it.isNotEmpty() }
++            .takeIf { false }
+             ?.let { lost(key, stored, it) }
+         var applied: List<RevisionEntry> = emptyList()
+         var dropped: List<RevisionEntry> = emptyList()
