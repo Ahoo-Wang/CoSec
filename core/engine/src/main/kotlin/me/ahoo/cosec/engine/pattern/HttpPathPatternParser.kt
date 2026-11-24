@@ -183,10 +183,7 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
 
                 '}' -> throw invalid(begin + index, "} is not opened")
                 '\\' -> {
-                    val escaped = PatternEscapes.escaped(pattern, text, index, begin)
-                    if (escaped == '\\') {
-                        throw invalid(begin + index, "a request path holds no backslash (PIP-14): \\\\ matches no path")
-                    }
+                    val escaped = escapedInPath(text, index, begin)
                     literal.append(escaped)
                     plain.append(escaped)
                     index++
@@ -215,6 +212,15 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
         }
         flush()
         return Tokens(tokens, plain.toString())
+    }
+
+    /** The character the backslash at [index] of [text] escapes: any [PatternEscapes.ESCAPABLE] but `\\`, which no path holds. */
+    private fun escapedInPath(text: String, index: Int, begin: Int): Char {
+        val escaped = PatternEscapes.escaped(pattern, text, index, begin)
+        if (escaped == '\\') {
+            throw invalid(begin + index, "a request path holds no backslash (PIP-14): \\\\ matches no path")
+        }
+        return escaped
     }
 
     /**
