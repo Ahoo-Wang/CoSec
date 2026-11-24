@@ -3,14 +3,14 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.WebGateCheckTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
-index b43204938..faeeec726 100644
+index d14d23805..faeeec726 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
 @@ -105,7 +105,7 @@ internal class CoSecModuleCheckAutoConfiguration {
      class WebGate {
          @Bean
          fun cosecWebGateCheck(context: ApplicationContext): StartupTask =
--            StartupTask.AfterSingletons { WebGateCheck.require(context, context.classLoader) }
+-            StartupTask.AfterSingletons { WebGateCheck.require(context, context.classLoader, context.environment) }
 +            StartupTask.AfterSingletons { WebGateCheck.gate(context, context.classLoader) }
      }
  

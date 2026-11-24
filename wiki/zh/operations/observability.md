@@ -129,9 +129,10 @@ starter 注册的监听器：
 
 Kafka 审计监听器把同样的 JSON 写到 [`cosec.audit.kafka.topic`](./configuration.md#audit)（`cosec-audit`），key 是
 JSON 数组 `[tenantId, principalId]`。它与审计日志并存，而不是替代它；要改变这一点，设置 `cosec.audit.enabled=false`
-并只注册你想要的。它从自己的线程发送，最多有 1,024 个发送在等待：
+并只注册你想要的。它从自己的线程发送，等待中的发送最多与它的决策队列一样多：即决策监听器那份堆中属于它的一份
+（[由计算得出，而非配置](./configuration.md#computed-not-configured)）。发送队列满时，发送立即失败。
 
-- `best-effort`：发送失败最多每 10 秒记录一行，带上自上一行以来失败的数量：`Failed to publish audit event to Kafka topic [<topic>]: <n> failed since the last report.`（broker 宕机时每个间隔一行，而不是每个决策一行）
+- `best-effort`：发送失败最多每 10 秒记录一行，带上自上一行以来失败的数量：`Failed to publish audit event to Kafka topic [<topic>]: <n> failed since the last report.`（broker 宕机时每个间隔一行，而不是每个决策一行）。入队之后被 broker 拒绝或一直没有应答的记录，每条都计入 `cosec.audit.kafka.failures`；入队之前就失败的（队列已满）计入 `cosec.listener.failures`。
 - `required`：请求等待 broker 的确认。发送失败或超时，或发送队列已满（`The Kafka audit queue of [<topic>] is full.`），
   都会使放行变成 `503`。生产者请配置 `acks=all`。
 
@@ -182,6 +183,7 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 | `cosec.listener.dropped` | `listener` | 队列满或已关闭时丢弃的事件，以及排空超时时丢弃的事件 |
 | `cosec.listener.failures` | `listener` | 抛异常的监听器调用，以及超时的 `REQUIRED` 监听器调用 |
 | `cosec.audit.required.failures` | 无 | 发生在它无法改变的决策（非放行）上的 `REQUIRED` 失败 |
+| `cosec.audit.kafka.failures` | `listener` | 入队之后丢失的 `best-effort` Kafka 审计记录：broker 拒绝了它们，或一直没有应答。broker 宕机时每条记录都在这里丢失，而 `cosec.listener.failures` 要到队列满了才会变化：任何非零都应告警 |
 
 吊销存储无法读取时，流水线未经吊销检查就接受的令牌也会计数（[已写明的例外](../guide/security-model.md#the-two-documented-exceptions)）：
 

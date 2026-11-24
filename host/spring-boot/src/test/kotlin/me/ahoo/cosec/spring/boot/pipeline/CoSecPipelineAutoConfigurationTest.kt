@@ -35,6 +35,7 @@ import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
 import me.ahoo.cosec.jwt.JwtSigning
+import me.ahoo.cosec.kafka.KafkaAuditListener
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
@@ -65,6 +66,7 @@ import me.ahoo.cosec.spring.boot.control.ControlProperties
 import me.ahoo.cosec.spring.boot.control.ControlRoutesWebFilter
 import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.micrometer.KafkaAuditMeters
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.cosec.webmvc.SecurityContextArgumentResolver
 import me.ahoo.test.asserts.assert
@@ -512,6 +514,9 @@ class CoSecPipelineAutoConfigurationTest {
                 context.getBean(AttributeProviders::class.java).catalog.external("ext.ip2region.country")
                     .assert().isNotNull()
                 context.getBeansOfType(BridgeContextContributor::class.java).size.assert().isEqualTo(2)
+                // DR1-G-4: the records the Kafka audit lost after queueing them, beside the listeners' own counters.
+                context.getBean(MeterRegistry::class.java).get(KafkaAuditMeters.FAILURES)
+                    .tags("listener", KafkaAuditListener.NAME).functionCounter().count().assert().isZero()
             }
     }
 }

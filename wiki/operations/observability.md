@@ -150,10 +150,11 @@ denials, `503`s and errors appear.
 
 The Kafka audit listener writes the same JSON to [`cosec.audit.kafka.topic`](./configuration.md#audit)
 (`cosec-audit`), keyed by `[tenantId, principalId]` as a JSON array. It runs alongside the audit log, not instead of
-it; set `cosec.audit.enabled=false` and register only what you want to change that. It sends from a thread of its own
-with at most 1,024 sends waiting:
+it; set `cosec.audit.enabled=false` and register only what you want to change that. It sends from a thread of its own,
+with as many sends waiting as its decision queue holds: its part of the decision listeners' share of the heap
+([Computed, not configured](./configuration.md#computed-not-configured)). A full send queue fails the send at once.
 
-- `best-effort`: failed sends are logged at most once every 10 seconds, with how many failed since the last line: `Failed to publish audit event to Kafka topic [<topic>]: <n> failed since the last report.` (a broker outage is one line per interval, not one per decision)
+- `best-effort`: failed sends are logged at most once every 10 seconds, with how many failed since the last line: `Failed to publish audit event to Kafka topic [<topic>]: <n> failed since the last report.` (a broker outage is one line per interval, not one per decision). Each record the broker refused, or never answered, after it was queued is counted in `cosec.audit.kafka.failures`; what failed before it was queued (a full queue) is in `cosec.listener.failures`.
 - `required`: the request waits for the broker's acknowledgement. A failed or late send, or a full send queue
   (`The Kafka audit queue of [<topic>] is full.`), makes a permit `503`. Configure the producer with `acks=all`.
 
@@ -221,6 +222,7 @@ The listeners themselves are counted:
 | `cosec.listener.dropped` | `listener` | events a full or closed queue dropped, or a drain that timed out |
 | `cosec.listener.failures` | `listener` | listener calls that threw or, for `REQUIRED` ones, timed out |
 | `cosec.audit.required.failures` | none | `REQUIRED` failures on decisions they could not change (not permits) |
+| `cosec.audit.kafka.failures` | `listener` | `best-effort` Kafka audit records lost after they were queued: the broker refused them or never answered. While the broker is down every record is lost here and `cosec.listener.failures` stays still until the queue fills: alert on any |
 
 So are the tokens the pipeline accepted without a revocation check, the revocation store unreadable
 ([the documented exception](../guide/security-model.md#the-two-documented-exceptions)):
