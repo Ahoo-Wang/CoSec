@@ -98,7 +98,11 @@ class WorkBudgetTest {
         currentTime.assert().isEqualTo(0L)
         other.complete(Unit)
         runCurrent()
-        budget.withWork("a", 60, patience) { budget.withWork("a", 40, patience) { budget.held.assert().isEqualTo(100L) } }
+        budget.withWork(
+            "a",
+            60,
+            patience
+        ) { budget.withWork("a", 40, patience) { budget.held.assert().isEqualTo(100L) } }
         budget.refused.assert().isEqualTo(1L)
     }
 

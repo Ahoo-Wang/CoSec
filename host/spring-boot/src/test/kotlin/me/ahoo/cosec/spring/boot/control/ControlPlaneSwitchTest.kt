@@ -171,9 +171,17 @@ class ControlPlaneSwitchTest {
             // service profile's, made of the same plane), the in-process facade and the lock-out check.
             context.getBean(me.ahoo.cosec.control.api.ControlPlane::class.java).work.assert().isSameAs(budget)
             context.getBean(me.ahoo.cosec.control.api.ControlHttp::class.java).work.assert().isSameAs(budget)
-            (context.getBean(me.ahoo.cosec.control.sdk.ControlService::class.java) as me.ahoo.cosec.control.local.LocalControlService)
+            (
+                context.getBean(
+                    me.ahoo.cosec.control.sdk.ControlService::class.java
+                ) as me.ahoo.cosec.control.local.LocalControlService
+                )
                 .work.assert().isSameAs(budget)
-            (context.getBean(me.ahoo.cosec.control.lifecycle.Changes::class.java).lockout as me.ahoo.cosec.control.api.ControlLockout)
+            (
+                context.getBean(
+                    me.ahoo.cosec.control.lifecycle.Changes::class.java
+                ).lockout as me.ahoo.cosec.control.api.ControlLockout
+                )
                 .work.assert().isSameAs(budget)
             val registry = context.getBean(io.micrometer.core.instrument.MeterRegistry::class.java)
             registry.find(ControlMetersConfiguration.WORK_HELD).gauge()!!.value().assert().isEqualTo(0.0)
