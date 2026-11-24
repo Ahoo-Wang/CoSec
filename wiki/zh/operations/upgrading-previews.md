@@ -141,6 +141,11 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **长于 256 个字符的限流键值改用其哈希命名桶**（`OBL-6`，DR1-C-1）。受影响的：`key` 读取这么长的值的规则，几乎总是客户端自选的请求头。这样的桶现在是 `h:<sha-256>`，此前是 `k:<value>`（[限流](../policies/rate-limiting.md#keys)），所以它的计数会重新开始一次：在 Redis 上旧键不再被读取，两个窗口后过期；本地限流器的计数本来就只属于该实例。滚动升级期间两个版本同时服务时，这样的值会计入两个桶（每个版本一个），所以在最后一个实例升级之前，它最多得到两倍的限额。256 个字符及以内的值保留原来的桶与计数。无需改动。
 - **生成的路由映射不再取决于最后是谁访问了 API 文档**（`RTE-4`，DR1-C-2）。受影响的：在 OpenAPI 文档没有写 `servers` 的宿主上，用 `cosecServiceGenerator/routes` 生成的路由映射。这时 springdoc 会在它缓存的文档里放一个自己的服务器，取自最近一次请求 API 文档的请求（含查询串），路由就生成在它的路径下。现在这个服务器被排除，路由位于应用的根路径。若曾在 `/v3/api-docs` 之类的路径下生成过路由映射，请重新生成；服务部署在宿主不会去掉的路径下时，在文档里写上 `servers`（[角色权限](../policies/role-permissions.md#generating-a-catalog-from-openapi)）。
 - **被取消的 `HttpControlService` 调用现在会结束它在宿主上的请求**（`CTL-82`，#1893）。受影响的：无需改动。经 `HttpControlService` 的调用所在的协程被取消时，调用会关闭它的 HTTP 交换，控制面宿主（WebFlux）随之取消该请求。此前，请求会留在宿主上，直到调用自己的超时（默认 30 秒）结束它。控制调用没有自己的期限，由你决定：包住调用的 `withTimeout`，或 `HttpControlService` 的 `timeout`（[在代码中修改策略](../integration/checks.md#changing-policies-from-your-code)）。
+- **控制面 SDK 对输入与应答的校验更严**（`CTL-77`、`CTL-80`、`CTL-76`，DR1-F-15 至 F-18）。受影响的：经 `cosec-control-sdk` 或 `cosec-control-http` 调用控制面的应用。
+  - `HttpControlService` 在构造时拒绝会跟随重定向的 `HttpClient`：用 `followRedirects(HttpClient.Redirect.NEVER)`（JDK 的默认值）构造它。超过 20 MB 的应答以 `IOException` 让调用失败。
+  - `ControlCaller.service` 拒绝 `CoSec-Identity` 携带不了的主体或角色：空角色，或带落单代理项的角色。
+  - 类型化读取器拒绝 `schema` 不是 2 的文档。
+  - `proposeAndPublishWithoutShadow` 不再放弃同一作者的、被审批过或开过影子窗口的持有者：它等待这个持有者，耐心用尽后与对待其他持有者一样放弃。
 - **成员关系由每个实例自己持有，从不放进 Redis**（`MEM-5`，DR1-D-2）。受影响的：有 `MembershipLoader` 的应用。此前每个实例都读写 `<s>:membership:*` 下的共享缓存，并把那里的任何东西读作加载器的回答，所以任何数据面 Redis 凭据都能借此授予角色。现在每个实例把它自己的加载器的回答放在自己的内存中，不从 Redis 读取任何东西：
   - **行为。** 原来第二个实例的未命中是一次 Redis 读取，现在是一次加载器调用：N 个实例在一个寿命内对同一主体最多加载 N 次，请按此评估加载器的容量。`invalidate(tenant, principal)` 仍会经 Redis 的失效通道（`<s>:inv:membership`）在所有实例上丢弃该主体，这不需要任何键权限。
   - **配置。** 寿命是 `cosec.authorization.membership.ttl`（一分钟，与之前相同）。任何 `cocache.caches.MembershipCache.*` 设置，尤其是它的 `ttl`，都会使启动失败并指出该属性：请迁移过去。成员关系占用堆的六十四分之一，见启动日志。

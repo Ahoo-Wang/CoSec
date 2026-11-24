@@ -3,12 +3,12 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.CoCacheControlStoreTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
-index 5ad8e4806..4c47cf23c 100644
+index 0000000..0000000 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
-@@ -63,7 +63,7 @@ internal class OpenChangeSets(
-     /** When this instance first found a member's change missing or not listed there, by set and member. */
-     private val staleSince = ConcurrentHashMap<String, Instant>()
+@@ -78,7 +78,7 @@ internal class OpenChangeSets(
+     /** How many members this instance keeps a time for: what the sets hold at most. */
+     internal fun staleEntries(): Int = staleSince.values.sumOf { it.size }
  
 -    suspend fun kept(): Boolean = KEPT in sets.changeMembers(KEPT) && !legacyListed()
 +    suspend fun kept(): Boolean = KEPT in sets.changeMembers(KEPT)
