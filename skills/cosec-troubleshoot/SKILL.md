@@ -220,7 +220,11 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **`API key format [<n>] is not 3.`** (a request with that key is `503`): `null` is a 7.x key, convert it with
   `cosec-migrate api-keys`; `2` is a key an 8.0 pre-release stored, which nothing converts: issue a new key, delete
   the old one. **`[<key>] was stored by an 8.0 pre-release in format <n>`** from `cosec-migrate api-keys`: the same key;
-  the run is refused until it is gone.
+  the run is refused until it is gone. **`its principal [<p>] is named by a DENY or the blacklist, which a principal of its
+  own ... would escape (MIG-6)`**: a DENY reads the key's principal by `subject.id` or is bound to it, or `--blacklist`
+  blocks it; keep the key on its principal (in place with `--memberships`, or `--grant-to-principal <p>`). Without
+  `--blacklist`, block each moved key's `blockIfPrincipalBlocked` value if its principal is blocked. **`[<key>] is not an API key: its <member> is not
+  ...`**: the stored record has a member of the wrong type; fix it at the source or delete the key.
 - **`Cache[<CoSec cache>] - ... locked by cosec`**: a `cocache.caches.[name].*` entry or a `CacheSpecCustomizer` sets a
   field CoSec locks on its caches (a store of record's `ttl` or `unknown-read`, the snapshot store's `local-max-age`,
   any `key-prefix`). Remove the setting or exclude CoSec's caches; never suggest `unlock` for these, whose constrained

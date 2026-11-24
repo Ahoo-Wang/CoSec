@@ -112,6 +112,8 @@ class ApiKeyMigrationPlan(
         if (cap == null) node.putNull("cap") else node.putArray("cap").apply { cap.forEach { add(it) } }
         node.put("defaultTenant", converted.legacy.tenantId.isNullOrEmpty())
         node.putArray("lost").apply { converted.lost.forEach { add(it) } }
+        node.putArray("stillDenied").apply { converted.denied.forEach { add(it) } }
+        converted.blockIfBlocked?.let { node.put("blockIfPrincipalBlocked", it) }
         node.putArray("changes").apply { converted.changes.forEach { add(it) } }
     }
 

@@ -23,10 +23,20 @@ class ConvertedApiKey(
     val legacy: LegacyApiKey,
     val key: ApiKey,
     val mode: Mode,
-    /** The principal's own bindings (principal and break-glass) the key reached as that principal, and no longer does. */
+    /**
+     * The principal's own bindings that grant (principal and break-glass) the key reached as that principal, and no
+     * longer does.
+     */
     val lost: List<String>,
     /** What depends on the principal's id and changes with it; empty when the key keeps its principal. */
     val changes: List<String> = emptyList(),
+    /** The DENYs bound to the principal, which the key, capped on it, stays under (RC1-1); none for a moved key. */
+    val denied: List<String> = emptyList(),
+    /**
+     * For a key moved without `--blacklist`: the value to add to the application's blacklist before the key is used if
+     * its 7.x principal is blocked there (DR2-M-9); null otherwise.
+     */
+    val blockIfBlocked: String? = null,
 ) {
     enum class Mode { IN_PLACE, OWN_PRINCIPAL, GRANTED }
 }
