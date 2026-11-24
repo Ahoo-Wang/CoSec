@@ -1,0 +1,16 @@
+# Rule: DOC-15
+# Mutant: a typed resource's literal, an action's name and a route's resource template take a reserved character as text
+# Tests: :engine:test --tests me.ahoo.cosec.engine.pattern.ReservedCharactersTest :document:test --tests me.ahoo.cosec.document.route.RouteMapTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/PatternEscapes.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/PatternEscapes.kt
+index 0ed4f993a..38d3b99ad 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/PatternEscapes.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/PatternEscapes.kt
+@@ -120,7 +120,6 @@ object PatternEscapes {
+                     literal.append(escaped(pattern, text, index, offset))
+                     index++
+                 }
+-                char in RESERVED -> throw reserved(pattern, offset + index, char)
+                 char in syntax -> throw InvalidPatternException(
+                     pattern,
+                     offset + index,

@@ -1,0 +1,24 @@
+# Rule: DOC-15
+# Mutant: an escaped * still acts as a wildcard, so a pattern naming the character matches every value in its place
+# Tests: :engine:test --tests me.ahoo.cosec.engine.pattern.ReservedCharactersTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
+index 5f97f7e7a..8df5b516b 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
+@@ -187,8 +187,13 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
+                     if (escaped == '\\') {
+                         throw invalid(begin + index, "a request path holds no backslash (PIP-14): \\\\ matches no path")
+                     }
+-                    literal.append(escaped)
+-                    plain.append(escaped)
++                    if (escaped == '*') {
++                        flush()
++                        tokens.add(GlobToken.Run(-1))
++                    } else {
++                        literal.append(escaped)
++                        plain.append(escaped)
++                    }
+                     index++
+                 }
+                 in PatternEscapes.RESERVED -> throw PatternEscapes.reserved(pattern, begin + index, char)
