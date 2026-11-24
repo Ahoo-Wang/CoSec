@@ -31,6 +31,7 @@ import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.ReferrerEntry
+import me.ahoo.cosec.control.store.RetentionPolicy
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.Actor
@@ -88,6 +89,9 @@ import kotlin.coroutines.CoroutineContext
  * A publish may name policies whose back-reference sets cannot be read or written (`"unreadable": ["shared"]`, as a
  * value of the format before 8.0.0-beta.5, `CTL-42`). A scenario with `"cost": true` also counts what the last publish
  * did to the back-reference sets (`CTL-44`): `"lastPublish": {"setReads": 0, "membersAdded": 1, "membersRemoved": 0}`.
+ *
+ * A scenario with `"reclaim": true` runs a reclamation of the last document after its publishes, all younger than
+ * `min-age`, with `"retention"` naming what it keeps (`CTL-84`): `"retention": {"maxCount": 2, "documentCap": 320}`.
  */
 object StoreRunner : ScenarioRunner {
     override fun run(scenario: Scenario): Outcome = runBlocking {
@@ -100,11 +104,13 @@ object StoreRunner : ScenarioRunner {
             "publishes",
             "history",
             "cost",
+            "retention",
+            "reclaim",
             "expect",
         )
         val memory = InMemoryControlStore()
         val store = RecordingStore(memory)
-        val revisions = Revisions(store)
+        val revisions = Revisions(store, retention = retentionOf(scenario.node.get("retention")))
         val outcomes = ArrayList<Deferred<String>>()
         val previous = HashMap<SnapshotKey, Head?>()
         var key: SnapshotKey = SnapshotKey.Tenant("acme")
@@ -137,7 +143,18 @@ object StoreRunner : ScenarioRunner {
             hold?.let { held = it to outcome }
         }
         held?.let { (it, finishing) -> it.release.complete(Unit).also { finishing.await() } }
+        if (scenario.node.get("reclaim")?.bool() == true) revisions.reclaim(key)
         stored(scenario, outcomes.map { it.await() }, revisions, memory, store, key)
+    }
+
+    /** `"retention": {"maxCount": 2, "documentCap": 320}`: what a reclamation keeps (`CTL-84`), the defaults otherwise. */
+    private fun retentionOf(node: JsonNode?): RetentionPolicy {
+        node?.only("maxCount", "documentCap") ?: return RetentionPolicy()
+        val defaults = RetentionPolicy()
+        return RetentionPolicy(
+            maxCount = node.get("maxCount")?.intValue() ?: defaults.maxCount,
+            documentCap = node.get("documentCap")?.longValue() ?: defaults.documentCap,
+        )
     }
 
     /** What the scenario expects of the store after its publishes: [answered], the head of [key] and what it holds. */

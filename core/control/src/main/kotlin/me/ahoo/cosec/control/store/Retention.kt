@@ -27,6 +27,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
+import java.time.Instant
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -47,6 +48,9 @@ internal class Retention(
     private val history: suspend (SnapshotKey) -> Pair<List<RevisionEntry>, SnapshotDigest?>,
 ) {
     private val holder: String = UUID.randomUUID().toString()
+
+    /** What a document's records may weigh (`CTL-84`). */
+    val budget = RecordBudget(clock)
 
     /**
      * Walks the `parent` chain of [key]'s head (`verify-chain`, RFC 0007 §5.4): every parent at or above the index
@@ -145,9 +149,10 @@ internal class Retention(
         val now = clock.instant()
         val recent = entries.takeLast(retention.maxCount).map { it.digest }.toSet()
         val retained = entries.map { it.digest }
+        val sizes = sizesOf(key, entries.dropLast(retention.maxCount))
+        val over = budget.over(entries, sizes, retention)
         val removed = entries.filter { entry ->
-            entry.digest !in recent && entry.digest !in keep && entry.digest != head &&
-                entry.publishedAt.isBefore(now.minus(retention.minAge))
+            entry.digest !in recent && entry.digest !in keep && entry.digest != head && (old(entry, now) || entry.digest in over)
         }
         var orphans: List<SnapshotDigest> = emptyList()
         var reclaiming: List<SnapshotDigest> = emptyList()
@@ -158,6 +163,7 @@ internal class Retention(
                     pending.since.isBefore(now.minus(retention.orphanAge))
             }.map { it.digest }
             val entries = index.entries.filter { entry -> removed.none { it.digest == entry.digest } }
+                .map { sized(it, sizes) }
             val pending = index.pending.filter { it.digest !in orphans }
             // What the verified history keeps is live too: a digest it lists is never left to delete (#1536).
             val live = entries.map { it.digest }.toSet() + pending.map { it.digest } + keep + listOfNotNull(head) +
@@ -181,8 +187,28 @@ internal class Retention(
             writes.updateIndex(key) { index -> index.copy(reclaiming = index.reclaiming - deleted.toSet()) } ||
                 warn("[$key]: the records deleted stay listed to reclaim; the next pass deletes them again")
         }
+        budget.reclaimed(key, removed.filterNot { old(it, now) }, retention)
         return Reclaimed(removed.map { it.digest }, orphans, deleted, failed)
     }
+
+    /** [entry] with its size from [sizes] when the index had none. */
+    private fun sized(entry: RevisionEntry, sizes: Map<SnapshotDigest, Long>): RevisionEntry =
+        if (entry.size != null) entry else sizes[entry.digest]?.let { entry.copy(size = it) } ?: entry
+
+    /** Whether [entry] is older than `min-age` at [now]. */
+    private fun old(
+        entry: RevisionEntry,
+        now: Instant
+    ): Boolean = entry.publishedAt.isBefore(now.minus(retention.minAge))
+
+    /**
+     * What the records of [entries] the index has no size for weigh (entries an older version wrote): each read once, and
+     * written into the index by the same pass. A record that is gone weighs nothing.
+     */
+    private suspend fun sizesOf(key: SnapshotKey, entries: List<RevisionEntry>): Map<SnapshotDigest, Long> =
+        entries.filter { it.size == null }.mapNotNull { entry ->
+            store.record(key, entry.digest)?.let { entry.digest to it.bodyBytes().size.toLong() }
+        }.toMap()
 
     /** Deletes the record of [key] at [digest]; `false` when that failed, which the next pass tries again. */
     @Suppress("TooGenericExceptionCaught")
