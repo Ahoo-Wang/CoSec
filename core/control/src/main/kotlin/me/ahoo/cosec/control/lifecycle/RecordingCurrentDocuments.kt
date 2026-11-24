@@ -39,4 +39,6 @@ internal class RecordingCurrentDocuments(private val context: CurrentDocuments) 
     override suspend fun apps(): Versioned<AppList>? = context.apps().also {
         if (apps == null) apps = CheckedApps(it?.digest)
     }
+
+    override val unrecorded: CurrentDocuments get() = context.unrecorded
 }
