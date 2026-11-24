@@ -534,13 +534,18 @@ the server's CoSec version, the error's `name` with its `problem` and `status` (
   another app, or none (see the status table).
 - **`NonReplayableRequestError`**: the access token was refreshed after a `401`, and the request's body was a stream
   that cannot be sent twice. Send it again with a new body.
-- **A tenant switch is refused**: `401 token-invalid` when the switch's `Authorization` and its body are not one pair
-  (the request was refreshed between reading the pair and sending it), or the credential has no session (an API key,
-  a token of a `TokenVerifier` of the application's); `401 token-revoked` when the pair is older than the session's
-  current one (another tab refreshed: refresh first; and an older pair presented to switch revokes the session), or
-  the login's session a switched session came from has ended (`IDN-36`); `503` while the revocation or session store cannot be read (keep the
-  pair, retry). A switch request without the pair in its body fails against an endpoint of 8.0.0-beta.8 or later,
-  which reads it (`IDN-22`). Any other answer is the application's own `TenantSwitch` refusing.
+- **A tenant switch is refused**: `switchTenant` rejects with `TenantSwitchError`. `sessionEnded: true` (a `401`, the
+  pair removed, `onUnauthorized` called): `token-revoked` when the session was logged out or revoked, or is a session a
+  switch started whose login's session has ended (`IDN-36`), or the pair presented was older than the session's current
+  one, which revokes the session (a switch of the application's own that did not take the lock refreshes take);
+  `token-invalid` when `Authorization` and the body were not one pair (the same cause), or the credential has no session
+  (an API key, a token of a `TokenVerifier` of the application's); `token-expired` at the session's lifetime. An
+  application route that refuses a non-member with `401` ends the session too: it must refuse with another status.
+  `sessionEnded: false` keeps the pair: `503` while the revocation or session store cannot be read (call again), no
+  `status` (network error or timeout: calling again is safe, the switch does not rotate the pair), or the application's
+  own refusal (its `TenantSwitch`). A switch request without the pair in its body fails against an endpoint of
+  8.0.0-beta.8 or later, which reads it (`IDN-22`). `No tenantSwitcher: ...`: the configurer has no
+  `CoSecTenantSwitcher`.
 - **`logout()` rejects with `LogoutUnconfirmedError`**: the pair is gone here, the server did not confirm (`503`,
   `500`, network error), or the client has no `tokenRevoker` (`No tokenRevoker: ...`) or, in React, the hook has no
   `tokenManager` (`No tokenManager: ...`).

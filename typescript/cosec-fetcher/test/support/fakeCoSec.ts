@@ -104,6 +104,10 @@ interface Session {
   aud?: string;
   sub: string;
   roles: string[];
+  /** The tenant a switch started this session in (`tenantId`). */
+  tenant?: string;
+  /** The login's session a switch started this one from (`IDN-36`). */
+  root?: string;
 }
 
 export interface Seen {
@@ -136,6 +140,9 @@ export interface FakeHostOptions {
  * Time is `Date.now()`, so a test moves it with `vi.setSystemTime`.
  *
  * Routes: `/auth/login`, `/auth/refresh` (POST, `{accessToken, refreshToken}`),
+ * `/auth/switch/<tenant>` (the application's switch over
+ * `SwitchTenantAuthentication`: authenticated, the pair in the body; the
+ * tenant `closed` is the application's own `403`),
  * `/public` (anyone), `/me` (authenticated), `/denied` (authenticated, but
  * the decision is deny), `/limited` (permitted, then `429`), `/down` (`503`).
  */
@@ -166,6 +173,12 @@ export class FakeCoSecHost {
   limitRefreshNext = 0;
   /** A status the application's refresh handler answers instead (no problem body). */
   refreshHandlerStatus?: number;
+  /** Switch requests answered 503 (the revocations or the session store). */
+  unavailableNextSwitches = 0;
+  /** Switch requests whose response is lost after the server issued. */
+  loseNextSwitchResponses = 0;
+  /** What each switch did to the session it was presented from. */
+  readonly switches: { generation: number; outcome: string }[] = [];
   /** Replaces an answer after the server produced it (a proxy, a fault). */
   after?: (seen: Seen, response: Response) => Response | Promise<Response>;
 
@@ -203,6 +216,7 @@ export class FakeCoSecHost {
       // `roles` is left out when empty (contract/token/claims.json: optional).
       ...(session.roles.length > 0 ? { roles: session.roles } : {}),
       ...(session.aud ? { aud: session.aud } : {}),
+      ...(session.tenant ? { tenantId: session.tenant } : {}),
       ...common,
     };
     const refresh = {
@@ -438,6 +452,16 @@ export class FakeCoSecHost {
       case '/broken':
         return this.refuse(headers, 'internal-error');
     }
+    if (path.startsWith('/auth/switch/') && method === 'POST') {
+      // The pipeline: the switch route is open to authenticated callers only.
+      if (authn.kind !== 'authenticated') return deny();
+      return this.switchHandler(
+        headers,
+        body,
+        decodeURIComponent(path.slice('/auth/switch/'.length)),
+        authn.claims,
+      );
+    }
     if (refreshRoute) {
       // The pipeline: an expired access token is anonymous.
       if (authn.kind !== 'authenticated' && !this.anonymousRefresh) {
@@ -491,7 +515,11 @@ export class FakeCoSecHost {
     }
     const session = this.sessions.get(refresh.sid as string);
     if (!session) return this.refuse(headers, 'token-invalid');
-    if (session.revoked) return this.refuse(headers, 'token-revoked');
+    // IDN-36: a session a switch started lives only while the login's does.
+    const root = session.root ? this.sessions.get(session.root) : undefined;
+    if (session.revoked || root?.revoked) {
+      return this.refuse(headers, 'token-revoked');
+    }
     if (session.endsAt <= this.nowSec()) {
       return this.refuse(headers, 'token-expired');
     }
@@ -513,6 +541,85 @@ export class FakeCoSecHost {
     session.revoked = true;
     this.refreshes.push({ at, generation, outcome: 'revoked' });
     return this.refuse(headers, 'token-revoked');
+  }
+
+  /**
+   * `SwitchTenantAuthentication` (`IDN-22`, `IDN-36`): the pair the request was
+   * made with, checked as a refresh checks it without moving the session; a
+   * session of its own in the target tenant, with the login's time and root.
+   */
+  private switchHandler(
+    headers: Headers,
+    body: unknown,
+    tenant: string,
+    request: Record<string, unknown>,
+  ): Response {
+    const pair = body as Record<string, unknown> | undefined;
+    if (
+      !pair ||
+      typeof pair.accessToken !== 'string' ||
+      typeof pair.refreshToken !== 'string'
+    ) {
+      return this.refuse(headers, 'invalid-request');
+    }
+    const access = claims(pair.accessToken);
+    const refresh = claims(pair.refreshToken);
+    if (
+      access.jti !== request.jti ||
+      refresh['cosec.token'] !== 'refresh' ||
+      refresh.sub !== access.jti ||
+      (refresh.exp as number) <= this.nowSec()
+    ) {
+      return this.refuse(headers, 'token-invalid');
+    }
+    const session = this.sessions.get(refresh.sid as string);
+    if (!session) return this.refuse(headers, 'token-invalid');
+    const root = session.root ? this.sessions.get(session.root) : undefined;
+    if (session.revoked || root?.revoked) {
+      return this.refuse(headers, 'token-revoked');
+    }
+    if (session.endsAt <= this.nowSec()) {
+      return this.refuse(headers, 'token-expired');
+    }
+    if (this.unavailableNextSwitches > 0) {
+      this.unavailableNextSwitches--;
+      return this.refuse(headers, 'unavailable');
+    }
+    const generation = refresh['cosec.generation'] as number;
+    const current =
+      generation === session.generation ||
+      (generation === session.generation - 1 &&
+        Date.now() - session.movedAt <= this.leeway);
+    if (!current) {
+      session.revoked = true;
+      this.switches.push({ generation, outcome: 'revoked' });
+      return this.refuse(headers, 'token-revoked');
+    }
+    if (tenant === 'closed') {
+      return this.respond(headers, 403, { error: 'not a member' });
+    }
+    this.switches.push({ generation, outcome: 'switched' });
+    const switched: Session = {
+      sid: this.id('sid'),
+      generation: 1,
+      movedAt: Date.now(),
+      revoked: false,
+      endsAt: session.endsAt,
+      authTime: session.authTime,
+      aud: session.aud,
+      sub: session.sub,
+      roles: [],
+      tenant,
+      root: session.root ?? session.sid,
+    };
+    this.sessions.set(switched.sid, switched);
+    if (this.loseNextSwitchResponses > 0) {
+      this.loseNextSwitchResponses--;
+      throw new TypeError('Failed to fetch');
+    }
+    return this.respond(headers, 200, this.pair(switched), {
+      'Cache-Control': 'no-store',
+    });
   }
 
   private deliver(headers: Headers, session: Session): Response {

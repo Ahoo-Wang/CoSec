@@ -55,6 +55,7 @@ One module creates the client; everything else imports it:
 import { Fetcher, ResultExtractors } from '@ahoo-wang/fetcher';
 import {
   CoSecConfigurer,
+  CoSecTenantSwitcher,
   CoSecTokenRefresher,
   CoSecTokenRevoker,
   type CompositeToken,
@@ -68,6 +69,7 @@ const bare = new Fetcher({ baseURL }); // refresh and logout: the pair is their 
 export const cosec = new CoSecConfigurer({
   tokenRefresher: new CoSecTokenRefresher({ fetcher: bare, endpoint: '/auth/refresh' }),
   tokenRevoker: new CoSecTokenRevoker({ fetcher: bare, endpoint: '/auth/logout' }),
+  tenantSwitcher: new CoSecTenantSwitcher({ fetcher: api }), // only if the application has a switch route
   onUnauthorized: () => window.location.assign('/login'),
   onForbidden: async () => console.warn('Not allowed'),
 });
@@ -212,48 +214,54 @@ The space is never sent on a request without a token (the server would answer `4
 ## Switch tenant or app
 
 A token's tenant and app (`aud`) are fixed by whoever issued it; the client never sends a header for them. To work in
-another tenant or app, call the application's switch endpoint (its own route, over `SwitchTenantAuthentication`) and
-store the pair it answers. The switch presents the session's current pair, as a refresh does, and the
-`Authorization` header must hold that pair's access token: a pair the request was not made with is `token-invalid`.
+another tenant or app, call the application's switch endpoint (its own route, over `SwitchTenantAuthentication`)
+through `JwtTokenManager.switchTenant`. The configurer's `CoSecTenantSwitcher` ([wiring](#wire-the-client)) is over the configured `Fetcher`, not the bare one:
+the switch is a request the pipeline permits, with the `CoSec-Device-Id` a `TenantSwitch` may check.
 
 ```ts
-import { ResultExtractors } from '@ahoo-wang/fetcher';
-import { IGNORE_REFRESH_TOKEN_ATTRIBUTE_KEY, type CompositeToken } from '@ahoo-wang/cosec-fetcher';
-import { api, cosec } from './cosec';
+import { TenantSwitchError } from '@ahoo-wang/cosec-fetcher';
+import { cosec } from './cosec';
 
 export async function switchTo(tenant: string, app: string): Promise<void> {
-  const manager = cosec.tokenManager!;
-  if (manager.isRefreshNeeded) await manager.refresh(); // present the current generation
-  const current = manager.currentToken;
-  if (!current) throw new Error('Not signed in');
-  const { accessToken, refreshToken } = current.token;
-  const pair = await api.post<CompositeToken>(
-    `/auth/select/${encodeURIComponent(tenant)}/${encodeURIComponent(app)}`, // the application's route
-    { headers: { Authorization: `Bearer ${accessToken}` }, body: { accessToken, refreshToken } },
-    {
-      resultExtractor: ResultExtractors.Json,
-      attributes: new Map([[IGNORE_REFRESH_TOKEN_ATTRIBUTE_KEY, true]]),
-    },
-  );
-  cosec.tokenStorage.signIn(pair);
+  try {
+    await cosec.tokenManager!.switchTenant({
+      endpoint: `/auth/select/${encodeURIComponent(tenant)}/${encodeURIComponent(app)}`, // the application's route
+    });
+  } catch (error) {
+    if (error instanceof TenantSwitchError && !error.sessionEnded) {
+      // the application's own refusal (error.status, its body), or 503 / no answer: the session is unchanged
+    }
+    throw error;
+  }
 }
 ```
 
-The configured `Fetcher` sends the `CoSec-Device-Id` a switch may check; the explicit `Authorization` keeps the header
-and the body one pair, and the attribute keeps the request from refreshing mid-way and from carrying a space. What a
-refused switch means, when the endpoint answers as the served refresh does:
+What it does (`JwtTokenManager.switchTenant`, from the code and its tests against the fake host and `test/client-host`):
 
-- `401 token-revoked`: the session is over (a logout, a pair presented again after the leeway, or, for a session a
-  switch started, the end of the login's session, `IDN-36`). An older pair presented to switch revokes the session.
-  Sign in again; `onUnauthorized` is called, but the pair is not removed for you: `cosec.tokenStorage.signOut()`.
-- `401 token-expired`: the session's lifetime is over. `401 token-invalid`: not a CoSec session's pair, or not the
-  request's. Sign in again.
-- `503`: the revocation or session store could not be read; nothing was issued. Keep the pair and retry.
-- Anything else is the application's own refusal (its `TenantSwitch` threw): the user is not a member there, and the
-  session is unchanged.
+- **Presents the current generation.** It waits for a refresh in flight, refreshes an expired access token first, then
+  sends under the lock refreshes take (in-process, and the same Web Lock across tabs), reading the stored pair again
+  once it holds the lock. The pair goes in the body (with `body`'s members of the application's own, if given) and its
+  access token in `Authorization`: always one pair. No space is sent. A refresh asked meanwhile waits, and refreshes
+  nothing of the old session (a request made with it fails with `RefreshSessionChangedError` rather than being sent
+  again in the new tenant).
+- **Stores the answer as one write**, which other tabs on a shared storage read as a new sign-in, so the React hooks and
+  `currentUser` follow. If the stored session changed meanwhile (a sign-out or sign-in elsewhere), nothing is stored:
+  `RefreshSessionChangedError`.
+- **A refused pair ends the session**: a `401` from the route (`token-revoked`: a logout, a pair presented again, or
+  the end of the login's session for a session a switch started, `IDN-36`; `token-expired`; `token-invalid`) removes
+  the stored pair if it is still the one sent, calls `onUnauthorized` once, and rejects with
+  `TenantSwitchError` (`sessionEnded: true`, `problem`, `status`).
+- **Anything else keeps the session**: `TenantSwitchError` with `sessionEnded: false` for the application's own refusal
+  (its `TenantSwitch` threw: a `403` of its own, which also reaches `onForbidden`), a `503` (the revocations or the
+  session store), a network error or timeout (no `status`). Nothing is retried. Calling again is safe: the server checks
+  the pair as a refresh does but does not rotate it, so the same current pair switches again; a switch whose answer was
+  lost started a session nobody holds, which ends with the login's.
+- A refresh it needs first can fail as any refresh does (`RefreshTokenError`, `RefreshUnavailableError`).
 
-A switched session keeps the login time, so it ends when the login's would. The session switched from stays as it was
-at the server: `logout()` afterwards ends the switched session only.
+The application's route must answer a refused pair `401` and its own refusal with any other status (the client reads a
+`401` as the end of the session), as `test/client-host`'s `/auth/switch/{tenant}` does. A switched session keeps the
+login time, so it ends when the login's would. The session switched from stays live at the server: `logout()`
+afterwards ends the switched session only, and the client no longer holds the other pair.
 
 ## React
 
@@ -295,7 +303,9 @@ function Profile() {
 `onSignOut`), `logout()` (`JwtTokenManager.logout()` of the `tokenManager` option; the pair is gone either way,
 `onSignOut` fires unless a newer sign-in replaced the session, and it rejects with `LogoutUnconfirmedError` on an
 unconfirmed logout or without a `tokenManager`). A `tokenManager` that manages another `TokenStorage` than the hook's
-makes the hook throw. The guards are a convenience of the interface: CoSec decides on the server. Read claims as
+makes the hook throw. A component switches tenant with `cosec.tokenManager!.switchTenant(...)`
+([Switch tenant or app](#switch-tenant-or-app)); the hooks follow the stored pair, so `currentUser` changes with it.
+The guards are a convenience of the interface: CoSec decides on the server. Read claims as
 [the claims table](https://cosec.ahoo.me/integration/clients#the-claims-a-client-may-read) says: `roles` and `policies`
 may be absent for a user who has roles, so never hide or show features from them.
 

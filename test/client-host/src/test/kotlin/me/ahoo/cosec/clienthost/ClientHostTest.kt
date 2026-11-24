@@ -196,6 +196,84 @@ class ClientHostTest {
         send("POST", "/auth/refresh", json.writeValueAsString(pair)).statusCode().assert().isEqualTo(200)
     }
 
+    private fun switch(tenant: String, pair: Map<String, String>, bearer: String = pair.getValue("accessToken")) =
+        send("POST", "$SWITCH_PATH/$tenant", json.writeValueAsString(pair), bearer = bearer)
+
+    private fun claimsOf(token: String) = json.readTree(java.util.Base64.getUrlDecoder().decode(token.split('.')[1]))
+
+    @Suppress("UNCHECKED_CAST")
+    private fun pairOf(response: HttpResponse<String>): Map<String, String> =
+        json.readValue(response.body(), Map::class.java) as Map<String, String>
+
+    /** IDN-22: a session of its own in the target tenant, from the pair; the session presented moves nothing. */
+    @Test
+    fun aSwitchIssuesAPairInTheTargetTenantAndMovesNothing() {
+        val pair = signIn("kate")
+        val switched = switch("acme", pair)
+        switched.statusCode().assert().isEqualTo(200)
+        switched.headers().firstValue("Cache-Control").get().assert().isEqualTo("no-store")
+        val next = pairOf(switched)
+        claimsOf(next.getValue("accessToken")).get("tenantId").asString().assert().isEqualTo("acme")
+        send("GET", "/orders/1", bearer = next.getValue("accessToken")).statusCode().assert().isEqualTo(200)
+        // Presented again, the same pair switches again: the switch does not rotate it, and it still refreshes.
+        switch("acme", pair).statusCode().assert().isEqualTo(200)
+        send("POST", "/auth/refresh", json.writeValueAsString(pair)).statusCode().assert().isEqualTo(200)
+    }
+
+    @Test
+    fun aNonMemberIsTheApplicationsOwnRefusalAndKeepsTheSession() {
+        val pair = signIn("liam")
+        val refused = switch(CLOSED_TENANT, pair)
+        refused.statusCode().assert().isEqualTo(403)
+        refused.headers().firstValue("Content-Type").get().assert().startsWith("application/json")
+        send("POST", "/auth/refresh", json.writeValueAsString(pair)).statusCode().assert().isEqualTo(200)
+    }
+
+    @Test
+    fun aSwitchOfAnEndedSessionIsRevoked() {
+        val pair = signIn("mia")
+        send("POST", "/test/end-session", json.writeValueAsString(pair)).statusCode().assert().isEqualTo(200)
+        val refused = switch("acme", pair)
+        refused.statusCode().assert().isEqualTo(401)
+        refused.body().assert().contains("https://cosec.ahoo.me/problems/token-revoked")
+    }
+
+    @Test
+    fun anOlderPairPresentedToSwitchRevokesTheSession() {
+        val first = signIn("nora")
+        refresh(refresh(first))
+        switch("acme", first).body().assert().contains("token-revoked")
+    }
+
+    @Test
+    fun aPairOtherThanTheRequestsSwitchesNothing() {
+        val mine = signIn("omar")
+        val other = signIn("omar")
+        val refused = switch("acme", other, bearer = mine.getValue("accessToken"))
+        refused.statusCode().assert().isEqualTo(401)
+        refused.body().assert().contains("token-invalid")
+    }
+
+    @Test
+    fun aSwitchWhoseRevocationsCannotBeReadIsUnavailable() {
+        val pair = signIn("pia")
+        send("POST", "/test/revocations/down").statusCode().assert().isEqualTo(200)
+        val refused = switch("acme", pair)
+        send("POST", "/test/revocations/up").statusCode().assert().isEqualTo(200)
+        refused.statusCode().assert().isEqualTo(503)
+        refused.body().assert().contains("https://cosec.ahoo.me/problems/unavailable")
+        switch("acme", pair).statusCode().assert().isEqualTo(200)
+    }
+
+    /** IDN-36: once the login's session is logged out, a session switched from it is revoked at its next refresh. */
+    @Test
+    fun aSwitchedSessionEndsWithTheLogin() {
+        val pair = signIn("quinn")
+        val switched = pairOf(switch("acme", pair))
+        send("POST", "/auth/logout", json.writeValueAsString(pair)).statusCode().assert().isEqualTo(204)
+        send("POST", "/auth/refresh", json.writeValueAsString(switched)).body().assert().contains("token-revoked")
+    }
+
     @Test
     fun theHostCountsWhatReachedIt() {
         send("POST", "/test/reset")

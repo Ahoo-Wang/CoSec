@@ -112,6 +112,23 @@ await logout();
 
 正在进行的刷新会先被等待，会话用它存下的令牌对结束。服务端结束了会话（`204`）或回答 `401`（会话已不可用）时，`logout()` 正常完成；无论哪种结果，本地的令牌对都会删除。`LogoutUnconfirmedError`（`503`、`500`、网络故障、没有 `tokenRevoker`）要求应用告诉用户：服务端可能仍持有该会话，直到它在那里结束，最迟到其刷新令牌过期。它不携带任何令牌：`problem` 和 `status` 说明服务端的回答。
 
+## 切换租户或应用
+
+应用有租户或应用切换（它自己基于 CoSec `SwitchTenantAuthentication` 的路由）时，给配置器一个建在已配置 `Fetcher` 上的切换器，然后调用 `switchTenant`：
+
+```ts
+import { CoSecTenantSwitcher } from '@ahoo-wang/cosec-fetcher';
+
+// 放进上面示例的 CoSecConfigurer 选项：
+//   tenantSwitcher: new CoSecTenantSwitcher({ fetcher: api }),
+
+await cosec.tokenManager!.switchTenant({
+  endpoint: '/auth/select/acme/orders',
+});
+```
+
+它出示会话当前的令牌对（访问令牌放在 `Authorization`，令牌对放在请求体），在刷新所用的同一把锁下发出，途中不会被一次刷新换掉；访问令牌过期时先刷新。返回的令牌对一次写入。路由回答 `401` 时会话结束（删除令牌对，`onUnauthorized` 调用一次，抛出 `sessionEnded` 为真的 `TenantSwitchError`）；其他回答，包括应用自己的拒绝、`503` 或没有回答，都保留会话，且不重试。再次调用是安全的：切换不会轮换被出示的令牌对。切换前的会话在服务端仍然有效，`logout()` 只结束切换出的会话。
+
 ## CoSec 8.0 应用必须允许什么
 
 设置了 `cosec.authentication.login.refresh.path` 时，starter 提供刷新路由，其应答正是本客户端所依赖的（[构建客户端](https://cosec.ahoo.me/zh/integration/clients#what-your-application-serves)）；登录属于应用。应用必须：

@@ -91,6 +91,7 @@ export interface CoSecConfig extends Partial<DeviceIdStorageCapable>, RequestTru
     readonly refreshRetryDelays?: readonly number[];
     readonly rotationLeeway?: number;
     readonly spaceIdProvider?: SpaceIdProvider;
+    readonly tenantSwitcher?: CoSecTenantSwitcher;
     readonly tokenRefresher?: TokenRefresher;
     readonly tokenRevoker?: TokenRevoker;
     readonly tokenStorage?: TokenStorage;
@@ -178,6 +179,21 @@ export class CoSecRequestInterceptor implements RequestInterceptor {
 // @public
 export interface CoSecRequestOptions extends DeviceIdStorageCapable, RequestTrustCapable {
     spaceIdProvider?: SpaceIdProvider;
+}
+
+// @public
+export class CoSecTenantSwitcher {
+    constructor(options: CoSecTenantSwitcherOptions);
+    // (undocumented)
+    readonly options: CoSecTenantSwitcherOptions;
+    // @internal
+    switch(token: CompositeToken, request: TenantSwitchRequest, shouldNotifyUnauthorized?: () => boolean): Promise<CompositeToken>;
+}
+
+// @public (undocumented)
+export interface CoSecTenantSwitcherOptions {
+    fetcher: Fetcher;
+    timeout?: number;
 }
 
 // @public
@@ -378,6 +394,7 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
     refresh(exchange?: FetchExchange): Promise<void>;
     // @internal
     sendRefresh(jwtToken: JwtCompositeToken, send: () => Promise<CompositeToken>): Promise<CompositeToken>;
+    switchTenant(request: TenantSwitchRequest): Promise<void>;
     // (undocumented)
     readonly tokenRefresher: TokenRefresher;
     // (undocumented)
@@ -395,6 +412,7 @@ export interface JwtTokenManagerOptions {
     isRefreshRejected?: (error: unknown) => boolean;
     refreshRetryDelays?: readonly number[];
     rotationLeeway?: number;
+    tenantSwitcher?: CoSecTenantSwitcher;
     tokenRevoker?: TokenRevoker;
 }
 
@@ -536,6 +554,20 @@ export class SpaceIdStorage extends KeyStorage<SpaceId> {
 
 // @public
 export interface SpaceIdStorageOptions extends Partial<KeyStorageOptions<SpaceId>> {
+}
+
+// @public
+export class TenantSwitchError extends FetcherError {
+    constructor(cause: unknown, sessionEnded: boolean);
+    readonly problem?: CoSecProblem;
+    readonly sessionEnded: boolean;
+    readonly status?: number;
+}
+
+// @public
+export interface TenantSwitchRequest {
+    readonly body?: Readonly<Record<string, unknown>>;
+    readonly endpoint: string;
 }
 
 // @public
