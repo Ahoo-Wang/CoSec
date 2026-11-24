@@ -355,7 +355,8 @@ private class TypedPatternParser(private val pattern: String) {
         }
         return PatternEscapes.literal(pattern, text, at, "*?{}") { char ->
             when {
-                char.isWhitespace() || char.isISOControl() -> "'$char' is not allowed in a $what"
+                char.isWhitespace() || char.isISOControl() ->
+                    "'${PatternEscapes.shown(char)}' is not allowed in a $what"
                 char == ':' && what == "type" -> "':' is not allowed in a type"
                 else -> null
             }

@@ -166,7 +166,7 @@
     {
       "id": "DOC-15",
       "source": "RFC 0014 R4 (the maintainer's answer of 2026-11-24: reserve them; the rules hard, the policies flexible); RFC 0005 §5 (sentences proposed in the PR)",
-      "statement": "The characters a future pattern syntax needs, `[ ] ( ) | ! ^ $ \\`, are a compile error unescaped in every pattern of a document and of a route map: an http:path: pattern, a typed resource pattern (its type and literal segments), an action pattern (its service and verb), a route's path and the literal segments of its resource template; the error names the character and its position. A backslash followed by one of `[ ] ( ) | ! ^ $ \\ * ? { }` is that character as text, and followed by anything else is a compile error, so every literal has one spelling and an escaped character never acts as syntax. A path pattern that matches no request path does not compile either: a backslash (PIP-14), a `;` or a control character (PIP-5, PIP-30), a dot segment (PIP-5), or a segment whose values hold more than 256 characters. An escape counts as the one character it writes in a pattern's length. cosec-migrate escapes a 7.x path pattern's reserved characters, which 7.x read as text, and cosec-openapi escapes every metacharacter of a spec path outside its templates.",
+      "statement": "The characters a future pattern syntax needs, `[ ] ( ) | ! ^ $ \\`, are a compile error unescaped in every pattern of a document and of a route map: an http:path: pattern, a typed resource pattern (its type and literal segments), an action pattern (its service and verb), a route's path and the literal segments of its resource template; the error names the character, printably (a control character as its \\uXXXX escape), and its position. A backslash followed by one of `[ ] ( ) | ! ^ $ \\ * ? { }` is that character as text, and followed by anything else is a compile error, so every literal has one spelling and an escaped character never acts as syntax. A path pattern that matches no request path does not compile either: a backslash (PIP-14), a `;` or a control character (PIP-5, PIP-30), a dot segment (PIP-5), or a segment whose values hold more than 256 characters. An escape counts as the one character it writes in a pattern's length. cosec-migrate escapes a 7.x path pattern's reserved characters, which 7.x read as text, and cosec-openapi escapes every metacharacter of a spec path outside its templates.",
       "level": "engine",
       "guards": [
         "engine:ReservedCharactersTest#a reserved character unescaped is a compile error where it stands, in every kind of pattern",
@@ -187,7 +187,8 @@
         "openapi:OpenAPIServiceGeneratorTest#a spec path's characters are text in its route, never pattern syntax",
         "openapi:OpenAPIServiceGeneratorTest#a spec path with a backslash fails generation, since no request path holds one",
         "migrate:MatcherTranslatorTest#a character 8_0 reserves converts escaped",
-        "document:RouteMapTest#a route reserves the characters a document's patterns reserve, and writes them escaped"
+        "document:RouteMapTest#a route reserves the characters a document's patterns reserve, and writes them escaped",
+        "engine:ReservedCharactersTest#a refused control character is shown by its code point, never raw"
       ],
       "properties": [
         "engine:ReservedCharactersPropertyTest#a reserved character unescaped is refused where it stands, in a path, a typed resource and an action",

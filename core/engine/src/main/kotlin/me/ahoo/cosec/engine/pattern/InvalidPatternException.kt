@@ -16,6 +16,7 @@
 package me.ahoo.cosec.engine.pattern
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.model.Identifiers
 
 /**
  * An action, resource or path pattern that does not compile. Patterns fail closed: there is no fallback that matches
@@ -23,4 +24,5 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  */
 @InternalCoSecApi
 class InvalidPatternException(val pattern: String, val index: Int, reason: String) :
-    IllegalArgumentException("Invalid pattern [$pattern] at $index: $reason")
+    // The pattern is a document's text, which nothing checked yet: shown printable, so it writes no line of a log.
+    IllegalArgumentException("Invalid pattern [${Identifiers.printable(pattern)}] at $index: $reason")

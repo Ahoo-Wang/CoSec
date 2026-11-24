@@ -78,7 +78,7 @@ class ActionPattern private constructor(
             }
             return PatternEscapes.literal(pattern, text, at, NAME_SYNTAX) { char ->
                 if (char == SEPARATOR || char.isWhitespace() || char.isISOControl()) {
-                    "'$char' is not allowed in a service or verb"
+                    "'${PatternEscapes.shown(char)}' is not allowed in a service or verb"
                 } else {
                     null
                 }
