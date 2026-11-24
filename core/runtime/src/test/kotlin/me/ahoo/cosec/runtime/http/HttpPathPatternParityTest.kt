@@ -162,7 +162,7 @@ class HttpPathPatternParityTest {
         if (restNames.any { it in otherNames }) {
             return IntendedDifference.DUPLICATE_REST_VARIABLE
         }
-        if (pattern.replace(NAMED_CAPTURE, "").any { it in PatternEscapes.RESERVED }) {
+        if (pattern.replace(ANY_CAPTURE, "").any { it in PatternEscapes.RESERVED }) {
             return IntendedDifference.RESERVED_CHARACTER
         }
         if (segments.any { segment ->
@@ -313,6 +313,9 @@ class HttpPathPatternParityTest {
         private const val MISMATCHES_SHOWN = 20
         private val CAPTURE_WITH_COLON = Regex("\\{[^}]*:")
         private val NAMED_CAPTURE = Regex("\\{[^*}][^}]*}")
+
+        /** A capture of either kind, whose name may hold `$` (a Java identifier part), which is no literal. */
+        private val ANY_CAPTURE = Regex("\\{[^}]*}")
 
         fun encode(value: String): String = value.toByteArray(Charsets.UTF_8)
             .joinToString("") { "%" + "%02X".format(it.toInt() and 0xFF) }

@@ -545,6 +545,20 @@ rest, and the kubelet restarts the pod.
   fold several statements' patterns into fewer; a segment after a leading `**` counts twice. On the data
   plane a stored document over a bound is installed as failed, and the requests that read it answer `503`.
 
+## A pattern does not compile after an upgrade {#a-pattern-does-not-compile-after-an-upgrade}
+
+- `` '<c>' is reserved for a future pattern syntax; write \<c> for the character ``: a pattern holds one of
+  `[ ] ( ) | ! ^ $ \` unescaped (`DOC-15`), which an earlier preview read as text. Write it escaped, `\$` for `$`, a
+  backslash doubled in JSON ([Policy language](../policies/language.md#reserved-characters)). The message gives the
+  position. Since 8.0.0-beta.9 a stored document with one is installed as failed, and the requests that read it answer
+  `503`: find such documents before upgrading ([Upgrading from 8.0.0-beta.8](./upgrading-previews.md#from-8-0-0-beta-8)).
+- `` \<c> escapes nothing ``: a backslash before a character that is not one of `[ ] ( ) | ! ^ $ \ * ? { }`.
+- `` a request path holds no backslash ``, `` hold no ';' ``, `` holds no control character ``, `` holds no dot segment ``,
+  or `` more than the 256 a request path's segment holds ``: the pattern matches no path the pipeline lets through
+  (`PIP-5`, `PIP-14`, `PIP-30`), so a DENY written so would deny nothing. Name the path as the pipeline sees it.
+- A route map that does not load with one of these messages: its path, action or resource template holds the
+  character; the same rule applies.
+
 ## A compilation does not end {#a-compilation-does-not-end}
 
 `Compiling snapshot document [<doc>] revision <n> did not end within <budget>; the load fails, and the revision is not

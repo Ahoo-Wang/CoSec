@@ -66,7 +66,7 @@ class RouteMapTest {
         val escaped = load(
             file(
                 route("GET", "/odata/\\\\${'$'}metadata", "odata:meta\\\\!", "odata/meta\\\\(data\\\\)"),
-                route("GET", "/Products\\\\({id}\\\\)", "odata:product", "pro\\\\(duct/{id}"),
+                route("GET", "/odata/v1/Products\\\\({id}\\\\)", "odata:product", "pro\\\\(duct/{id}"),
             ),
         )
         (escaped.resolve("GET", "/odata/${'$'}metadata") as RouteResolution.Mapped).let {
@@ -74,7 +74,7 @@ class RouteMapTest {
             it.resource.type.assert().isEqualTo("odata")
             it.resource.id.assert().isEqualTo("meta(data)")
         }
-        (escaped.resolve("GET", "/Products(7)") as RouteResolution.Mapped).let {
+        (escaped.resolve("GET", "/odata/v1/Products(7)") as RouteResolution.Mapped).let {
             it.resource.type.assert().isEqualTo("pro(duct")
             it.resource.id.assert().isEqualTo("7")
         }
