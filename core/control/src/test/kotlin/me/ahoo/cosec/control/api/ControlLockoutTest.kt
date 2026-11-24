@@ -18,6 +18,10 @@ package me.ahoo.cosec.control.api
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.authz.ControlActions
+import me.ahoo.cosec.control.authz.ControlAuthorizer
+import me.ahoo.cosec.control.authz.ControlDecision
+import me.ahoo.cosec.control.authz.ControlResources
 import me.ahoo.cosec.control.authz.EngineAuthority
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ACME
@@ -50,6 +54,10 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.BindingRef
+import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.model.decision.StatementRef
+import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
@@ -135,7 +143,105 @@ class ControlLockoutTest {
             operator,
             SnapshotKey.Platform,
             frozen
-        )!!.reason.assert().contains("denied by policy freeze, statement 0")
+        ).let {
+            it!!.reason.assert().contains("denied by policy freeze, statement 0")
+            // The statement's policy is the platform's: an operator who may not read it is told the refusal alone.
+            it.namedIn.assert().containsExactly(SnapshotKey.Platform)
+            it.unnamed.assert().contains("cosec:publish on [platform] would be denied").doesNotContain("freeze")
+        }
+    }
+
+    /**
+     * DR1-F-13 (`CTL-51`): a refusal by a tenant's platform boundary names that boundary, a policy of the platform
+     * document, only to a publisher who may read the platform document, as `simulate` hides any reference but a statement
+     * of a readable policy. The lock-out check decides for platform principals, whose tenant names no boundary, so the
+     * engine does not answer one here today; the rule is held where the refusal is worded.
+     */
+    @Test
+    fun `a refusal by the platform boundary names it only to a reader of the platform document`() {
+        val refusal = ControlLockout.denied(
+            "cosec:publish on [platform]",
+            StatementRef.Boundary(PolicyId("fence"), TenantId("acme")),
+            emptyMap(),
+            PolicyHomes(HeldDocuments(null, null, null)),
+        )
+        refusal.reason.assert().contains("platform boundary fence")
+        refusal.namedIn.assert().containsExactly(SnapshotKey.Platform)
+        refusal.unnamed.assert().contains("would be denied by the tenant's platform boundary").doesNotContain("fence")
+    }
+
+    /**
+     * DR1-F-13 (`CTL-51`): where each kind of reference is defined, as `Redaction.visible` reads it: a bound policy's
+     * own document (the app's, the tenant's), an attachment's tenant and platform together, a built-in's platform; a
+     * policy no document of the view defines, a scope refused and no statement at all name nothing.
+     */
+    @Test
+    fun `each reference is named only where its policy is defined`() {
+        val app = SnapshotKey.App("order")
+        val tenant = SnapshotKey.Tenant("acme")
+        val heads = mapOf(
+            SnapshotKey.Platform to Held(platform(listOf(admin), emptyList()), null),
+            app to Held(StoreFixtures.candidate(app, listOf(allow("perm:order/read"))), null),
+            tenant to Held(StoreFixtures.candidate(tenant, listOf(allow("own"))), null),
+        )
+        val homes = PolicyHomes(HeldDocuments(heads[SnapshotKey.Platform], heads[app], heads[tenant]))
+        fun denied(by: StatementRef?) = ControlLockout.denied("x", by, heads, homes)
+        fun bound(policy: String, document: DocumentKind) =
+            StatementRef.Policy(PolicyId(policy), 0, "", BindingRef.Bound(BindingId("b"), document))
+
+        denied(bound("perm:order/read", DocumentKind.TENANT)).namedIn.assert().containsExactly(app)
+        denied(bound("own", DocumentKind.TENANT)).namedIn.assert().containsExactly(tenant)
+        denied(bound("admin", DocumentKind.TENANT)).namedIn.assert().containsExactly(SnapshotKey.Platform)
+        denied(StatementRef.Policy(PolicyId("own"), 0, "", BindingRef.Attached(PolicyId("own")))).namedIn
+            .assert().containsExactly(tenant, SnapshotKey.Platform)
+        denied(StatementRef.Policy(PolicyId("cosec:blacklist"), 0, "", BindingRef.Builtin)).namedIn
+            .assert().containsExactly(SnapshotKey.Platform)
+        denied(bound("nowhere", DocumentKind.TENANT)).let {
+            it.namedIn.assert().isEmpty()
+            it.reason.assert().isEqualTo("x would be denied")
+        }
+        denied(StatementRef.ScopeRejected(ScopeResolution.Rejected.Reason.APP_MISMATCH)).let {
+            it.namedIn.assert().isEmpty()
+            it.reason.assert().contains("x would be denied (")
+        }
+        denied(null).reason.assert().isEqualTo("x would be denied: no statement permits it")
+    }
+
+    /**
+     * DR1-F-13 (`CTL-51`): the lock-out finding names a statement only to a publisher who may read the document its policy
+     * is defined in, as `simulate` shows one; to another it says the refusal without the statement.
+     */
+    @Test
+    fun `a statement is named only to a publisher who may read the document that defines it`() = runBlocking<Unit> {
+        val named = LockoutCheck { _, _, _ ->
+            LockoutCheck.Lockout(
+                "x would be denied by policy secret, statement 0",
+                listOf(SnapshotKey.Platform),
+                "x would be denied"
+            )
+        }
+        val ids = java.util.concurrent.atomic.AtomicInteger()
+        suspend fun warning(readsPlatform: Boolean): String {
+            val authorizer = ControlAuthorizer { _, action, resource ->
+                val platform = ControlResources.document(SnapshotKey.Platform)
+                val platformRead = action == ControlActions.READ && resource.type == platform.type && resource.id == platform.id
+                if (platformRead && !readsPlatform) ControlDecision.DENY else ControlDecision.PERMIT
+            }
+            val changes = Changes(
+                harness.memory,
+                harness.revisions,
+                { ChangeId("named-${ids.incrementAndGet()}") },
+                authorizer,
+                harness.clock,
+                ChangeOptions(shadow = IMMEDIATE_WINDOW),
+                revocations = RevocationReader.NONE,
+                lockout = named,
+            )
+            val change = changes.propose(operatorFor(ACME), ACME, 0, listOf(Operation.PutPolicy(allow("p"))), "test")
+            return change.findings.single { it.check == LockoutCheck.CHECK }.message
+        }
+        warning(readsPlatform = true).assert().contains("x would be denied by policy secret, statement 0")
+        warning(readsPlatform = false).assert().contains("x would be denied.").doesNotContain("secret")
     }
 
     @Test

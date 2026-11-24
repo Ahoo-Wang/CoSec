@@ -76,8 +76,13 @@ internal class RetainedDocuments(
     suspend fun retained(key: SnapshotKey, revision: Long): PolicyDocument =
         revisions.revision(key, revision) ?: throw gone(key, revision)
 
+    /**
+     * Names neither the document nor the revision: `explain` with `at` reads the platform's and an app's documents too,
+     * which the caller may not read, and a detail naming them would tell which of their revisions are retained (DR1-F-13).
+     */
+    @Suppress("UnusedParameter")
     private fun gone(key: SnapshotKey, revision: Long) = ChangeRejectedException(
         GONE,
-        "[$key] keeps no revision $revision"
+        "a revision this call reads is no longer retained"
     )
 }

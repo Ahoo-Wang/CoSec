@@ -111,7 +111,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `action` | 必填，`service:verb`（未映射的 HTTP 请求为 `http:GET`）。`http` 动作按请求方法的方式读取：`http:HEAD` 按 `http:GET` 判定和分析，含小写字母的动词是 `400`（`PIP-18`）。 |
 | `resource` | 必填：`type/id`，或以 `/` 开头的 `http` 资源路径。`http` 路径与请求路径经同一个规范化：执法拒绝的路径（点号段、格式错误的转义、超过 2,048 个字符或每个 `/` 段 256 个）是 `400`，路径参数（`;v=2`）被去掉。类型化 id 受同样的长度限制。 |
 | `remoteIp`、`time` | 客户端地址，以及 ISO 时刻（默认：当前）。 |
-| `principalBindings`、`breakGlass` | 凭证能用到什么，默认都为 `true`（CoSec 自己的令牌）。模拟 API key 时把 `breakGlass` 设为 `false`；带角色上限的 key 还要把 `principalBindings` 设为 `false`：此时附加的策略和主体绑定不授予任何东西，它们的 DENY 照样生效。只接受布尔值。 |
+| `principalBindings`、`breakGlass` | 凭证能用到什么，默认都为 `true`（CoSec 自己的令牌）。模拟 API key 时把 `breakGlass` 设为 `false`；带角色上限的 key 还要把 `principalBindings` 设为 `false`：此时附加的策略和主体绑定不授予任何东西，它们的 DENY 照样生效。只接受布尔值。省略时，模拟 API key 的请求会用上这个 key 用不到的东西，因而可能显示执行时不会给出的放行，反过来则不会（DR1-F-11）：除 CoSec 自己的令牌以外，任何凭证都写明这两项。 |
 
 响应包含 `enforced`、要求时的 `candidate`，以及 `differs`。每个决策为 `Permit`、`Deny`、`Indeterminate`（带 `cause`，即失败的种类）或 `Rejected`（作用域被拒绝，带 `reason`：`APP_MISMATCH` 或 `SPACE_NOT_MEMBER`），并给出做出决策的语句（`by`）和完整的候选追踪。其策略定义在你无权读取的文档中的语句会被省略并计入 `redacted`，即使应用它的绑定在你可以读取的文档里。`differs` 比较两个决策的内容，失败按其类型和消息比较，所以两侧相同的编译失败不算不同。
 
@@ -134,7 +134,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 
 ## 用 explain 调试决策 {#debugging-a-decision-with-explain}
 
-`explain` 接受同样的 `request`（与 `simulate` 一样授权和检查），以及可选的 `at`：某个决策所用的文档修订，取自其审计事件的记录（`{"platform": 12, "app": 3, "tenant": 4}`）。只要这些修订仍被保留，它就在这些修订上求值，并返回决策及其追踪，让你看到过去的请求为什么被这样决策。是否读取了应用文档，按执行时的方式、用所记录修订的租户文档来决定；它回答的修订就是它读取的修订：没有读取应用文档时没有 `app` 成员，绝不是 `null`。`explain` 回答的 `version` 可以原样作为 `at` 再发回去。其字段以及如何找到该请求，见[代码中的检查](../integration/checks.md)。
+`explain` 接受同样的 `request`（与 `simulate` 一样授权和检查），以及可选的 `at`：某个决策所用的文档修订，取自其审计事件的记录（`{"platform": 12, "app": 3, "tenant": 4}`）。只要这些修订仍被保留，它就在这些修订上求值（否则为 `410`，不点名文档也不点名修订：`at` 也指定了你可能无权读取的平台与应用文档的修订，DR1-F-13），并返回决策及其追踪，让你看到过去的请求为什么被这样决策。是否读取了应用文档，按执行时的方式、用所记录修订的租户文档来决定；它回答的修订就是它读取的修订：没有读取应用文档时没有 `app` 成员，绝不是 `null`。`explain` 回答的 `version` 可以原样作为 `at` 再发回去。其字段以及如何找到该请求，见[代码中的检查](../integration/checks.md)。
 
 ## 变更 {#changes}
 
@@ -266,7 +266,7 @@ flowchart LR
 - **平台主体**列出它对其作为层持有 `cosec:read` 的那些层：`doc/tenant` 对应租户文档的变更，`doc/app` 对应应用的，`doc/platform`（平台文档本身的读取）对应平台文档的变更。`cosec:platform-admin` 三者都持有。层的读取只允许列表去查看：每个变更仍然只在 `GET /changes/{id}` 会向你展示时才出现。
 - **其他调用方**得到不带详情的 `403`，什么也不读取。
 
-无论你能看到什么，每个请求至多读取四页变更。先达到这个上限时，它应答已找到的变更（一页较短或为空），并给出 `next`，从停下的位置继续。所以带 `next` 的空页不是结尾：一直沿着 `next` 走到它为 `null`。这个 `next` 可能指向你看不到的变更。它只告诉你，某个你可以列出的层中的某个文档在该状态下有一个未完成的变更，而按 id 读取该变更仍然是 `404`。按文档列出只读取该文档的未完成变更，它的 `next` 总是你能看到的变更。
+无论你能看到什么，每个请求至多读取四页变更。先达到这个上限时，它应答已找到的变更（一页较短或为空），并给出 `next`，从停下的位置继续。所以带 `next` 的空页不是结尾：一直沿着 `next` 走到它为 `null`。这个 `next` 可能指向你看不到的变更；它是位置（该变更的文档与 id）的编码，解码就能看到那个变更的 id：以 `limit=1` 逐个列出，租户的主体不需要 `cosec:read` 就能数出自己租户文档在各状态下的未完成变更，并得知它们的 id（DR1-E-8）。除此之外不透露这种变更的任何内容：按 id 读取它仍然是 `404`。不透明的位置留到 8.1。按文档列出只读取该文档的未完成变更，它的 `next` 总是你能看到的变更。
 
 ### 列表游标 {#listing-cursors}
 
@@ -390,7 +390,7 @@ flowchart LR
 
 ## 发布与回滚 {#publishing-and-rolling-back}
 
-`POST /changes/{id}:publish` 发布一个 `READY` 的变更。如果它的窗口出现了 `WIDENED`、`NARROWED`、`BECAME_INDETERMINATE`、`BECAME_DENIED` 或 `OBLIGATIONS_CHANGED` 的请求，或以证据不足关闭，发布者必须确认这些数字，否则返回 `428`：
+`POST /changes/{id}:publish` 发布一个 `READY` 的变更。无论结果如何，它都以 `200` 回答这个变更：看它的 `state`，只有为 `PUBLISHED` 时才是发布了，不能只看状态码（DR1-F-12；重新检查可能让它变成 `CONFLICTED`、`DRAFT` 或 `AWAITING_APPROVAL`，见下文）。如果它的窗口出现了 `WIDENED`、`NARROWED`、`BECAME_INDETERMINATE`、`BECAME_DENIED` 或 `OBLIGATIONS_CHANGED` 的请求，或以证据不足关闭，发布者必须确认这些数字，否则返回 `428`：
 
 ```json
 { "ack": { "window": "<window id>", "counts": { "SAME": 4180, "NARROWED": 3 } } }
@@ -398,7 +398,7 @@ flowchart LR
 
 窗口 id 和计数在变更的 `shadow` 中；为零的计数可以省略。
 
-对平台文档、平台租户的文档（`tenant:(platform)`）或控制应用的文档的变更，还会检查它发布之后，其操作者是否仍能到达控制面（检查 `V4`）。引擎在候选就位的情况下，判定操作者正在进行的请求（按管道判定它的方式：路径、主体、成员关系、请求头与时间），以及控制应用中对该文档的 `cosec:publish`。会把操作者挡在外面的变更，在提议时带有 `V4` `WARNING`；发布时针对发布者检查，除非发布者在发布请求体里以 `"lockout": true` 确认，否则返回 `422`；确认之后，变更会记录这一确认以及确认者。把控制 API 移到另一条路径、角色或策略是正当的交接：确认它，或者分两次变更完成（先加入新的入口并发布，再删除旧的）。被锁在外面之后的出路是 [`cosec-migrate restore`](../operations/storage.md#recovering-from-a-lock-out)。这项检查的局限：
+对平台文档、平台租户的文档（`tenant:(platform)`）或控制应用的文档的变更，还会检查它发布之后，其操作者是否仍能到达控制面（检查 `V4`）。引擎在候选就位的情况下，判定操作者正在进行的请求（按管道判定它的方式：路径、主体、成员关系、请求头与时间），以及控制应用中对该文档的 `cosec:publish`。会把操作者挡在外面的变更，在提议时带有 `V4` `WARNING`；发布时针对发布者检查，除非发布者在发布请求体里以 `"lockout": true` 确认，否则返回 `422`；确认之后，变更会记录这一确认以及确认者。这条发现只在操作者能读取定义该策略的文档时才点名作出判定的语句，与 `simulate` 显示语句的方式相同（`CTL-51`）；否则只说哪个请求会被拒绝，不点名语句（DR1-F-13）。把控制 API 移到另一条路径、角色或策略是正当的交接：确认它，或者分两次变更完成（先加入新的入口并发布，再删除旧的）。被锁在外面之后的出路是 [`cosec-migrate restore`](../operations/storage.md#recovering-from-a-lock-out)。这项检查的局限：
 
 - 只检查发布者自己的回路，使用正在进行的请求的事实。其他操作者可能被锁在外面。
 - 看不到之后发生的事：到期的绑定或令牌、去掉某个角色的成员关系提供者、窗口之外的 `time` 条件、换了的地址。
