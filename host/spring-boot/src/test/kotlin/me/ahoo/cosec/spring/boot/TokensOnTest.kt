@@ -28,7 +28,7 @@ import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.id.RandomIdGenerator
-import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
@@ -62,7 +62,8 @@ class TokensOnTest {
                     "jti-1",
                     "alice",
                     null,
-                    null
+                    null,
+                    PERSON
                 )
             } else {
                 throw TokenVerificationException("not a token of the issuer")
@@ -97,7 +98,7 @@ class TokensOnTest {
         JwtTokenConverter(
             RandomIdGenerator,
             signing
-        ).toToken(TokenSubject("alice", Identity.Credential.Kind.PERSON)).accessToken
+        ).toToken(TokenSubject("alice", PERSON)).accessToken
 
     @Test
     fun `a verifier alone turns tokens on and issues none`() {

@@ -94,8 +94,8 @@ class TokenSubject(
         @JvmOverloads
         fun of(token: VerifiedToken, issue: TokenFamilies.Issue? = null): TokenSubject = TokenSubject(
             id = token.principal,
-            // A person's, as every token was read before kinds; the verified token's own kind replaces it (IDN-45).
-            kind = Identity.Credential.Kind.PERSON,
+            // The kind the presented token carries, never one an application's hook gives (IDN-46).
+            kind = token.kind,
             app = token.app,
             tenant = token.tenant,
             roles = token.roles,

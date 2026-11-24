@@ -41,6 +41,11 @@ internal object TokenOperations {
         "token.verify" to { arguments ->
             describe(JwtTokenVerifier(JwtSigning.hmac256(arguments.getValue("secret"))).verify(arguments.getValue("token")))
         },
+        // Whose the token is, as this version's verifier reads it (`IDN-46`): apart from `token.verify`, which both
+        // versions describe in the same words.
+        "token.kind" to { arguments ->
+            Kinds.of(JwtTokenVerifier(JwtSigning.hmac256(arguments.getValue("secret"))).verify(arguments.getValue("token")))
+        },
     )
 
     private fun subject(name: String): TokenSubject = when (name) {

@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenFamily
@@ -56,7 +57,14 @@ class SwitchedSessionRootTest {
     private val acme = TenantId("acme")
 
     private fun token(session: TokenSession, tenant: TenantId) =
-        VerifiedToken("jti-${session.id}-${session.generation}", alice.value, tenant.value, null, session = session)
+        VerifiedToken(
+            "jti-${session.id}-${session.generation}",
+            alice.value,
+            tenant.value,
+            null,
+            PERSON,
+            session = session
+        )
 
     private suspend fun switched(from: TokenSession, fromTenant: TenantId, to: TenantId): TokenSession =
         live.of(token(from, fromTenant)).fork(to).session

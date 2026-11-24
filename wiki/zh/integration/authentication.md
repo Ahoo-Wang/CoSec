@@ -147,7 +147,7 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 }
 ```
 
-`kind`（`Identity.Credential.Kind`，`IDN-45`）是必需的：令牌属于谁，人还是工作负载。用户的登录声明为人的，机器的（client credentials、服务账号）声明为工作负载的：工作负载从不审批变更、从不是控制面的信任根、也没有 break-glass。CoSec 把它写进访问令牌的 `cosec.kind`，刷新与租户切换都保留它。`TokenSubject("alice", Kind.PERSON, "acme")` 是租户 `acme`：`tenant` 排在 `app` 之前，和 CoSec 其他 API 一样（`TokenFamilies.start(tenant, principal)`）。示例把 `id` 之后的每个参数都按名字写，读起来更清楚。
+`kind`（`Identity.Credential.Kind`，`IDN-45`）是必需的：令牌属于谁，人还是工作负载。用户的登录声明为人的，机器的（client credentials、服务账号）声明为工作负载的：工作负载从不审批变更、从不是控制面的信任根、也没有 break-glass。CoSec 把它写进访问令牌的 `cosec.kind`，它的校验器再读回来（`IDN-46`），刷新与租户切换都保留出示的令牌的种类，不论钩子答什么。没有这个声明的令牌（更早的 8.0 预览版签发的）读作工作负载的，从它刷新出的每个令牌也一样，直到用户重新登录。`TokenSubject("alice", Kind.PERSON, "acme")` 是租户 `acme`：`tenant` 排在 `app` 之前，和 CoSec 其他 API 一样（`TokenFamilies.start(tenant, principal)`）。示例把 `id` 之后的每个参数都按名字写，读起来更清楚。
 
 `authenticate` 通过抛出异常来拒绝登录：它没有“空”的回答，登录失败或调用方已离开时都不会签发令牌。它运行在调用方的线程上，在 WebFlux 中就是事件循环，因此基于阻塞客户端（例如 JDBC 用户表）的实现要用 `runInterruptible(myDispatcher) { ... }` 把调用移到自己的有界调度器上。Spring 在 WebFlux 和 Spring MVC 中都能运行 `suspend` 控制器函数。MVC 需要类路径上有 `kotlinx-coroutines-reactor`；没有时，请在请求线程上调用 `runBlocking { ... }`。
 

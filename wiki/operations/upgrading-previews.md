@@ -125,6 +125,13 @@ Which preview of the library may run behind which preview of the gateway image: 
   must not depend on (`contract/token/claims.json`); refresh tokens do not. The claim makes each token about 30
   characters longer, so the same heap's verified-token cache holds about 0.5 % fewer of them (16,298 of the largest
   test token at 2 GiB, where 16,384 fitted).
+- **Breaking: a verified token says whose it is** (`IDN-46`). Affected: every `TokenVerifier` of your own, and every
+  session signed in before this preview. `VerifiedToken` takes a required `kind` after `app`, with no default: a
+  verifier does not compile until it says which from the token's claims (a client-credentials token a workload's), and
+  declares `WORKLOAD` where the token does not say. The credential `TokenAuthenticator` makes is of that kind, and only
+  CoSec's own token read as a person's gets break-glass. CoSec's verifier reads `cosec.kind`: a token without it, which
+  an earlier preview issued, is a workload's, and a refresh or a tenant switch keeps the presented token's kind. Such a
+  session cannot approve a change or use break-glass until its user signs in again.
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 

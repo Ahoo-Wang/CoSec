@@ -22,6 +22,7 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -114,6 +115,15 @@ class SwitchTenantAuthenticationTest {
         subject.policies.assert().isEmpty()
         subject.attributes.assert().isEmpty()
         subject.membershipMarker.assert().isEqualTo(MembershipClaims.PROVIDER)
+    }
+
+    /** `IDN-46`: the new token is of the kind of the token the switch was asked with, whatever its hook answers. */
+    @Test
+    fun `the new token keeps the kind of the previous one - IDN-46`() = runTest {
+        val member = Switching(mapOf("globex" to TenantMembership(roles = setOf("admin"))))
+        member.authenticate(Credentials("globex", alice)).kind.assert().isEqualTo(Identity.Credential.Kind.PERSON)
+        val workload = PermittedRequest.withToken(signedIn.session, kind = Identity.Credential.Kind.WORKLOAD)
+        member.authenticate(Credentials("globex", workload)).kind.assert().isEqualTo(Identity.Credential.Kind.WORKLOAD)
     }
 
     /** `SCP-11`, `SCP-12`: without an app in the answer, the new token keeps the previous one's, or none. */

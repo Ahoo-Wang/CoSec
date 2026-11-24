@@ -54,6 +54,7 @@ import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -175,7 +176,7 @@ class MetricsListenerTest {
         val unchecked = UncheckedRevocations()
         CoSecMeters.bind(registry, unchecked)
         val verifier = object : TokenVerifier {
-            override fun verify(accessToken: String): VerifiedToken = VerifiedToken("t1", "alice", null, null)
+            override fun verify(accessToken: String): VerifiedToken = VerifiedToken("t1", "alice", null, null, PERSON)
 
             override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
         }

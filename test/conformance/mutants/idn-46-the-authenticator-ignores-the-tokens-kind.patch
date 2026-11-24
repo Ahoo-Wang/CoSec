@@ -1,0 +1,19 @@
+# Rule: IDN-46
+# Mutant: TokenAuthenticator makes every token's credential a person's, whatever its verifier read, so a workload's token approves and CoSec's own one uses break-glass
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.TokenKindTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
+index 2633536ab..dd692e9ef 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
+@@ -139,8 +139,8 @@ class TokenAuthenticator(
+                 MembershipSource.of(token),
+                 token.attributes,
+                 // Whose the token is, as its verifier read it (IDN-46): a workload's token never uses break-glass.
+-                Identity.Credential(credentialMethod, token.kind, token.id, token.expiresAt),
+-                breakGlass = ownTokens && token.kind == Identity.Credential.Kind.PERSON,
++                Identity.Credential(credentialMethod, Identity.Credential.Kind.PERSON, token.id, token.expiresAt),
++                breakGlass = ownTokens,
+                 issuedAt = token.issuedAt,
+                 apiKeyCredential = false,
+                 app = token.app?.let(::AppId),

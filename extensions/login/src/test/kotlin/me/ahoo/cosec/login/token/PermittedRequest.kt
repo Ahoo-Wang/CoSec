@@ -66,6 +66,7 @@ object PermittedRequest {
         roles: Set<String> = setOf("admin"),
         attributes: Map<String, Any> = emptyMap(),
         app: String? = null,
+        kind: Identity.Credential.Kind = Identity.Credential.Kind.PERSON,
     ): SecurityContext = of(
         AuthenticatedPrincipal(
             PrincipalId(principal),
@@ -78,8 +79,8 @@ object PermittedRequest {
                 )
             ),
             attributes,
-            Identity.Credential(Identity.Method.JWT, Identity.Credential.Kind.PERSON, "t1", null),
-            breakGlass = true,
+            Identity.Credential(Identity.Method.JWT, kind, "t1", null),
+            breakGlass = kind == Identity.Credential.Kind.PERSON,
             issuedAt = issuedAt,
             apiKeyCredential = false,
             app = app?.let(::AppId),

@@ -423,8 +423,10 @@ with the host stopped. Its probes are on the management port 8081, never on 8080
   names, exactly by space; attached policies and principal bindings grant it nothing, but their DENYs still apply
   (IDN-2, BND-9), so a capped key is denied what its principal is denied. A key grants nothing its principal does not
   hold (IDN-1), and no API key ever gets break-glass (BRK-8). `roles: []` leaves only `Anyone`, less those DENYs.
-- Break-glass that does not apply: only a token CoSec's own `JwtTokenVerifier` verified gets it (BRK-8), never a token
-  of a custom `TokenVerifier`, even through `TokenAuthenticator`. An authenticator naming its method `jwt` makes every
+- Break-glass that does not apply: only a token CoSec's own `JwtTokenVerifier` verified, and read as a person's, gets it
+  (BRK-8, IDN-46), never a token of a custom `TokenVerifier`, even through `TokenAuthenticator`. A session begun on an
+  earlier 8.0 preview has no `cosec.kind` claim, reads as a workload's (no break-glass, no approving: `a workload's
+  credential ... cannot approve`) and stays so through refreshes: sign in again. An authenticator naming its method `jwt` makes every
   request `503` (`The authentication method [jwt] is CoSec's own token's`): that name is reserved.
 - `token-invalid` for a token whose `tenantId` claim is empty or not a string, or whose `attributes` name `apiKeyId` (reserved
   for API keys).

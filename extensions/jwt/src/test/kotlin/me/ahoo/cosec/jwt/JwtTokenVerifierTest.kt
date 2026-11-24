@@ -251,11 +251,12 @@ class JwtTokenVerifierTest {
 
     /**
      * RC1-26: [JwtTokenVerifier] is CoSec's own verifier, so the tokens it verifies may use break-glass, and their
-     * credential is named `jwt`; the same token through a verifier that wraps it is not CoSec's, and may not.
+     * credential is named `jwt`; the same token through a verifier that wraps it is not CoSec's, and may not. The token
+     * is a person's (`IDN-46`): a workload's gets no break-glass from any verifier.
      */
     @Test
     fun onlyThisVerifiersTokensMayUseBreakGlass() {
-        val token = signed {}
+        val token = signed { withClaim(Jwts.KIND_CLAIM, Jwts.PERSON) }
         fun authenticate(verifier: TokenVerifier) = runBlocking {
             val result = TokenAuthenticator(verifier, RevocationReader.NONE).authenticate(Credentials(token, null))
             (result as AuthnResult.Authenticated).principal

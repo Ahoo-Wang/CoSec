@@ -247,7 +247,7 @@ class WebAdapterParityTest {
 
     private val slashTenantTokens = TokenAuthenticator(
         object : TokenVerifier {
-            override fun verify(accessToken: String) = VerifiedToken("jti", "alice", "acme/west", null)
+            override fun verify(accessToken: String) = VerifiedToken("jti", "alice", "acme/west", null, PERSON)
 
             override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
         },

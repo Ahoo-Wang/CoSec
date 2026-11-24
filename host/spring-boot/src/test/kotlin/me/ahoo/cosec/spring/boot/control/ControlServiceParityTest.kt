@@ -50,6 +50,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -290,7 +291,7 @@ class ControlServiceParityTest {
             roles = setOf("admin"),
             credential = Identity.Credential(
                 Identity.Method.JWT,
-                Identity.Credential.Kind.PERSON,
+                PERSON,
                 "token-$tenant",
                 now.plusSeconds(300)
             ),
@@ -361,6 +362,7 @@ class ControlServiceParityTest {
             subject,
             tenant,
             "cosec-control",
+            PERSON,
             setOf("admin"),
             attributes = attributes,
             issuedAt = now,
@@ -505,7 +507,7 @@ class ControlServiceParityTest {
             roles = setOf("admin"),
             credential = Identity.Credential(
                 Identity.Method.JWT,
-                Identity.Credential.Kind.PERSON,
+                PERSON,
                 "token-$subject-$tenant",
                 now.plusSeconds(300)
             ),

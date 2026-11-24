@@ -20,6 +20,7 @@ import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.SubjectRevocation
 import me.ahoo.cosec.spi.token.TokenRevokedException
@@ -59,7 +60,7 @@ class TokenRevocationTest {
     }
 
     private fun token(issuedAt: Instant?, tenantId: String? = tenant.value, id: String = alice.value): VerifiedToken =
-        VerifiedToken("jti-$issuedAt", id, tenantId, null, issuedAt = issuedAt)
+        VerifiedToken("jti-$issuedAt", id, tenantId, null, PERSON, issuedAt = issuedAt)
 
     private val revocations = Revocations()
 
@@ -127,7 +128,7 @@ class TokenRevocationTest {
 
     @Test
     fun aTokenWithoutIssuedAtIsRevoked() = runTest {
-        val plain = VerifiedToken("plain", alice.value, null, null)
+        val plain = VerifiedToken("plain", alice.value, null, null, PERSON)
         assertAccepted(plain)
 
         revocations.revokeSubject(TenantId.DEFAULT, alice, now)

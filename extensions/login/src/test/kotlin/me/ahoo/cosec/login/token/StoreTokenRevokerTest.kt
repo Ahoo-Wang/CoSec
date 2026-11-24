@@ -19,6 +19,7 @@ import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.RevocationUnavailableException
@@ -47,7 +48,7 @@ class StoreTokenRevokerTest {
 
     @Test
     fun revoke() = runTest {
-        val tokenPrincipal = VerifiedToken("tokenId", "alice", null, null)
+        val tokenPrincipal = VerifiedToken("tokenId", "alice", null, null, PERSON)
         val accessToken = "accessToken"
         every { tokenVerifier.verify(accessToken) } returns tokenPrincipal
 
@@ -72,7 +73,7 @@ class StoreTokenRevokerTest {
     /** As before the store was read through [TokenRevocation]: a token already revoked is refused, not revoked again. */
     @Test
     fun revokeWhenAlreadyRevoked() = runTest {
-        every { tokenVerifier.verify("accessToken") } returns VerifiedToken("tokenId", "alice", null, null)
+        every { tokenVerifier.verify("accessToken") } returns VerifiedToken("tokenId", "alice", null, null, PERSON)
         tokenRevoker.revoke("accessToken")
 
         assertThrows<TokenRevokedException> { tokenRevoker.revoke("accessToken") }
@@ -81,7 +82,7 @@ class StoreTokenRevokerTest {
     /** A logout is not stopped by a revocation store it cannot read: it records the revocation, which it can write. */
     @Test
     fun revokeWhenRevocationsCannotBeRead() = runTest {
-        every { tokenVerifier.verify("accessToken") } returns VerifiedToken("tokenId", "alice", null, null)
+        every { tokenVerifier.verify("accessToken") } returns VerifiedToken("tokenId", "alice", null, null, PERSON)
         val unavailable = object : RevocationReader {
             override suspend fun isRevoked(tokenId: String): Boolean = throw RevocationUnavailableException("down")
 

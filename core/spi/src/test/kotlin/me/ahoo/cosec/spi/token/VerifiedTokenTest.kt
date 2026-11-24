@@ -17,6 +17,7 @@ package me.ahoo.cosec.spi.token
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.scope.ScopeResolver
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -24,25 +25,25 @@ import org.junit.jupiter.api.assertThrows
 /** The rules of a token's claims hold wherever a [VerifiedToken] is made, on every path that verifies a token. */
 class VerifiedTokenTest {
     private val invalid = listOf<() -> VerifiedToken>(
-        { VerifiedToken("", "alice", null, null) },
-        { VerifiedToken("jti", "", null, null) },
+        { VerifiedToken("", "alice", null, null, PERSON) },
+        { VerifiedToken("jti", "", null, null, PERSON) },
     )
 
     /** `IDN-11`. */
     @Test
     fun verifyAndRefreshRefuseAnEmptyTenant() {
-        assertThrows<TokenVerificationException> { VerifiedToken("jti", "alice", "", null) }
+        assertThrows<TokenVerificationException> { VerifiedToken("jti", "alice", "", null, PERSON) }
     }
 
     /** RC1-52, `IDN-10`: a token claiming an id with an unpaired surrogate is invalid, so no store is asked about it. */
     @Test
     fun verifyAndRefreshRefuseAnIdWithAnUnpairedSurrogate() {
         val tokens = listOf<() -> VerifiedToken>(
-            { VerifiedToken("jti\uD800", "alice", null, null) },
-            { VerifiedToken("jti", "alice\uDC00", null, null) },
-            { VerifiedToken("jti", "alice", "beta\uD800", null) },
-            { VerifiedToken("jti", "alice", null, null, roles = setOf("r\uD800")) },
-            { VerifiedToken("jti", "alice", null, null, policies = setOf("p\uD800")) },
+            { VerifiedToken("jti\uD800", "alice", null, null, PERSON) },
+            { VerifiedToken("jti", "alice\uDC00", null, null, PERSON) },
+            { VerifiedToken("jti", "alice", "beta\uD800", null, PERSON) },
+            { VerifiedToken("jti", "alice", null, null, PERSON, roles = setOf("r\uD800")) },
+            { VerifiedToken("jti", "alice", null, null, PERSON, policies = setOf("p\uD800")) },
         )
         tokens.forEach { assertThrows<TokenVerificationException> { it() } }
     }
@@ -52,11 +53,11 @@ class VerifiedTokenTest {
     @Test
     fun aTenantThatCannotNameATenantIsRefused() {
         for (tenant in listOf(" ", "*", "a:b", "a\nb", "x".repeat(129))) {
-            assertThrows<TokenVerificationException> { VerifiedToken("jti", "alice", tenant, null) }
+            assertThrows<TokenVerificationException> { VerifiedToken("jti", "alice", tenant, null, PERSON) }
         }
-        VerifiedToken("jti", "alice", "acme", null).tenant.assert().isEqualTo("acme")
-        VerifiedToken("jti", "alice", "(platform)", null).tenant.assert().isEqualTo("(platform)")
-        VerifiedToken("jti", "alice", "x".repeat(128), null).tenant!!.length.assert().isEqualTo(128)
+        VerifiedToken("jti", "alice", "acme", null, PERSON).tenant.assert().isEqualTo("acme")
+        VerifiedToken("jti", "alice", "(platform)", null, PERSON).tenant.assert().isEqualTo("(platform)")
+        VerifiedToken("jti", "alice", "x".repeat(128), null, PERSON).tenant!!.length.assert().isEqualTo(128)
     }
 
     /**
@@ -66,17 +67,17 @@ class VerifiedTokenTest {
     @Test
     fun verifyAndRefreshRefuseABlankSubject() {
         for (subject in listOf(" ", "   ", "\t", "\n", "\u00A0")) {
-            assertThrows<TokenVerificationException> { VerifiedToken("jti", subject, null, null) }
+            assertThrows<TokenVerificationException> { VerifiedToken("jti", subject, null, null, PERSON) }
         }
-        VerifiedToken("jti", " alice ", null, null).principal.assert().isEqualTo(" alice ")
+        VerifiedToken("jti", " alice ", null, null, PERSON).principal.assert().isEqualTo(" alice ")
     }
 
     @Test
     fun aSubjectBeginningWithAParenthesisIsRefused() {
         for (subject in listOf("(0)", "(platform)", "(")) {
-            assertThrows<TokenVerificationException> { VerifiedToken("jti", subject, null, null) }
+            assertThrows<TokenVerificationException> { VerifiedToken("jti", subject, null, null, PERSON) }
         }
-        VerifiedToken("jti", "a(b)", null, null).principal.assert().isEqualTo("a(b)")
+        VerifiedToken("jti", "a(b)", null, null, PERSON).principal.assert().isEqualTo("a(b)")
     }
 
     /** `SCP-10`, RFC 0012 §3.5. */
@@ -92,10 +93,10 @@ class VerifiedTokenTest {
             "x".repeat(ScopeResolver.MAX_APP_ID_LENGTH + 1)
         )
         for (app in invalidApps) {
-            assertThrows<TokenVerificationException> { VerifiedToken("jti", "alice", null, app) }
+            assertThrows<TokenVerificationException> { VerifiedToken("jti", "alice", null, app, PERSON) }
         }
-        VerifiedToken("jti", "alice", null, "order").app.assert().isEqualTo("order")
-        VerifiedToken("jti", "alice", null, null).app.assert().isNull()
+        VerifiedToken("jti", "alice", null, "order", PERSON).app.assert().isEqualTo("order")
+        VerifiedToken("jti", "alice", null, null, PERSON).app.assert().isNull()
     }
 
     @Test
@@ -108,7 +109,7 @@ class VerifiedTokenTest {
         val roles = linkedSetOf("admin")
         val policies = linkedSetOf("p1")
         val attributes = linkedMapOf<String, Any>("a" to "b")
-        val token = VerifiedToken("jti", "alice", null, null, roles, policies, attributes)
+        val token = VerifiedToken("jti", "alice", null, null, PERSON, roles, policies, attributes)
         roles += "root"
         policies += "p2"
         attributes["c"] = "d"

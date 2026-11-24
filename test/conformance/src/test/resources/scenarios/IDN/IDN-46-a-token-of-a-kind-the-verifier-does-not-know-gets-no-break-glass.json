@@ -1,0 +1,55 @@
+{
+  "rules": [
+    "IDN-46"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "CoSec's own token for cosec says cosec.kind Person, which is not exactly person: the verifier reads any other value as a workload's, never refusing the token, and break-glass does not reach it.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "root",
+          "subject": {
+            "principal": "cosec",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "cosec:root",
+          "breakGlass": true,
+          "expiresAt": "2099-12-31T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "jwt",
+    "jwt": {
+      "jti": "t1",
+      "sub": "cosec",
+      "tenantId": "(platform)",
+      "kind": "none",
+      "claims": {
+        "cosec.kind": "Person"
+      }
+    }
+  },
+  "listeners": [
+    {
+      "name": "audit",
+      "delivery": "required"
+    }
+  ],
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}
