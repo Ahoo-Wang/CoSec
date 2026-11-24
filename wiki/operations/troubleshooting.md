@@ -741,6 +741,20 @@ host. To embed the control plane, remove `cosec.control.service-url`. To call th
 (or leave `cosec-control` out). `cosec.control.service-url needs cosec-control-http` means the host is named and the
 module that calls it is missing: add `me.ahoo.cosec:cosec-control-http`.
 
+### A control call over HTTP fails on its client or its answer {#a-control-call-over-http-fails-on-its-client-or-its-answer}
+
+```text
+The control API's client follows redirects: a redirect is a refusal, and one followed would send CoSec-Identity where it points. ...
+The control plane's answer is over 20971520 bytes (... read or declared): no answer of the control API is that large, so it is not read.
+```
+
+The first is `HttpControlService` refusing the `HttpClient` it was given (`CTL-77`): a client built with
+`followRedirects(NORMAL)` or `ALWAYS` would resend `CoSec-Identity`, which the host believes unsigned, to wherever a
+redirect points. Build it with `followRedirects(HttpClient.Redirect.NEVER)`, the JDK's default. The second is an
+`IOException` from a call whose answer passed 20 MB, twice the largest body a control route reads: no control-plane
+host answers that much, so something else answered at the service URL. Check `cosec.control.service-url` and any proxy in
+between.
+
 ### Startup fails on two problem renderers {#startup-fails-on-two-problem-renderers}
 
 ```text

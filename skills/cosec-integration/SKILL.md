@@ -328,7 +328,9 @@ service that writes what it already decided: it needs `cosec:skip-shadow`; `chec
 something of its own: the proposal's answer, nothing stored, `CTL-78`); `cosec.control.http.enabled=false` serves no routes. Every instance with the control plane runs
 its maintenance passes under their leases; no property turns them off. A service calls the service port through
 `HttpControlService` (`cosec-control-http`): set `cosec.control.service-url=http://<host>:8082/cosec/control/v1` and the
-starter's `ControlService` is it, writing `CoSec-Identity` for each call. One `ControlService` per application: naming a host on
+starter's `ControlService` is it, writing `CoSec-Identity` for each call. A client of your own for it follows no redirect
+(`followRedirects(HttpClient.Redirect.NEVER)`, the JDK's default), or construction fails; an answer over 20 MB fails the
+call. One `ControlService` per application: naming a host on
 an instance that runs the control plane fails startup (`STA-11`). Through `ControlService`, in process or over the
 service port, no one is the trust root, whoever the caller states, a platform administrator included (`CTL-81`): every
 change is analyzed, and what the analysis cannot prove waits for a person, who approves on the operators' routes. It

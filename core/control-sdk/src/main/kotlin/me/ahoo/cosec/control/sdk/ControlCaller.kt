@@ -18,6 +18,7 @@ package me.ahoo.cosec.control.sdk
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.model.Identifiers
 
 /**
  * Who a call through [ControlService] acts as (`CTL-65`). The control plane decides every call for this principal, by
@@ -56,10 +57,24 @@ class ControlCaller private constructor(
          */
         fun of(context: SecurityContext): ControlCaller = ControlCaller(context, null, emptySet())
 
-        /** The application's own principal [principal] in the platform tenant, with [roles] in the default space. */
+        /**
+         * The application's own principal [principal] in the platform tenant, with [roles] in the default space. Held to
+         * what `CoSec-Identity` holds an identity to, so a caller states alike in process and over HTTP (DR1-F-18): the
+         * principal is not blank (`IDN-38`), no role is empty, and neither holds an unpaired UTF-16 surrogate (`IDN-10`).
+         */
         fun service(principal: String, roles: Set<String> = emptySet()): ControlCaller {
-            require(principal.isNotBlank()) { "A service principal has an id." }
-            return ControlCaller(null, principal, roles.toSet())
+            require(principal.isNotBlank()) { "A service principal has an id that is not blank (IDN-38)." }
+            require(Identifiers.isWellFormed(principal)) {
+                "Service principal [${Identifiers.printable(principal)}] holds an unpaired UTF-16 surrogate (IDN-10)."
+            }
+            val stated = roles.toSet()
+            stated.firstOrNull { it.isEmpty() || !Identifiers.isWellFormed(it) }?.let { role ->
+                throw IllegalArgumentException(
+                    "Service principal [${Identifiers.printable(principal)}] states a role that is empty or holds an " +
+                        "unpaired UTF-16 surrogate: [${Identifiers.printable(role)}]."
+                )
+            }
+            return ControlCaller(null, principal, stated)
         }
 
         /** What an implementation answers a context CoSec did not make with (`PIP-29`). */

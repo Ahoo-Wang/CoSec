@@ -3,15 +3,15 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.OpenChangeSetsRaceTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
-index f87fed1d5..c6205986e 100644
+index 0000000..0000000 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
-@@ -159,7 +159,7 @@ internal class OpenChangeSets(
+@@ -193,7 +193,7 @@ internal class OpenChangeSets(
          }
          val listed = change?.takeIf { it.state == state && it.key == document }
          val current = listed?.let { member(document, id, checkNotNull(stored).digest) }
 -        members.filter { it != current }.forEach { stale(key, it) }
 +        sets.removeChangeMembers(key, members.filter { it != current }.toSet())
-         current?.let { staleSince -= "$key|$it" }
+         current?.let { forget(key, it) }
          return listed?.let { ListedChange.Readable(it) }
      }
