@@ -25,7 +25,7 @@ on:
         required: false
         default: ''
       image:
-        description: A published gateway image to test instead of building one from the ref (ghcr.io/ahoo-wang/ only)
+        description: A published gateway image to test instead of building one from the ref (ghcr.io/ahoo-wang/ only); the control-plane image is always built from the ref
         required: false
         default: ''
   schedule:
@@ -303,7 +303,7 @@ jobs:
         run: ./.ci-actions/.github/scripts/resolve-dependencies.sh
 
       - name: Build the distributions
-        run: ./gradlew :gateway-server:installDist :migrate:installDist
+        run: ./gradlew :gateway-server:installDist :control-server:installDist :migrate:installDist
 
       # The image as the Dockerfile ships it, or a published one under the tag the script loads into the cluster.
       - name: Build or pull the gateway image
@@ -315,11 +315,16 @@ jobs:
             docker build --build-context shared=platform --tag cosec-gateway:system platform/gateway-server
           fi
 
+      # The control-plane host's image, as its Dockerfile ships it, built from the ref as the Compose legs build it, whatever
+      # the image input (a gateway image only): the script loads it into the cluster, so nothing is pulled from a registry.
+      - name: Build the control-plane host image
+        run: docker build --build-context shared=platform --tag cosec-control:system platform/control-server
+
       # kind and kubectl come with the runner image; the script says so when they do not.
       - name: Run the kind leg
         run: |
           set -o pipefail
-          test/system-test/kind/run.sh cosec-gateway:system "$PWD/migration/migrate/build/install/cosec-migrate/bin/cosec-migrate" 2>&1 \
+          test/system-test/kind/run.sh cosec-gateway:system cosec-control:system "$PWD/migration/migrate/build/install/cosec-migrate/bin/cosec-migrate" 2>&1 \
             | tee "$RUNNER_TEMP/kind-leg.log"
 
       - name: Collect the evidence
