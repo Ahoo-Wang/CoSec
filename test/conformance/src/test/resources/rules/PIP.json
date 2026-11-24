@@ -57,7 +57,7 @@
     {
       "id": "PIP-5",
       "source": "RFC 0006 §5.3.1 (amended 2026-10-27, review of #1044; amended 2026-11-22, #1853)",
-      "statement": "A path with a dot segment after one decoding, in any encoding (including after removing path parameters, with an encoded ';' and with '\\' as a separator), or longer than 2048 characters as received, or with a segment longer than 256 UTF-16 units once decoded (after removing path parameters), is answered 400 before authentication. A segment longer than 256 characters only encoded is refused for every other reason a shorter one is. A pattern that matches the path as received (decodeAndParseSegments: false) reads each segment as written, so it matches no path with a segment longer than 256 characters as written.",
+      "statement": "A path with a percent-escape that does not decode (`%zz`, `%2`, a trailing `%`), or with a dot segment after one decoding, in any encoding (including after removing path parameters, with an encoded ';' and with '\\' as a separator), or longer than 2048 characters as received, or with a segment longer than 256 UTF-16 units once decoded (after removing path parameters), is answered 400 before authentication. A segment longer than 256 characters only encoded is refused for every other reason a shorter one is. A pattern that matches the path as received (decodeAndParseSegments: false) reads each segment as written, so it matches no path with a segment longer than 256 characters as written.",
       "level": "pipeline",
       "guards": [
         "runtime:PathNormalizerTest#ambiguousPathsAreRejected",
@@ -469,6 +469,7 @@
         "jwt:LoginRoutesTest#the login routes render a refusal as the adapters do",
         "spring-boot:ProblemRendererWiringTest#the application's renderer writes the body, under CoSec's status and media type",
         "spring-boot:ProblemRendererWiringTest#two renderers fail startup and name both",
+        "spring-boot:GatewayHostProblemBodyTest#the control routes of a gateway host render a refusal with the host's renderer",
         "architecture:OneDecisionPathTest#renderersNeverSeeDecisions",
         "architecture:OneDecisionPathTest#refusalBodiesComeFromProblemBodies",
         "micrometer:ProblemRenderFailedMetricTest#each refusal a renderer failed is counted, and a rendered one is not"

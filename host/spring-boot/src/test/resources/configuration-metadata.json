@@ -566,6 +566,12 @@
       "type": "java.util.Set<java.lang.String>"
     },
     {
+      "description": "The application's own controllers and functional routes, by bean name, that may be served on the gateway host, where CoSec does not decide them (they are mapped before any gateway route), because something else protects them. Any other one fails startup (`STA-13`); a name with `*` is refused, since no handler is listed by a pattern. A statement only the operator can make: which handlers need no CoSec decision is not something a process observes.",
+      "name": "cosec.gateway.unprotected-handlers",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.GatewayProperties",
+      "type": "java.util.Set<java.lang.String>"
+    },
+    {
       "description": "Whether the `ext.ip2region.*` attribute provider is on (`cosec-ip2region`).",
       "name": "cosec.ip2region.enabled",
       "sourceType": "me.ahoo.cosec.spring.boot.ip2region.Ip2RegionProperties",
@@ -626,7 +632,7 @@
       "type": "java.time.Duration"
     },
     {
-      "description": "The prefix of every Redis key this deployment writes (`SNP-9`, RC1-46): snapshot documents, control-plane records, shadow reports, token revocations, memberships (`<p>:snapshot:…`, `<p>:control:…`, `<p>:token:…`, …), API keys (`<p>:api-key:…`) and rate limit counters (`<p>:rate-limiter:…`). Two deployments on one Redis that differ in it share nothing. A trailing `:` is ignored.",
+      "description": "The prefix of every Redis key this deployment writes (`SNP-9`, RC1-46): snapshot documents, control-plane records, shadow reports, token revocations, memberships (`<p>:snapshot:…`, `<p>:control:…`, `<p>:token:…`, …), API keys (`<p>:api-key:…`) and rate limit counters (`<p>:rate-limiter:…`). Two deployments on one Redis that differ in it share nothing. Letters, digits, `_`, `.` and `-` only, or such a string wrapped whole in braces, a Redis Cluster hash tag (`{cosec}`); never `:`, so that no deployment's prefix nests inside another's (`a` and `a:b` would share keys): anything else fails startup.",
       "name": "cosec.key-prefix",
       "sourceType": "me.ahoo.cosec.spring.boot.CoSecProperties",
       "type": "java.lang.String"

@@ -33,6 +33,7 @@ object MembershipsExport {
             // A wrong type is a malformed export, never "no roles": reading it as empty would change which
             // identity an API key migrates to. Only a real empty array confirms there are none.
             val owner = TenantId(entry.text(index, "tenant")) to entry.text(index, "principal")
+            require(owner.second.isNotBlank()) { "--memberships entry $index: its principal is blank (IDN-38)." }
             // Two entries for one principal: which is right is not for the migration to guess.
             require(owner !in read) { "--memberships names ${owner.second}@${owner.first.value} twice." }
             val roles = entry.get("roles")

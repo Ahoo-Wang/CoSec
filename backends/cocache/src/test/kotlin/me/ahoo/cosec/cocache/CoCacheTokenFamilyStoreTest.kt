@@ -152,7 +152,7 @@ class CoCacheTokenFamilyStoreTest {
         // A member a later version adds is ignored; a later format is refused.
         val extra = String(TokenFamilyCodec.encode(family)).replace("}", ""","more":1}""")
         TokenFamilyCodec.decode(extra.toByteArray()).assert().isEqualTo(family)
-        val later = String(TokenFamilyCodec.encode(family)).replace(""""format":1""", """"format":2""")
+        val later = String(TokenFamilyCodec.encode(family)).replace(""""format":1""", """"format":3""")
         assertThrows<SnapshotFormatException> { TokenFamilyCodec.decode(later.toByteArray()) }
     }
 }

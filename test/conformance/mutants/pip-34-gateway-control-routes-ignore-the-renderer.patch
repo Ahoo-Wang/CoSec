@@ -1,0 +1,17 @@
+# Rule: PIP-34
+# Mutant: on a Spring Cloud Gateway host the control routes answer a refusal with CoSec's body, not the host's renderer's (DR1-C-7d)
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.GatewayHostProblemBodyTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlRoutesAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlRoutesAutoConfiguration.kt
+index 8ce3b23f4..514944ab1 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlRoutesAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlRoutesAutoConfiguration.kt
+@@ -259,8 +259,6 @@ internal class CoSecControlRoutesAutoConfiguration {
+                 contributors.orderedStream().toList(),
+                 ReactiveClientIp.of(CoSecPipelineWebAutoConfiguration.clientIpOf(context, authorization)),
+                 CoSecPipelineWebAutoConfiguration.hostOf(authorization),
+-                // PIP-34: the control routes' refusals carry the host's body, as its gateway filter's do (DR1-C-7d).
+-                bodies,
+             ),
+             basePathOf(properties),
+         )

@@ -24,6 +24,7 @@ object StartupGuards {
         "runtime:HeapBudgetTest#at the production overlay's 2 GiB heap no bound is below the count it replaced",
         "runtime:HeapBudgetTest#the shares together take at most the bound, leaving the documents their reserved quarter",
         "runtime:HeapBudgetTest#the startup line names each budget and its share",
+        "control:ControlDerivedTest#the document cache is a third of the documents' share, beside the two snapshot sources",
         "runtime:PipelineBuilderTest#a built pipeline's listener queues are one BEST_EFFORT listener's part of the heap share",
         "spring-boot:DerivedHeapTest#the startup line names each bound, what it came to and from what",
         "spring-boot:RevocationCachePrecedenceTest#a per-cache property cannot set the count",
@@ -53,6 +54,7 @@ object StartupGuards {
         "spring-boot:UnknownPropertiesTest#a removed key is said to be no longer a property, with what replaced it",
         "spring-boot:DerivedSnapshotSettingsTest#the line says what was derived, from the interval, the deadline and the cores",
         // CTL-72: the control plane's cadences and limits are constants or computed.
+        "control:ControlMaintenanceTest#only the instance holding the reclaim lease reads the open changes",
         "control:ControlDerivedTest#an orphan is removed only once it has outlived a whole reclaim pass",
         "control:ControlDerivedTest#the shadow pass is a fifteenth of the least a window lives, within a quarter second and a minute",
         "control:ControlDerivedTest#a window never closes later than one pass after it could",
@@ -64,6 +66,17 @@ object StartupGuards {
         "spring-boot:ControlServicePortTest#the maintenance passes run on every host that has the control plane, and no property turns them off",
         "spring-boot:UnknownPropertiesTest#a switch that was removed before it was released is not a property",
         "control:ControlMaintenanceTest#shadow windows are closed by whoever holds the lease, which a pass releases",
+        // STA-13: a gateway host serves no handler of its own without a CoSec decision unless the operator lists it.
+        "spring-boot:GatewayOwnHandlersTest#a handler of the application that is not listed fails startup, naming it, the property and the page",
+        "spring-boot:GatewayOwnHandlersTest#every handler listed starts, and a name that matches no handler is ignored",
+        "spring-boot:GatewayOwnHandlersTest#a pattern is never accepted",
+        "spring-boot:GatewayOwnHandlersTest#a controller and a functional route are not seen by a gateway global filter, a route is",
+        // IDN-26 (DR1-D-3): a revocation held locally lives at most 30 seconds too.
+        "spring-boot:StrictCacheFailureTest#aRevocationTablesLocalMaxAgeIsAtMost30Seconds",
+        "cocache:CacheTtlPolicyTest#revocationTablesHoldARevocationFor30SecondsAtMost",
+        // SNP-9 (DR1-D-4): no deployment's key prefix nests inside another's.
+        "spring-boot:KeyPrefixValidationTest#a prefix that could nest inside another's fails, saying what it holds and what to do",
+        "spring-boot:KeyPrefixValidationTest#startup fails on such a prefix, naming the property",
         // STA-6, STA-7: a service behind a gateway states its network boundary and runs no hidden-method filter.
         "spring-boot:GatewayModeTrustTest#a service in gateway mode does not start until the operator states the boundary, and the message says what to write",
         "spring-boot:GatewayModeTrustTest#false and every value but true fail like an absent one, and say what was written",
@@ -127,6 +140,10 @@ object StartupGuards {
         "spring-boot:DataPlaneAclTest#an image with the control plane, switched off, starts with the page's user and may write no document",
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#the control plane switched on explicitly without cosec-control or cosec-cocache fails startup",
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#a cosec control enabled that is neither true nor false fails startup, without the modules too",
+        // STA-1: the gate of a web host, and a control plane switched on where none is wired (DR1-G-5, DR1-G-6).
+        "spring-boot:WebGateCheckTest#a web host with CoSec on and its adapter's module, but no gate, fails startup",
+        "spring-boot:WebGateCheckTest#a gate found by type, whatever its bean's name, lets the host start",
+        "spring-boot:WebGateCheckTest#the control plane switched on in gateway mode fails startup, which wires none",
         "cocache:ReadOnlyDeclarationTest#a layer cannot make a data-plane instance's snapshot store read-write",
         "cocache:ReadOnlyDeclarationTest#a layer cannot make the control plane's snapshot store read-only",
         "cocache:ReadOnlyDeclarationTest#a layer cannot make a data-plane instance's candidate store read-write",

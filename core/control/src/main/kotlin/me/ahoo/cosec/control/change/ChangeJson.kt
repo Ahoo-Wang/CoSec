@@ -33,7 +33,8 @@ internal object ChangeJson {
         factory.objectNode().put("tenant", actor.tenant.value).put("principal", actor.principal.value)
 
     internal fun actor(node: JsonNode): Actor {
-        return Actor(TenantId(node.need("tenant").text()), PrincipalId(node.need("principal").text()))
+        val principal = node.need("principal").text().ifBlank { malformed("[principal] is blank") }
+        return Actor(TenantId(node.need("tenant").text()), PrincipalId(principal))
     }
 
     internal fun JsonNode.need(name: String): JsonNode = get(name) ?: malformed("[$name] is missing")

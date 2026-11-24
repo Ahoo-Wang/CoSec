@@ -45,7 +45,6 @@ import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Operation
-import me.ahoo.cosec.control.change.Severity
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.lifecycle.CandidateCompile
@@ -61,6 +60,7 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
+import me.ahoo.cosec.control.store.RetentionPolicy
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDocument
@@ -125,6 +125,7 @@ import java.time.Instant
  *                                                                           // token "token-<name>", issued at no time
  *                "dave": { "tenant": "acme", "roles": ["approver"], "provider": true } },  // the provider says its roles
  * "options":   { "fourEyes": true, "lockout": true (the UC-6 check, off by default), "shadow": { "minDuration": "PT15M", "minSamples": 3, "maxDuration": "PT1H" },
+ *                "maxCount": 2,                                    // cosec.control.revisions.max-count (CTL-83); 50 when absent
  *                "providers": [ { "path": "ext.geo.country", "type": "string" } ] },   // the host's AttributeProviders
  * "steps": [ { "propose": { "change": "c1", "by": "alice", "document": "tenant:acme", "kind": "BREAK_GLASS",
  *                           "operations": [ { "putPolicy": { ...the document format's policy... } },
@@ -263,7 +264,11 @@ object ChangeRunner : ScenarioRunner {
             }
         } as ControlStore
 
-        val revisions = Revisions(store, clock)
+        val revisions = Revisions(
+            store,
+            clock,
+            RetentionPolicy(maxCount = node.get("options")?.get("maxCount")?.intValue() ?: RetentionPolicy().maxCount),
+        )
 
         /** The roles the membership provider answers, by operator; a `provide` step changes them. */
         private val provided = node.get("operators")?.fields().orEmpty().entries
@@ -395,7 +400,7 @@ object ChangeRunner : ScenarioRunner {
 
         /** A window closes as soon as it is looked at, unless the scenario sets `options.shadow`. */
         private fun shadowOptions(): ShadowOptions {
-            node.get("options")?.only("fourEyes", "shadow", "providers", "lockout")
+            node.get("options")?.only("fourEyes", "shadow", "providers", "lockout", "maxCount")
             val shadow = node.get("options")?.get("shadow") ?: return ShadowOptions(Duration.ZERO, 0, Duration.ZERO)
             shadow.only("minDuration", "minSamples", "maxDuration")
             return ShadowOptions(
@@ -455,20 +460,8 @@ object ChangeRunner : ScenarioRunner {
         }
 
         private suspend fun outcome(results: List<String>): Outcome {
-            val errors = named.keys.associateWith { id -> changes.get(ChangeId(id)).errors.map { it.check } }
-            val escalations = named.keys.associateWith { id ->
-                changes.get(
-                    ChangeId(id)
-                ).escalations.map { it.reason.name }
-            }
-                .filterValues { it.isNotEmpty() }
-            val warnings = named.keys.associateWith { id ->
-                changes.get(
-                    ChangeId(id)
-                ).findings.filter { it.severity == Severity.WARNING }.map { "${it.check} ${it.path}" }
-            }.filterValues { it.isNotEmpty() }
             val heads = documents.associate { it.toString() to (revisions.head(it)?.revision ?: 0) }
-            return Outcome.Changed(results, errors, heads, escalations, warnings)
+            return ChangeOutcome.of(changes, memory, named.keys, results, heads)
         }
 
         /** One step's result, as `expect.steps` writes it. */

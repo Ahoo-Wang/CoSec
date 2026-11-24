@@ -34,14 +34,106 @@ Which preview of the library may run behind which preview of the gateway image: 
   keeps a `ControlCaller.of(context)` past its request (a launched job, a deferred write). Over HTTP it acted as the
   user until the credential expired, after a logout too; it is now refused `403`, as in process, before anything is
   sent, with a `WARN`. Call as the application's own principal (`ControlCaller.service`) from such work.
-
+- **Breaking: a web host with CoSec on fails startup without a CoSec gate** (`STA-1`, DR1-G-6). Affected: an
+  application that excluded `CoSecPipelineWebAutoConfiguration`, or replaced the adapter's bean with a filter of another
+  type, while keeping `cosec.enabled`. It served every request undecided, with `web=none` in the startup summary as the
+  only sign. Keep the auto-configuration, register CoSec's filter yourself, or set `cosec.enabled=false`
+  ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-missing-module)).
+- **Breaking: `cosec.control.enabled=true` fails startup in `gateway` mode** (`STA-1`, DR1-G-5). Affected: a service
+  behind a gateway that wrote the key. Its control plane was never wired, while the startup line said its routes were
+  served; that line now appears only where the control plane runs. Remove the key, or run the control plane on an
+  `enforce` host.
+- **Breaking: `cosec.key-prefix` holds no `:`** (`SNP-9`, DR1-D-4). Affected: a deployment whose prefix has a
+  character other than letters, digits, `_`, `.` and `-`, other than one pair of braces around the whole prefix (a hash
+  tag, `{cosec}`, still works).
+  - A prefix like `a` and another like `a:b` nested, so two deployments on one Redis shared keys. Now such a prefix fails
+    startup, naming what it holds.
+  - **A trailing `:`** (`cosec:`) was removed before use, so the keys are already the ones without it: remove the `:`.
+  - **A `:` inside it** (`cosec:prod`): the keys live under it, and must move to a prefix allowed now (`cosec-prod`).
+    1. Stop the writers: the control plane's host (or an IAM that embeds it), `cosec-migrate`, and the gateways, whose
+       logouts write revocations.
+    2. Copy every key under `<old>:` to the same name under `<new>:`, with its TTL (`DUMP` and `RESTORE ... ABSTTL`, or
+       `RENAME` on a single node; on a cluster, keys of one hash slot only).
+    3. Start every process with `cosec.key-prefix=<new>`, then delete the old keys.
+- **Breaking: a principal id is never blank** (`IDN-38`, #1889). Affected: a deployment where some credential names a
+  principal whose id is empty or white space only. beta.7 accepted it in several places, and the request was decided
+  for that id as an authenticated principal. Now each place refuses it:
+  - **A token** whose `sub` is white space only is `401` `token-invalid`, on a request and on refresh, and
+    `JwtTokenConverter` signs none: a login whose `Authentication` answers such a subject fails.
+  - **An authenticator of your own** that makes a `PrincipalId` of one throws, so the request is `503`: answer
+    `Rejected` for a credential that names no one ([Extending](../architecture/extending.md)).
+  - **An API key** record whose `principalId` is blank no longer loads, and a request that presents it is `503`. Find
+    them with `redis-cli --scan --pattern '<s>:api-key:*'`, reading each value with `GET` and keeping those where
+    `jq 'select(.principalId | test("^\\s*$"))'` prints something; delete them or issue them again for a principal.
+  - **A document** that binds a blank principal no longer compiles, and a host fails closed on it as on any document it
+    cannot read. Look before upgrading: `jq '[.bindings[]? | select(.subject.principal? | strings | test("^\\s*$"))]'`
+    over each published document lists them; remove them with a change.
+  - **A forwarded identity** whose `sub`, `tenant` or `rid` is blank is malformed (`400`), and a gateway writes none.
+  - **A session record** of a blank principal (`<s>:token:family:*`) is a format error: its refresh fails with `503`, as
+    for any record that cannot be read (`IDN-19`), and its user signs in again.
+  - `cosec-migrate api-keys` names a 7.x key of a blank principal among its rejections. An id is still not trimmed:
+    `" alice "` is an id of its own, and nothing about it changes.
+- **Breaking: the revocation tables' `local-max-age` is at most 30 seconds** (`IDN-26`, DR1-D-3). Affected: a
+  deployment that set `cosec.authentication.revocation.cache.local-max-age` above `30s`, or a `cocache.*` property or
+  customizer that set the local max age of `RevokedTokenCache` or `RevokedSubjectCache`.
+  - A revocation held locally used to live that long past a lost invalidation, so a subject's revocation raised since
+    was read as the older one. Now a value above 30 seconds fails startup, naming the property when it is
+    `cosec.authentication.revocation.cache.local-max-age`; a layer may still tighten it.
+  - Migrate by removing the setting, or writing `30s` or less. The default, `30s`, is unchanged.
+- **The control plane's document cache is a share of the heap** (`STA-12`, DR1-F-5). Affected: a control-plane host's
+  memory. `simulate`, `explain`, `analyze` and the lock-out check share one cache per host, a third of the snapshot
+  documents' quarter of the heap (about 170 MB at 2 GiB), where two caches held a fixed 64 MB each. The host's two
+  snapshot sources now hold a third of that quarter each, where they held half: at 2 GiB about 4,800 typical tenants in
+  each, where it was 7,200. Give a control-plane host more heap to hold more; nothing else to change.
+- **A document holds at most `cosec.control.revisions.max-count` open changes** (50 by default, `CTL-83`, DR1-E-2).
+  Affected: a client that leaves many changes open on one document. A proposal, an `:apply` or a rollback past the
+  limit first abandons its author's own oldest change whose checks failed, then is refused `409` with the new conflict
+  `OPEN_LIMIT`, naming the oldest open change in `heldBy`; a typed client sees `ConflictKind.OPEN_LIMIT`. Abandon the
+  changes you no longer need. A document already over the limit when you upgrade is not touched: its changes expire
+  within `cosec.control.changes.expire-after` (7 days) and bring it back under the limit, and until then it takes no new
+  change.
+- **A document keeps at most `max-count` ended changes, and reclamation removes old ones** (`CTL-83`, DR1-E-2).
+  Affected: a client that reads a change long after it ended. Ending a change removes the document's oldest ended
+  changes past `cosec.control.revisions.max-count`, whatever their age, and the hourly reclamation removes those older
+  than `cosec.control.revisions.min-age` whose change published no revision still retained. `GET /changes/{id}` of a
+  removed change is `404`. Read who published a revision from the revision itself:
+  `GET /documents/{key}/revisions/{revision}` names its change, author and approvers in `provenance`, and `explain`
+  still decides on it. A `ControlStore` of your own implements `endedChanges` and `removeChange`. Changes that ended
+  before the upgrade are not listed, so nothing removes them: delete their `<s>:control:change:<id>` keys yourself if
+  you want them gone.
 - **A control route that carries no document reads at most 64 KB** (DR1-F-3). Affected: a client that posts more than
   64 KB to `simulate`, `explain`, `analyze`, a step of a change, a rollback or break-glass. Such a body is now a `400`
   before it is parsed, where it was read and parsed up to 10 MB before anything was authorized. Proposals, `:apply` and
   their checks still read up to 10 MB. A simulated request larger than 64 KB has more headers and attributes than a real
   request can carry: trim it.
+- **Breaking: a gateway host with handlers of its own does not start until they are listed** (`STA-13`). Affected: a
+  Spring Cloud Gateway host in enforce mode whose application declares its own `@Controller`, `@RestController` or
+  `RouterFunction` beans.
+  - Those handlers are mapped before any gateway route, so CoSec, a filter of gateway routes, never decided them. Startup
+    used to warn and go on.
+  - Now it fails, naming each handler by bean name. Migrate by moving them to a service behind the gateway, where a route
+    decides them, or by listing the ones something else protects in `cosec.gateway.unprotected-handlers`. Startup then
+    names them in one INFO line.
+  - A name with `*` is refused. Spring's, CoSec's and actuator handlers are not the application's and need no entry
+    ([The gateway's own handlers](../integration/web.md#the-gateways-own-handlers)). A library's controller is: springdoc's
+    `openApiResource` on a gateway host is refused like your own (turn it off with `springdoc.api-docs.enabled=false`, or
+    list it).
 - **An `explain` at a retained revision is cached like a head** (DR1-F-4). Affected: nothing to change. Repeating it
   compiles nothing, where each call compiled its documents again.
+- **A session a tenant switch started ends with the login** (`IDN-36`). Affected: applications that serve tenant or
+  app switches (`SwitchTenantAuthentication`), and a `TokenFamilyStore` of your own.
+  - Before, the switched session was a session of its own. It kept the login time, but a logout of the login's session,
+    or its revocation as a reused pair, left it refreshing until its lifetime ended. Now it names the login's session as
+    its root, and its next refresh or switch after the root ends is `401 token-revoked`. Its access token stays valid
+    until it expires.
+  - **A `TokenFamilyStore` of your own must save `TokenFamily.root`** (a new nullable member; the constructor without it
+    stays). A switch reads the session back and is refused, with a message naming the member, when the root was not
+    kept.
+  - **Rolling upgrade.** A switched session's record is now written as format 2. An 8.0.0-beta.7 instance refuses it, so
+    that session ends there: the user who switched on an upgraded instance and refreshes on an old one switches again.
+    Sessions started by a login are unchanged (format 1).
+  - **Going back to 8.0.0-beta.7** ends every session a switch started after the upgrade, for the same reason.
+  - Switched sessions started before the upgrade have no root and keep their old behaviour until they end.
 - **Session records are kept no longer than their refresh token, and 64 per principal** (`IDN-35`, DR1-G-2).
   Affected: every deployment that issues CoSec's tokens, and a `TokenFamilyStore` of your own.
   - A session record (`<s>:token:family:<sid>`) used to stay in Redis for the whole session lifetime (30 days), even

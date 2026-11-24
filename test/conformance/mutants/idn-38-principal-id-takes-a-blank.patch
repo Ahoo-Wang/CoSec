@@ -1,0 +1,17 @@
+# Rule: IDN-38
+# Mutant: a principal id may be blank, so an authenticator of its own makes no one an authenticated principal
+# Tests: :model:test --tests me.ahoo.cosec.model.BindingTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/Ids.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/Ids.kt
+index 0000000..0000000 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/Ids.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/Ids.kt
+@@ -45,7 +45,7 @@ value class TenantId(val value: String) {
+ @JvmInline
+ value class PrincipalId(val value: String) {
+     init {
+-        require(value.isNotBlank()) { "A principal id is not blank." }
++        require(value.isNotEmpty() || value.isEmpty()) { "A principal id is not blank." }
+     }
+ }
+ 

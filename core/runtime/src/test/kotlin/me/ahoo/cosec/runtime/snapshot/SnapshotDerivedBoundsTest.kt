@@ -118,6 +118,8 @@ class SnapshotDerivedBoundsTest {
         gateway.firstBound(SnapshotKind.TENANT).assert().isEqualTo(14_566)
         val pod = DocumentBudget(HeapBudget.of(TWO_GIB / 4).documents)
         pod.absentTenants.assert().isEqualTo(16_320)
+        // DR1-D-5: the apps without a document keep the floor of a family on a small heap: 64, where the share gives 16.
+        DocumentBudget(HeapBudget.of(256L shl 20).documents).absentApps.assert().isEqualTo(DocumentBudget.FLOOR)
         pod.firstBound(SnapshotKind.TENANT).assert().isEqualTo(3_641)
         // A family keeps documents however heavy they are.
         pod.bound(

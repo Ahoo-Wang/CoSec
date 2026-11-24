@@ -169,6 +169,13 @@ lock: `localStorage` with Web Locks, or another storage declared with
 per-tab in-memory storage, refresh in one place only. The
 [recipe](https://fetcher.ahoo.me/guides/integrations/cosec) has the details.
 
+The default `localStorage` is readable by any script on the page's origin: such a
+script can take the refresh token and renew the session until its lifetime
+ends. `sessionStorage` or memory hide the pair from other tabs, not from a
+script on the page. Keep foreign script off the origin (a
+Content-Security-Policy, dependencies you trust); what each storage costs is in
+[Clients](https://cosec.ahoo.me/integration/clients#refreshing-under-rotation).
+
 ## Reporting errors
 
 The errors of this package that a refresh or a logout raises

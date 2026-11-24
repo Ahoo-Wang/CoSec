@@ -25,7 +25,9 @@ import java.io.PrintStream
 /** `bootstrap`: the first platform administrator. */
 internal object BootstrapCommand {
     fun bootstrap(options: Options, out: PrintStream): Int {
-        val principal = PrincipalId(options.required("platform-admin"))
+        val admin = options.required("platform-admin")
+        if (admin.isBlank()) throw UsageException("--platform-admin is blank: a principal id never is (IDN-38).")
+        val principal = PrincipalId(admin)
         val (already, revision) = controlStore(options) { store ->
             val bootstrap = Bootstrap(store)
             val bound = bootstrap.bound(principal)

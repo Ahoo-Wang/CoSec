@@ -191,6 +191,10 @@ endpoint, on the same threads. Every SPI here follows the same contract:
   that gives one throws, and a `MembershipProvider` answer with one fails: each is a `503`. `Identifiers.isWellFormed`
   (`cosec-model`) is the test; `Identifiers.printable` writes an id into an exception message or a log line without
   letting it forge a line.
+- **Name someone.** A principal id is never blank, empty or white space only (`IDN-38`): `PrincipalId` refuses one
+  when made, so an authenticator that gives one throws, which the pipeline answers `503`, as above. Report a credential
+  that names no one as `Rejected` instead, so the client is told its credential is invalid. Ids are not trimmed:
+  `" alice "` is an id of its own.
 - **Do not catch cancellation.** A client that goes away cancels the request's coroutine. Rethrow
   `CancellationException`, and do not use `runCatching` around a suspending call.
 - **Keep it cheap.** Each call has a timeout (see [Configuration](../operations/configuration.md)); the whole request
@@ -228,8 +232,12 @@ The control plane reads two more facts of the principal for approvals ([Testing 
 `workload` (`IDN-34`): true for an API key (`apiKey`: CoSec's API key authenticator sets it, and a credential of the
 method `API_KEY` counts as one whoever made it) and for a credential of the method `SERVICE` (`service`, a service's
 own identity), whoever made it; a workload never approves and is never the trust root. A principal of yours is a
-person's to CoSec unless its credential is named `api-key` or `service`, so give an authenticator of workloads neither
-`cosec:approve` nor `cosec:platform-admin`, or have it name its credential `Identity.Method.SERVICE`. The credential's id: an approval records
+person's to CoSec unless its credential is named `api-key` or `service`. So a machine client your authenticator proves
+under a method of its own (`oauth-client`, say) and grants `cosec:approve` can approve changes and be the trust root:
+two such credentials make four eyes. An authenticator of workloads names its credential
+`Identity.Credential(Identity.Method.SERVICE, id, expiresAt)` (or `API_KEY`) in the principal it builds, which makes
+the principal a workload, and gives it neither `cosec:approve` nor `cosec:platform-admin` (DR1-C-3; telling a person by
+provenance alone is 8.1's). The credential's id: an approval records
 it, and one without an id does not count. A principal you construct has no `issuedAt`, so any revocation of its
 tokens (`subjectRevokedBefore`) takes its approvals back.
 
@@ -284,7 +292,7 @@ the line that reads it, and nothing logs it: keep the three settings, or the rev
 A `TokenVerifier` of your own returns a `VerifiedToken` (`me.ahoo.cosec.spi.token`), an immutable value built from the
 claims it verified: `id`, `principal`, `tenant`, `app` (the token's `aud`), `roles`, `policies`, `attributes`, its times and
 membership marker. Its constructor throws `TokenVerificationException` for claims that no token may carry (an id
-beginning with `(`, an empty tenant, an unpaired surrogate, an impossible app), so `verify` refuses them whichever
+beginning with `(`, a blank subject, an empty tenant, an unpaired surrogate, an impossible app), so `verify` refuses them whichever
 verifier read them.
 
 A `TokenVerifier` is pure computation by contract: no I/O and nothing that blocks, since the pipeline calls it on the
@@ -301,7 +309,7 @@ users is in [Authentication](../integration/authentication.md).
 | Extension point | Contract |
 |---|---|
 | `TokenStore` | The write side of revocation, called by CoSec's own `TokenRevoker`, never by your code: `revoke(tokenId, ttl)` takes a token's `jti` (`VerifiedToken.id`), never the token, so `revoke(accessToken, ttl)` writes a key named after a live credential and revokes nothing. An application logs a user out, or revokes a principal, through `TokenRevoker` ([Logout and revocation](../integration/authentication.md#logout-and-revocation)). The store's methods are `revoke(tokenId, ttl)`, `revokeSubject(tenant, principal, issuedBefore, ttl)`, both suspending and non-blocking. An entry must outlive the refresh token it revokes. A store that cannot revoke every token of a principal throws from `revokeSubject`, so an emergency revocation never silently does nothing. |
-| `TokenFamilyStore` | The sessions of refresh tokens ([Sessions](../integration/authentication.md#sessions)): `create`, `read`, and `replace` a family only over the version read, atomically across instances. A failed read or an unconfirmed write throws. Read and written on login, refresh and logout only. A family's `expiresAt` is an upper bound: drop a record once it can no longer refresh, as CoSec's stores do after the refresh token validity. Keep `TokenFamilyStore.SESSIONS_PER_PRINCIPAL` sessions per principal and tenant, those that began last: `create` of one more deletes the earliest (`IDN-35`). |
+| `TokenFamilyStore` | The sessions of refresh tokens ([Sessions](../integration/authentication.md#sessions)): `create`, `read`, and `replace` a family only over the version read, atomically across instances. A failed read or an unconfirmed write throws. Read and written on login, refresh and logout only. A family's `expiresAt` is an upper bound: drop a record once it can no longer refresh, as CoSec's stores do after the refresh token validity. Keep `TokenFamilyStore.SESSIONS_PER_PRINCIPAL` sessions per principal and tenant, those that began last: `create` of one more deletes the earliest (`IDN-35`). Save every member of a family, `root` included: a switch reads it back and is refused without it (`IDN-36`). |
 | `RevocationReader` | The read side, called on every authenticated request: `isRevoked(tokenId)`, `subjectRevokedBefore(tenant, principal)`. Both suspend and must not block. Each must answer or fail within its own bound, throwing `RevocationUnavailableException` when the store cannot be read in time: CoSec gives your reader no budget but the authenticator's, and a read that never ends makes the request `503` at the authentication timeout (20 % of `cosec.pipeline.timeout`), whatever `cosec.authentication.revocation.fail-closed` says. CoSec's own reader bounds each read with the revocation read timeout (30 % of the authentication timeout). |
 | `ApiKeyReader` | `findByHash(hash): ApiKey?`, suspending. Return null for an unknown key; throw when the lookup fails (the request answers `503`). |
 
@@ -665,6 +673,13 @@ visit:
   terminal is among them; a change whose record does not decode is `ListedChange.Unreadable`, never left out, and
   maintenance skips its document or its window that pass. `openChangesKept()` says whether these lists can be
   trusted; maintenance reclaims nothing until they can, and `keepOpenChanges()` makes a new store's lists trusted.
+- `endedChanges(document, endedBefore, limit)` and `removeChange(document, id, expected)`: the changes of a document
+  that ended before a time, the oldest first, and the removal of one ended change's record (`CTL-83`). A `putChange` of
+  a terminal change lists it under its `updatedAt` before it writes it, so a write that lost leaves an extra entry,
+  never a missing one; whoever acts on an entry reads its record first. `removeChange` removes the record only while
+  it is `expected` and takes every entry of the change out; with `expected` `null`, only where there is no record, so
+  an entry whose record is gone leaves. The control plane keeps at most `max-count` ended changes a document, on the
+  write that ends one, and reclamation removes those past `min-age` that published no revision still retained.
 - `acquireLease(name, holder, duration)` and `releaseLease(name, holder)`: one instance at a time per task. A release
   removes the lease only while `holder` still has it, checked and removed in one atomic step (CoCache's
   `deleteIfMatch`): a lease that expired and another instance took meanwhile stays theirs.

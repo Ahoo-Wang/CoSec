@@ -62,7 +62,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 部署在 Redis 中最多持有多少个进行中的社交登录 | Redis 报告的内存（`maxmemory`，否则 `total_system_memory`，启动时读一次）的六十四分之一，每个登录按 512 字节计（两把键实测 352 字节）；Redis 两者都不报告时为 100,000，并记 WARN | 相同 |
 | 实例持有多少个主体的成员关系 | 堆的六十四分之一，按每个主体 3,072 字节计（十个角色分布在两个空间、五个附加策略时实测 2,293 字节）：2 GiB 时约 10,900 个。多出的一个会重新加载，从不被拒绝 | 相同 |
 | 一个 `BEST_EFFORT` 决策监听器最多可以有多少个待处理的事件 | 堆的六十四分之一，由各 `BEST_EFFORT` 监听器均分，按 `cosec.pipeline.trace-level` 下一个事件的大小计数：不追踪时 1 KB，追踪时（`full`、`exhaustive`）8 KB，因为追踪带着每条候选语句。2 GiB、四个监听器时，每个容纳 8,192 个不追踪的事件或 1,024 个追踪的事件，原来不论级别都是每个 1,024 个。太小时表现为 `cosec.listener.dropped`（`OBS-11`） | 同上，以及监听器数 |
-| 一个实例持有多少租户文档和应用文档 | 每个族已持有的，加上堆的四分之一（减去“不存在”条目那一份）剩下的空间，按其常驻文档的典型重量计数；重量是一个从不低于一个文档实际保留量的估计（`DocumentWeight`）：2 GiB 时约 14,500 个部署页面那种形状的租户（估计 34.6 KB，实际保留 29.5 KB）。每轮重新确认时以及每次淘汰之前重新计算，因此只在常驻内容的重量超过份额时才淘汰文档，从不低于 64 个；控制面与管道同在一个进程时各得一半；一个很重的文档只从空间里拿走它自己的重量。冷加载突发时一个族可能短暂地持有至多其上限的两倍，且绝不超出上限 4,096 个以上。太小时表现为 `cosec.snapshot.evictions` 上升而 `cosec.snapshot.installed` 停在 `cosec.snapshot.bound`（`SNP-24`） | 堆（`Runtime.maxMemory()`） |
+| 一个实例持有多少租户文档和应用文档 | 每个族已持有的，加上堆的四分之一（减去“不存在”条目那一份）剩下的空间，按其常驻文档的典型重量计数；重量是一个从不低于一个文档实际保留量的估计（`DocumentWeight`）：2 GiB 时约 14,500 个部署页面那种形状的租户（估计 34.6 KB，实际保留 29.5 KB）。每轮重新确认时以及每次淘汰之前重新计算，因此只在常驻内容的重量超过份额时才淘汰文档，从不低于 64 个；控制面与管道同在一个进程时各得三分之一，另外三分之一是控制面的文档缓存（DR1-F-5）；一个很重的文档只从空间里拿走它自己的重量。冷加载突发时一个族可能短暂地持有至多其上限的两倍，且绝不超出上限 4,096 个以上。太小时表现为 `cosec.snapshot.evictions` 上升而 `cosec.snapshot.installed` 停在 `cosec.snapshot.bound`（`SNP-24`） | 堆（`Runtime.maxMemory()`） |
 | 一个实例记住多少个没有文档的租户 id 和应用 id | 文档那四分之一中固定的十六分之一，每个 512 字节：2 GiB 时 65,280 个租户 id 和 256 个应用 id。固定不变，所以没有主人的 id 绝不会缩小文档所得（`SNP-7`） | 同上 |
 | 变更监听器的队列容纳的量 | 堆的三十二分之一，与以前相同：2 GiB 时 64 MiB。太小时表现为 `cosec.control.listener.lost` | 同上 |
 | CoCache 中文档的本地副本为冷加载提供多久，之后重新询问 Redis | 3 个重新确认间隔：默认 `30s`；无论缓存定制器或 `cocache.*` 配置项设置了什么 | [`cosec.authorization.snapshot.revalidate-interval`](#snapshot) |
@@ -134,7 +134,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.key-prefix` | string | `cosec` | 每个 Redis key 的前缀，去掉末尾的 `:`。同一部署的所有服务、它的控制面以及 `cosec-migrate --key-prefix` 使用同一个值。使用 Redis 限流器时，自带 hash tag 的前缀（如 `{cosec}`）让所有限流计数器落在 Redis Cluster 的同一个 slot 上（[限流](../policies/rate-limiting.md)）。 |
+| `cosec.key-prefix` | string | `cosec` | 每个 Redis key 的前缀：字母、数字、`_`、`.` 和 `-`（`cosec`），或者用一对花括号整个包住这样的串，即 Redis Cluster 的 hash tag（`{cosec}`）。其他任何形式，包括含 `:` 的，都会让启动失败，这样任何部署的前缀都不会嵌套在另一个部署的前缀里（`SNP-9`，[故障排查](./troubleshooting.md#startup-fails-on-the-key-prefix)）。同一部署的所有服务、它的控制面以及 `cosec-migrate --key-prefix` 使用同一个值。使用 Redis 限流器时，自带 hash tag 的前缀（如 `{cosec}`）让所有限流计数器落在 Redis Cluster 的同一个 slot 上（[限流](../policies/rate-limiting.md)）。 |
 
 ## 管道 {#pipeline}
 
@@ -171,6 +171,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
+| `cosec.gateway.unprotected-handlers` | bean 名集合 | 空 | 可以在 Spring Cloud Gateway 宿主上提供的应用自己的控制器和函数式路由：CoSec 不决策它们（它们映射在所有路由之前），它们由其他手段保护。其他任何一个都会让 enforce 模式下的启动失败（`STA-13`）；带 `*` 的名字被拒绝；对不上任何处理器的名字被忽略。哪些处理器不需要 CoSec 决策只有运维知道，所以它是一项声明，而不是算出来的值（[网关自己的处理器](../integration/web.md#the-gateways-own-handlers)）。 |
 | `cosec.gateway.unprotected-endpoints` | 端点 id 集合 | 空 | 可以在网关应用端口上通过 HTTP 暴露的 actuator 端点：CoSec 不授权它们，它们由其他手段保护。其他任何 `health` 以外的端点在那里暴露都会使启动失败（`STA-2`）；会修改路由的 `gateway` 从不接受。在单独的 `management.server.port` 上可以暴露任何端点（[网关上的 actuator](../integration/web.md#actuator-on-a-gateway)）。 |
 
 ## 网关身份 {#gateway-identity}
@@ -278,7 +279,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authentication.revocation.cache.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。只有实例在最近 30 秒内见过的令牌或主体才有条目，未命中就是请求路径上的一次 Redis 读取。每张表容纳多少条不是配置项：堆的八分之一，按每个令牌 290 字节、每个主体 230 字节计数（[由计算得出，而非配置](#computed-not-configured)、[为 SaaS 网关定容量](./deployment.md#what-a-replica-holds)）。 |
+| `cosec.authentication.revocation.cache.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。`local-max-age` 最多 `30s`：更长的值会让启动失败，因为失效消息丢失后，它会让本地一直保留已被提高的吊销所替换的旧吊销（`IDN-26`）。只有实例在最近 30 秒内见过的令牌或主体才有条目，未命中就是请求路径上的一次 Redis 读取。每张表容纳多少条不是配置项：堆的八分之一，按每个令牌 290 字节、每个主体 230 字节计数（[由计算得出，而非配置](#computed-not-configured)、[为 SaaS 网关定容量](./deployment.md#what-a-replica-holds)）。 |
 
 ### 本地缓存设置 {#local-cache-settings}
 
@@ -316,7 +317,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.control.http.base-path` | string | `/cosec/control` | 控制 API 的路径。路由位于 `{base-path}/v1` 之下，因此移动 API 时版本不会丢失。 |
 | `cosec.control.http.enabled` | boolean | `true` | 本实例是否提供控制 API 的路由（`CTL-58`）：`false` 一个也不提供，用于内嵌控制面、只在进程内调用它的应用。只能是 `true` 或 `false`。 |
 | `cosec.control.http.service-port` | int | 未设置 | 给直接调用控制面的服务用的独立端口，提供控制 API 的**服务范围**（`CTL-58`）：租户与应用文档（有哪些、读取，以及对租户文档的 `:apply`）和不需要人参与的变更流程（检查并提出租户文档的变更、读取、rebase、abandon、运行或跳过影子窗口、发布）。其余路由（平台文档、审批、回滚、break-glass 和各种查询）在该端口上都是 `404`，按 id 指定的非租户文档的变更、非租户文档变更的列表以及控制 API 之外的任何路径也是；按状态列出时只显示租户文档的变更。控制面门面（`ControlService`）触及的正是这些路由。它从不扩大调用方能做的事：每条路由都按调用方声明的主体授权。只支持 WebFlux；不能是应用端口或管理端口（`0` 绑定一个临时端口，以 `local.control.service.port` 公布）。有服务端口的宿主声明 `only-trusted-callers-can-reach=true`：此时 `only-gateway-can-reach` 启动失败，因为该端口放行服务。未设置则没有这个端口。它就是应用自己的服务器换一个端口（`CTL-71`）：TLS 与客户端认证（`server.ssl.*`）、绑定地址（`server.address`）、HTTP/2、请求头与请求体的上限、超时和转发头处理都是应用的，没有自己的属性；所以用双向 TLS 让 `only-trusted-callers-can-reach` 成立的宿主，服务端口也是双向 TLS，绑定在某个地址的宿主，这个端口也只绑在那里。停止时先解绑，在 `spring.lifecycle.timeout-per-shutdown-phase` 内等待在途请求，再关闭所有仍打开的连接。 |
-| `cosec.control.revisions.max-count` | int | `50` | 每个文档总是保留的修订数；更早的修订在同时超过 `min-age` 后被回收。未关闭变更所依赖的修订会被保留。 |
+| `cosec.control.revisions.max-count` | int | `50` | 每个文档总是保留的修订数；更早的修订在同时超过 `min-age` 后被回收。未关闭变更所依赖的修订会被保留。 它同时限定一份文档的未结束变更数（`CTL-83`）：未结束变更会保住它所依赖的修订，所以一份文档的未结束变更不多于你保留的修订数。 |
 | `cosec.control.revisions.min-age` | duration | `7d` | 比这年轻的修订总是保留。 |
 | `cosec.control.changes.expire-after` | duration | `7d` | 未关闭的变更请求在提出后这么久过期，并离开未关闭变更列表。 |
 | `cosec.control.approval.expire-after` | duration | `72h` | 一次审批的有效期。长于令牌吊销的保留时长（`cosec.jwt.token-validity.access` 与 `.refresh` 中较长的那个，再加 `cosec.authentication.revocation.skew`）时启动失败：审批会比其令牌的吊销记录活得更久。 |

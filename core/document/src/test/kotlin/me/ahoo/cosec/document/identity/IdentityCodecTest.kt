@@ -139,6 +139,36 @@ class IdentityCodecTest {
             .subject.assert().isEqualTo("alice\uD83D\uDE00")
     }
 
+    /**
+     * `IDN-38`: a blank subject is no one, so a service would take a nobody for an authenticated principal. The tenant
+     * and the request id are no more blank: each is malformed on read and not written, by its path. White space around
+     * an id is part of it, never trimmed.
+     */
+    @Test
+    fun `a blank tenant, subject or request id is refused as malformed, and not written`() {
+        val valid = """"tenant":"acme","sub":"alice","scope":{"app":"","space":""},"roles":[],""" +
+            """"auth":{"method":"jwt","jti":"t1","exp":2},"iat":1,"rid":"r1""""
+        for ((id, path) in listOf("acme" to "$.tenant", "alice" to "$.sub", "r1" to "$.rid")) {
+            for (blank in listOf(" ", "   ", "\\t", "\\u00A0")) {
+                val error = assertThrows<IdentityFormatException> {
+                    IdentityCodec.decode(header("""{"v":1,${valid.replace("\"$id\"", "\"$blank\"")}}"""))
+                }
+                error.reason.assert().describedAs(path).isEqualTo(IdentityFormatException.Reason.MALFORMED)
+                error.message.assert().isEqualTo("The identity header is malformed: $path is blank.")
+            }
+        }
+        listOf(
+            identity.copy(tenant = " "),
+            identity.copy(subject = "\t"),
+            identity.copy(requestId = "  "),
+        ).forEach { blank ->
+            val error = assertThrows<IdentityFormatException> { IdentityCodec.encode(blank) }
+            error.message.assert().endsWith(" is blank.")
+        }
+        val spaced = identity.copy(subject = " alice ")
+        IdentityCodec.decode(IdentityCodec.encode(spaced)).subject.assert().isEqualTo(" alice ")
+    }
+
     /** RFC 0010 C3: a method this release does not know is read as it is, so a newer gateway's authenticator works. */
     @Test
     fun `any named method is read as it is`() {

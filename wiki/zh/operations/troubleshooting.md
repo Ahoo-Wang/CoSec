@@ -77,6 +77,9 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
   `"beta\uD800"` 这样的转义（`IDN-10`）。Redis key 在它的位置写 `?`，这个令牌会读到 `beta?` 的文档、成员关系与吊销，所以在读取其中任何一项之前就被拒绝。
   CoSec 自己的签发方拒绝签出这样的令牌：登录失败，报 `Principal [alice\uD800] holds an unpaired UTF-16 surrogate ...`。
   修正签发方或它读取的用户存储：id 是 Unicode 文本。
+- **空白主体：** 令牌的 `sub` 只含空白字符（`IDN-38`）：主体 id 从不空白。CoSec 自己的签发方拒绝签出这样的令牌：登录失败，报
+  `A token has a subject that is not blank (IDN-38).`。修正签发方，或答出这个主体的 `Authentication`。id 不会被 trim：
+  `" alice "` 是合法的，也不是 `alice`。
 - **含 `/` 的租户或应用 id：** 令牌的 `tenantId` 或 `aud` 含 `/`，例如 `acme/west`，7.x 或预览版的签发方可能签出过这样的令牌（`SCP-13`）。
   租户 id 和应用 id 都是一个路径段，所以这个令牌既不指租户 `acme/west`，也不指 `acme`。请在保存该 id 的地方给租户或应用改名，然后让主体重新登录
   （[升级](./upgrading.md#tenant-and-app-ids-hold-no-slash)）。
@@ -174,7 +177,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 | `INDETERMINATE: RequiredListenerFailed` / `required_listener` | `REQUIRED` 决策监听器在一次放行上失败或超时（`REQUIRED decision listener [<name>] failed on request [<id>].`），或者放行来自 break-glass 绑定而没有 `REQUIRED` 监听器（`Request [<id>] permitted through break-glass, but no REQUIRED listener is registered.`）。 | 修复监听器的存储，或在使用 break-glass 之前注册 `REQUIRED` 监听器（[决策监听器](./observability.md#decision-listeners)）。 |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator` | 认证器失败，或耗时超过认证超时（`cosec.pipeline.timeout` 的 20 %）：例如 Redis API key 存储无法访问。 | 恢复存储。 |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，某个认证器的每个请求 | 你自己的 `Authenticator` 把凭证的方式命名为 `jwt`，而它保留给 CoSec 的令牌（`The authentication method [jwt] is CoSec's own token's ...`）。 | 按你的凭证命名方式，例如 `Identity.Method("ldap")`（[扩展](../architecture/extending.md#authenticators)）。 |
-| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，只有部分主体或 key | 认证器给出的主体，其 id、租户、凭证 id 或声明的角色中有落单的 UTF-16 代理项（`Principal [<id>] of tenant [<tenant>] holds an id with an unpaired UTF-16 surrogate ...`），或者 API key 存储的记录指名了这样的 id（`API key [<id>] holds an id with an unpaired UTF-16 surrogate.`，`IDN-10`）。这样的 id 会与另一个 id 共用一个 Redis key，所以请求改为失败即拒绝。 | 修正认证器或 key 的记录：id 是 Unicode 文本。 |
+| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，只有部分主体或 key | 认证器给出的主体，其 id、租户、凭证 id 或声明的角色中有落单的 UTF-16 代理项（`Principal [<id>] of tenant [<tenant>] holds an id with an unpaired UTF-16 surrogate ...`），或者 API key 存储的记录指名了这样的 id（`API key [<id>] holds an id with an unpaired UTF-16 surrogate.`，`IDN-10`）。这样的 id 会与另一个 id 共用一个 Redis key，所以请求改为失败即拒绝。或者主体的 id 为空白（`A principal id is not blank.`，或 `API key [<id>] has a blank principal.`，`IDN-38`）：空白的 id 不是任何人。 | 修正认证器或 key 的记录：id 是 Unicode 文本，并指向某个人。凭证指向的不是任何人时，认证器返回 `Rejected`。 |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，带某个 key 的每个请求都如此 | 该 key 以其他格式存储，读取时被拒绝（`API key format [null] is not 3.`；`null` 表示记录没有 `format`，例如 7.x 写入的 key；`2` 表示由 8.0 预览版写入）。 | 7.x 的 key：转换 key（[API key 只收窄，成员关系决定](./upgrading.md#api-keys-narrow-and-memberships-decide)）。预览版的 key：签发一个新 key 并删除旧 key；`cosec-migrate api-keys` 不会把它算作已转换。 |
 | `DEADLINE_EXCEEDED` / `deadline` | 整个求值耗时超过 [`cosec.pipeline.timeout`](./configuration.md#pipeline)。 | 在追踪中找到慢的阶段。 |
 
@@ -273,7 +276,7 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
 
 | 状态 | 原因 | 修复 |
 |---|---|---|
-| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有未知或缺失的成员、指名了带落单 UTF-16 代理项的 id（`IDN-10`）或不能作为租户 id 的租户（例如含 `/`，`SCP-13`）、大于 [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
+| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有未知或缺失的成员、指名了带落单 UTF-16 代理项的 id（`IDN-10`）、空白的 `sub`、`tenant` 或 `rid`（`IDN-38`）或不能作为租户 id 的租户（例如含 `/`，`SCP-13`）、大于 [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
 | `401` `token-invalid` | 本服务不读取的版本、没有 `auth.exp`，或签发时间晚于当前时间加 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)。 | 让服务与网关一起升级；同步时钟。 |
 | `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。在没有网关的测试中，头只生成一次并被重复使用：每个请求生成一个（[`IdentityHeader`](../integration/web.md#services-behind-the-gateway)）。 |
 
@@ -513,9 +516,13 @@ Set each to one of its values, or remove it to take its default: https://cosec.a
 
 `CoSec is off: cosec.enabled=false. This application authorizes no request and nothing is protected by CoSec.` 是应用启动后记录的一条 WARN。CoSec 装配的一切都不起作用：没有管道、没有令牌校验、没有快照。除非你本就这样打算，否则删掉该配置项或设为 `cosec.enabled=true`；网关仍会剥掉客户端的 `CoSec-Identity`。
 
-### 日志说网关自己的处理器不被决策 {#the-log-says-the-gateways-own-handlers-are-not-decided}
+### 网关自己的处理器导致启动失败 {#startup-fails-on-the-gateways-own-handlers}
 
-`This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. n handler(s) of the application itself ... are answered with no CoSec decision: ...` 指明应用自己的控制器或函数式路由。它们映射在所有网关路由之前，所以 CoSec 看不到对它们的请求（[网关自己的处理器](../integration/web.md#the-gateways-own-handlers)）。把它们移到网关之后的服务中，或在应用内自行保护。
+```text
+This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. n handler(s) of the application itself are mapped before any route and would be answered with no CoSec decision (no authentication, no policy, no rate limit): ... (STA-13, ...)
+```
+
+它按 bean 名指明应用自己的控制器或函数式路由。它们映射在所有网关路由之前，所以 CoSec 看不到对它们的请求（[网关自己的处理器](../integration/web.md#the-gateways-own-handlers)）。把它们移到网关之后的服务中，由路由来决策；或者把由其他手段保护的那些按 bean 名列在 `cosec.gateway.unprotected-handlers`（`COSEC_GATEWAY_UNPROTECTEDHANDLERS`）中，启动时会用一行 INFO 指明它们。`... lists [*]: it takes the bean names of handlers, never a pattern` 表示列出的名字含有 `*`：请逐个写出名字。
 
 ### 缺少模块时启动失败 {#startup-fails-on-a-missing-module}
 
@@ -538,10 +545,21 @@ starter 只装配类路径上的 CoSec 模块，漏加一个模块会悄无声�
 | `cosec.cosid.generator is set, but CoSec's ids do not come from CosId` | 一个 `CosIdRuntime`（`cosid-spring-boot-starter` 及其 `cosid.*` 配置），或者删除这个键：应用自己有 `IdGenerator` bean 时，CoSec 的 id 来自那个 bean |
 | `cosec.metrics.enabled=true needs cosec-micrometer` | `cosec-micrometer`，或者删除这个键：不设置时指标是可选的 |
 | `cosec.control.enabled=true needs cosec-control`（或 `cosec-cocache`） | 消息中指出的制品，或者删除这个键：不设置时，没有这些模块的实例就是数据面实例 |
+| `cosec.control.enabled=true, but cosec.pipeline.mode=gateway` | 网关后的服务不装配控制面：把它放到 `enforce` 模式（默认）的宿主上运行，或者删除这个键 |
 | `Social sign-in, whose states are kept in Redis ..., needs cosec-cocache` | 添加 `cosec-cocache`（它把一次登录的 OAuth state 存在 Redis 里，每个只能用一次），或声明你自己的 `SocialStateStore` Bean，或用 `cosec.authentication.login.social.enabled=false` 关闭社交登录 |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` 和 Redis 连接（`spring.data.redis.*`）：没有它就读不到快照，限流也会退化为按实例计数 |
 
 Web 相关的检查只在 CoSec 开启时运行（`cosec.enabled`，默认 `true`）；网关宿主不做 WebFlux 检查，它需要的是 `cosec-gateway`。设置 `spring.main.lazy-initialization=true` 时每项检查同样运行（`STA-3`）。
+
+有了模块，Web 宿主仍可能没有门：应用排除了 `CoSecPipelineWebAutoConfiguration`，或者用另一种类型的过滤器替换了适配器的 bean。
+这时每个请求都会不经裁决地到达应用，所以启动失败：
+
+```text
+CoSec is on (cosec.enabled), but this web host registers none of its gates (PipelineServletFilter, PipelineWebFilter, PipelineGatewayFilter), as a bean or a filter registration: every request would reach the application undecided. ...
+```
+
+保留这个自动配置，或者自己注册 CoSec 的过滤器（它类型的 bean，或者过滤器是它的 `FilterRegistrationBean`：检查看的是类型，不是 bean 的名字），
+或者用 `cosec.enabled=false` 关闭 CoSec。
 
 ### 刷新路由的认证导致启动失败 {#startup-fails-on-the-refresh-routes-authentication}
 
@@ -729,6 +747,14 @@ cosec.authorization.snapshot.revalidate-interval (PT0S) must be positive: the pe
 5 分钟、配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`（[配置](./configuration.md#snapshot)）。文档很多时要节省
 Redis 的 CPU，在这些范围内调大它（[存储](./storage.md#what-revalidation-costs-redis)）。
 
+### key 前缀导致启动失败 {#startup-fails-on-the-key-prefix}
+
+```text
+cosec.key-prefix [cosec:prod] holds ':': a key prefix is letters, digits, '_', '.' and '-' (cosec), or such a string wrapped whole in braces, a Redis Cluster hash tag ({cosec}), so that no deployment's prefix nests inside another's (SNP-9). ...
+```
+
+一个部署的前缀不能嵌套在另一个部署的前缀里：`a` 和 `a:b` 并存时，后者的 key 也都在前者之下。信息里写明了该怎么做。末尾的 `:`（`cosec:`），之前的预览版会忽略，它与去掉 `:` 后指的是同一批 key：删掉它即可。前缀中间的 `:`（`cosec:prod`）指向的 key 不在现在允许的任何前缀之下：按[升级说明](./upgrading-previews.md#from-8-0-0-beta-7)迁移它们。花括号只有在一对花括号包住整个前缀时才算 hash tag。
+
 ### 已移除的 key 前缀导致启动失败 {#startup-fails-on-a-removed-key-prefix}
 
 ```text
@@ -874,6 +900,8 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 - **`DELETE /break-glass/{bindingId}` 返回 `409` `binding [<id>] is not a break-glass binding`**：平台文档中该 id 的绑定是普通绑定（无论是否到期），没有提议任何变更。请用变更删除它（[策略测试](../policies/testing.md)）。
 - **`DELETE /break-glass/{bindingId}` 返回 `409` `[platform] is at revision <n>, not <m>`**：吊销提议时另一次写入恰好改变了平台文档，那可能是另一个吊销同一绑定的调用。请确认该绑定是否还在：重试（返回 `404` 即已删除），或读取 `GET /documents/platform`。
 - **`DELETE /break-glass/{bindingId}` 返回 `404`**：平台文档中没有该 id 的绑定，也没有提议任何变更。请核对 id（`GET /documents/platform` 列出所有绑定）。首次调用超时或失败之后重试得到的 `404`，说明该绑定已被删除，可能是那次调用删的，也可能是别的调用：平台文档的修订历史写明是哪个修订删除了它。和控制 API 的所有 `404` 一样，它不带 `detail`；控制面所在主机以 `INFO` 记录 `the platform document has no binding [<id>]`。
+- **提议答 `409`，`conflict: OPEN_LIMIT`**：文档已有 `cosec.control.revisions.max-count` 个未结束变更（默认 50，`CTL-83`）；`heldBy` 给出最老的那个。你自己最老的、检查失败的变更已先被放弃，剩下的是还能前进的变更或别的作者的变更。放弃不再需要的（`POST /changes/{id}:abandon`）、发布它们，或等它们过期（`cosec.control.changes.expire-after`）。
+- **已结束变更的 `GET /changes/{id}` 返回 `404`**：一个文档保留最近的 `cosec.control.revisions.max-count` 个已结束变更，回收任务删除更早、超过 `cosec.control.revisions.min-age` 且修订已不再保留的那些（`CTL-83`）。谁发布了某个修订，记在修订本身：`GET /documents/{key}/revisions/{revision}` 在 `provenance` 中给出它的变更、作者与审批人；其余见该变更的审计事件（[可观测性](observability.md)）。
 - **租户变更以 `TOO_LARGE` 等待审批**：授权分析在走到这些授出之前已用完一次分析允许的四百万次比较，没比较到的内容无从得知（`CTL-49`）。请把变更拆小；策略原有的语句几乎不花成本，起作用的是变更新增或改写的部分乘以作者持有的权限。只有一项 `change of tenant:<t>` 表示变更授出超过 80,000 个片段（被授出的 ALLOW 的每个动作乘每个资源，再乘每条绑定），它的任何部分都没有分析：把语句的动作或资源、或绑定分到几个变更里。
 - **升级之后，覆盖所有 app 的每个租户授出都等待审批**（`UNREADABLE`），并以 `WARN` 记录 `The app list is missing or incomplete: run cosec-migrate repair-references; ...`（每分钟至多一次，启动时也会出现）：app 列表尚不完整，分析无法判断作者在它没有读的 app 中持有什么。在每个控制面实例和 `cosec-migrate` 都运行这个版本之后，运行一次 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index)。列表丢失之后（`FLUSHDB`、驱逐）也是如此。`The app list misses an app document that exists`、`The app list has an entry that names no app document`，以及回收任务记的 `The app list misses the app documents [...]; it is incomplete again`（旧版本的实例或 `cosec-migrate` 发布了一个 app），同样需要运行 `repair-references`。
 

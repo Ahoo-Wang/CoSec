@@ -343,13 +343,15 @@
     {
       "id": "IDN-26",
       "source": "RFC 0004 §4.5.3; #1629 finding 5",
-      "statement": "A revocation through TokenRevoker invalidates every instance's local 'not revoked' answer for that token or subject at once; an instance that missed the invalidation keeps that answer for at most 30 seconds (RevokedTokenCache.MISSING_TTL_SECONDS), and no property, layer or customizer lengthens it.",
+      "statement": "A revocation through TokenRevoker invalidates every instance's local 'not revoked' answer for that token or subject at once; an instance that missed the invalidation keeps that answer for at most 30 seconds (RevokedTokenCache.MISSING_TTL_SECONDS), and no property, layer or customizer lengthens it. A revocation an instance holds locally, a subject revocation raised since included, is kept at most as long (DR1-D-3): both tables' local-max-age, as the cache ends with it, is at most 30 seconds: cosec.authentication.revocation.cache.local-max-age, a cocache.* property or a customizer above it fails startup, and a layer may only tighten it.",
       "level": "startup",
       "pending": null,
       "guards": [
         "cocache:CacheTtlPolicyTest#revocationTablesKeepNotRevokedFor30SecondsAtMost",
         "spring-boot:StrictCacheFailureTest#revocationTablesKeepNotRevokedFor30SecondsWhateverTheGlobalLayersSay",
-        "spring-boot:StrictCacheFailureTest#aRevocationTablesAbsentTtlPropertyFailsStartup"
+        "spring-boot:StrictCacheFailureTest#aRevocationTablesAbsentTtlPropertyFailsStartup",
+        "spring-boot:StrictCacheFailureTest#aRevocationTablesLocalMaxAgeIsAtMost30Seconds",
+        "cocache:CacheTtlPolicyTest#revocationTablesHoldARevocationFor30SecondsAtMost"
       ]
     },
     {
@@ -444,7 +446,7 @@
     {
       "id": "IDN-34",
       "source": "Roadmap §4 (beta.5: a service caller first declared api-key, a method of its own before RC1); coordinator's decision of 2026-11-23 (design (b): AuthenticatedPrincipal.workload); RFC 0009 §3, §4.2, RFC 0010 C3 (sentences proposed in the PR)",
-      "statement": "The identity a service states for itself when it calls the control plane as its own principal (ControlCaller.service, ServiceIdentity), in process or over the network, names its credential `service`, never `api-key` or `jwt`, and audit, decision and change records name it so. `service` and `api-key` are CoSec's workload methods: a principal is a workload's (AuthenticatedPrincipal.workload) when CoSec's API key authenticator proved it (by provenance) or its credential is named `api-key` or `service`, whoever named it: a gateway's forwarded identity, a service's stated one, or another authenticator's (fail closed). What a principal may do as a person or as a workload is read from workload alone, never from apiKey, which keeps its meaning (an API key proved it): a workload never approves (APR-7) and is never the trust root (APR-3). A `service` credential, as any credential but CoSec's own token, has no session and no break-glass.",
+      "statement": "The identity a service states for itself when it calls the control plane as its own principal (ControlCaller.service, ServiceIdentity), in process or over the network, names its credential `service`, never `api-key` or `jwt`, and audit, decision and change records name it so. `service` and `api-key` are CoSec's workload methods: a principal is a workload's (AuthenticatedPrincipal.workload) when CoSec's API key authenticator proved it (by provenance) or its credential is named `api-key` or `service`, whoever named it: a gateway's forwarded identity, a service's stated one, or another authenticator's (fail closed). What a principal may do as a person or as a workload is read from workload alone, never from apiKey, which keeps its meaning (an API key proved it): a workload never approves (APR-7) and is never the trust root (APR-3). A `service` credential, as any credential but CoSec's own token, has no session and no break-glass. A principal any other authenticator proves is a person unless its credential names `api-key` or `service`: an authenticator of machine clients names its credentials `Identity.Method.SERVICE` (or `API_KEY`) to make them workloads, and one that names another method is trusted to prove people (an S3 of the RC1 review, DR1-C-3; a person by provenance only is 8.1's).",
       "level": "build",
       "pending": null,
       "guards": [
@@ -484,6 +486,48 @@
       "guards": [
         "spring-boot:CoSecJwtAutoConfigurationTest#aRevocationOutlivesAnAccessTokenValidLongerThanTheRefreshToken",
         "spring-boot:CoSecJwtAutoConfigurationTest#contextLoadsTokenRevocationDefaults"
+      ]
+    },
+    {
+      "id": "IDN-36",
+      "source": "RC1 deep review, the coordinator's third batch and ruling of 2026-11-23; RFC 0009 (sentences proposed in the PR)",
+      "statement": "A session a tenant switch starts names its root, the session its user's login began (the switched session's root, or that session when it is the login's own), and lives only while the root does: its refresh, the retry within the rotation leeway, and a switch from it each read the root, and a root ended, revoked or gone revokes it and refuses (401 token-revoked). Each such answer writes the root back unchanged with a conditional write, so the root is kept as long as a session that depends on it, and a switch back to the root's tenant begins the root again in its principal's count (IDN-35). A switch reads back the session it created and is refused, ending it, when the store did not keep the root. Such a record is written as format 2, which a reader of format 1 refuses (IDN-31).",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "login:SwitchedSessionRootTest#a session switched to ends with the login it was switched from",
+        "login:SwitchedSessionRootTest#the root is the login's session, however many switches lie between",
+        "login:SwitchedSessionRootTest#a retry within the leeway is refused once the root has ended",
+        "login:SwitchedSessionRootTest#a gone root ends the session as a revoked one does",
+        "login:SwitchedSessionRootTest#a switched session's refreshes keep its root",
+        "login:SwitchedSessionRootTest#a store that does not keep the root refuses the switch, and ends the session it started",
+        "login:SwitchedSessionRootTest#switching back and forth never pushes out the login",
+        "cocache:TokenFamilyFormatTest#a switched session is format 2, with its root",
+        "cocache:SessionBoundTest#switching back to the login's tenant keeps the login among the latest"
+      ]
+    },
+    {
+      "id": "IDN-38",
+      "source": "#1889 (RFC 0004 §4.1); the coordinator's review of 2026-11-23 (sentences proposed in the PR)",
+      "statement": "A principal id is not blank: neither empty nor white space only. Authenticated means someone, and the id keys the principal's sessions, revocations, rate limits and audit records. Each entrance refuses one in its own terms: a token whose subject is blank is invalid (401 token-invalid) on every path that verifies one, a request's and a refresh's, and CoSec's token issuer signs none; a forwarded identity whose sub, tenant or rid is blank is malformed (400), and a gateway writes none; an API key record of a blank principal cannot be made, so its lookup fails (503); a document binding a blank principal, a stored actor or a session record naming one does not decode; cosec-migrate names a 7.x API key of a blank principal among its rejections and converts the others. PrincipalId itself refuses a blank value, so an authenticator of the application's own that makes one has failed (503), as for IDN-10. An id is not trimmed: white space around one is part of it, compared as it is.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "model:BindingTest#a principal id is never blank",
+        "spi:VerifiedTokenTest#verifyAndRefreshRefuseABlankSubject",
+        "jwt:JwtTokenVerifierTest#aBlankSubjectIsInvalidOnTheRequestAndRefreshPaths",
+        "jwt:JwtTokenConverterTest#aBlankSubjectIsNotIssued",
+        "document:IdentityCodecTest#a blank tenant, subject or request id is refused as malformed, and not written",
+        "document:PolicyDocumentCodecTest#a principal binding names a principal that is not blank",
+        "runtime:BlankPrincipalIdPipelineTest#a token of a blank subject is token-invalid and decided as anonymous",
+        "runtime:BlankPrincipalIdPipelineTest#an authenticator whose principal is blank is unavailable",
+        "runtime:BlankPrincipalIdPipelineTest#white space around a subject is part of its id",
+        "runtime:ApiKeyAuthenticatorTest#aKeyRecordOfABlankPrincipalCannotBeMade",
+        "control:StoredActorTest#a blank actor is a malformed record",
+        "cocache:TokenFamilyFormatTest#a session of a blank principal is refused as a format error",
+        "migrate:ApiKeyMigrationTest#a key that cannot be converted exactly is refused",
+        "migrate:MembershipsExportTypesTest#a blank principal is refused, naming the entry",
+        "migrate:MigrateMainTest#a blank platform administrator is a usage error"
       ]
     }
   ]

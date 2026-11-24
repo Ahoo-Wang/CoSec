@@ -255,13 +255,16 @@ class CacheTtlPolicyTest {
         }
     }
 
-    /** Lengthens a store's "not found" answers, as `cocache.defaults.store.absent-ttl` or a customizer would. */
-    private object LongAbsence : CacheLayers {
+    /**
+     * Lengthens a store's "not found" answers, as `cocache.defaults.store.absent-ttl` or a customizer would, and its local
+     * copies too when [localMaxAge] is set.
+     */
+    private class LongAbsence(private val localMaxAge: Duration? = null) : CacheLayers {
         override fun <K : Any, V : Any> apply(spec: StoreSpec<K, V>, locks: Locks): Layered<StoreSpec<K, V>> =
             CacheLayers.NONE.apply(
                 spec.toBuilder().policy {
                     absentTtl = Duration.ofHours(1)
-                    localMaxAge = Duration.ofHours(1)
+                    this@LongAbsence.localMaxAge?.let { localMaxAge = it }
                 }.build(),
                 locks,
             )
@@ -287,12 +290,24 @@ class CacheTtlPolicyTest {
     @Test
     fun revocationTablesKeepNotRevokedFor30SecondsAtMost() {
         CacheRuntime.builder().backend(InMemoryBackend()).build().use { runtime ->
-            val factory = CoCacheFactory(runtime, LongAbsence)
+            val factory = CoCacheFactory(runtime, LongAbsence())
             listOf(CoSecCacheSpecs.revokedToken(), CoSecCacheSpecs.revokedSubject()).forEach { spec ->
                 CoSecCacheSpecs.locks(spec.name).isLocked(PolicyField.ABSENT_TTL).assert().isTrue()
                 factory.create(spec, CoSecCacheSpecs.locks(spec.name))
                 runtime.policy(spec.name)!!.absentTtl.assert().describedAs(spec.name)
                     .isEqualTo(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
+            }
+        }
+    }
+
+    /** DR1-D-3: a layer that keeps a revocation table's local copies longer than 30 seconds is refused. */
+    @Test
+    fun revocationTablesHoldARevocationFor30SecondsAtMost() {
+        CacheRuntime.builder().backend(InMemoryBackend()).build().use { runtime ->
+            val factory = CoCacheFactory(runtime, LongAbsence(Duration.ofHours(1)))
+            listOf(CoSecCacheSpecs.revokedToken(), CoSecCacheSpecs.revokedSubject()).forEach { spec ->
+                assertThrows<IllegalArgumentException> { factory.create(spec, CoSecCacheSpecs.locks(spec.name)) }
+                    .message.assert().describedAs(spec.name).contains("local-max-age").contains("IDN-26")
             }
         }
     }

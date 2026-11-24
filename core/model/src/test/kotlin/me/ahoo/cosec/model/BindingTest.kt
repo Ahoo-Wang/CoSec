@@ -63,6 +63,16 @@ class BindingTest {
         binding.breakGlass.assert().isFalse()
     }
 
+    /** `IDN-38`: a blank principal id is no one, and never made; white space around an id is part of it, not trimmed. */
+    @Test
+    fun `a principal id is never blank`() {
+        for (blank in listOf("", " ", "\t\n", "\u00A0", "\u2003")) {
+            val error = runCatching { PrincipalId(blank) }.exceptionOrNull()
+            error.assert().isInstanceOf(IllegalArgumentException::class.java)
+        }
+        PrincipalId(" a ").value.assert().isEqualTo(" a ")
+    }
+
     /** Documents write `*` for Match.Any, so no concrete id may be `*` (RFC 0004 §4.1). */
     @Test
     fun `the wildcard is not an app or space id`() {

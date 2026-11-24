@@ -127,6 +127,7 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 - **被取消时停下。** 超时是协作式的：到了 SPI 的超时或 `cosec.pipeline.timeout`，Pipeline 取消调用，并等它返回之后才应答 `503`。`withContext(myDispatcher)` 停不下阻塞调用，所以挂住 30 秒的 JDBC 查询会让请求等 30 秒，而不是它的 300 ms 超时；在 WebMvc 上还会占住一个请求线程。`runInterruptible` 在取消时中断线程；对不响应中断的调用，再给客户端设置它自己的超时（JDBC 查询超时、HTTP 读取超时）。
 - **用抛出异常报告失败。** 查找失败时，永远不要返回“什么都没有”：空的成员关系、缺失的属性或“未吊销”，都可能把拒绝变成放行。Pipeline 把抛出的异常或超时变成 `Indeterminate`，除非有 DENY 匹配，否则应答 `503`。
 - **给出的 id 是文本。** SPI 给出的 id（主体、租户、凭证 id、角色、空间、策略 id）不能带落单的 UTF-16 代理项：Redis key 会在它的位置写 `?`，与另一个 id 共用一个 key（`IDN-10`）。`AuthenticatedPrincipal` 与 `ApiKey` 在构造时拒绝它，所以给出这种 id 的认证器或 API key 存储会抛出异常，带这种 id 的 `MembershipProvider` 答复也会失败：都是 `503`。判断用 `Identifiers.isWellFormed`（`cosec-model`）；把 id 写进异常消息或日志行时用 `Identifiers.printable`，它不会让 id 伪造出一行。
+- **给出某个人。** 主体 id 从不空白，既不为空也不只含空白字符（`IDN-38`）：`PrincipalId` 在构造时拒绝它，所以给出这种 id 的认证器会抛出异常，管道答 `503`，同上。凭证指向的不是任何人时，改为返回 `Rejected`，让客户端得知它的凭证无效。id 不会被 trim：`" alice "` 是它自己的 id。
 - **不要捕获取消。** 客户端离开会取消请求的协程。重新抛出 `CancellationException`，也不要用 `runCatching` 包裹挂起调用。
 - **保持廉价。** 每次调用都有超时（见[配置](../operations/configuration.md)）；整个请求受 `cosec.pipeline.timeout` 约束。不挂起的本地应答不切换线程，也不设定时器。
 
@@ -145,7 +146,7 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 
 [break-glass](../guide/security-model.md#break-glass) 绑定是否适用按来源判断：只有经 `TokenAuthenticator`、由 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌能得到它。你的认证器返回的主体，无论凭证使用自己的方式（例如 `Identity.Method("ldap")`）还是没有凭证，永远得不到 break-glass；你自己的 `TokenVerifier` 认可的令牌也得不到，即使经过 `TokenAuthenticator`（此时凭证以认证器的 `method` 命名，默认为 `token`）。方式 `JWT` 保留给 CoSec 的令牌：你用它构造的 `AuthenticatedPrincipal` 会被拒绝（`IllegalArgumentException`，即 `503`），因此任何认证器都无法凭名字冒充 CoSec 的令牌（`BRK-8`）。
 
-控制面在审批时还会读取主体的两项事实（[测试策略](../policies/testing.md#approval)）。`workload`（`IDN-34`）：对 API key（`apiKey`：CoSec 的 API key 认证器设置它，方式为 `API_KEY` 的凭证无论由谁构造都算作 API key）和方式为 `SERVICE` 的凭证（`service`，服务自己的身份，无论由谁构造）为真；工作负载从不审批，也从不是信任根。你的主体在 CoSec 看来是人的，除非其凭证名为 `api-key` 或 `service`，所以不要给面向工作负载的认证器授予 `cosec:approve` 或 `cosec:platform-admin`，或者让它把凭证命名为 `Identity.Method.SERVICE`。凭证的 id：审批会记下它，没有 id 的审批不算数。你构造的主体没有 `issuedAt`，所以其令牌的任何一次吊销（`subjectRevokedBefore`）都会让它的审批作废。
+控制面在审批时还会读取主体的两项事实（[测试策略](../policies/testing.md#approval)）。`workload`（`IDN-34`）：对 API key（`apiKey`：CoSec 的 API key 认证器设置它，方式为 `API_KEY` 的凭证无论由谁构造都算作 API key）和方式为 `SERVICE` 的凭证（`service`，服务自己的身份，无论由谁构造）为真；工作负载从不审批，也从不是信任根。你的主体在 CoSec 看来是人的，除非其凭证名为 `api-key` 或 `service`。所以你的认证器以自己的方式名（比如 `oauth-client`）证明的机器客户端，如果被授予 `cosec:approve`，就能审批变更、也能当信任根：两个这样的凭证就凑成了四眼。面向工作负载的认证器在它构造的主体里把凭证写成 `Identity.Credential(Identity.Method.SERVICE, id, expiresAt)`（或 `API_KEY`），这样主体就是工作负载，并且不授予它 `cosec:approve` 或 `cosec:platform-admin`（DR1-C-3；只按出处认定人留到 8.1）。凭证的 id：审批会记下它，没有 id 的审批不算数。你构造的主体没有 `issuedAt`，所以其令牌的任何一次吊销（`subjectRevokedBefore`）都会让它的审批作废。
 
 认证器只能看到 Pipeline 读作凭证的内容：令牌（`Authorization` 请求头；开启 `cosec.pipeline.allow-query-token` 时其次是同名查询参数；开启 `cosec.pipeline.allow-cookie-token` 时再次是 Cookie）和 API key 请求头（`cosec.pipeline.api-key-header`）。
 
@@ -185,7 +186,7 @@ fun cosecAuthenticator(
 
 运维设置了 `cosec.authentication.revocation.fail-closed: true`，只要这个写法漏掉读取它的那一行，就重新敞开了，而且没有任何日志：这三项设置要保留，否则吊销方面的加固就丢了（[这个例外](../guide/security-model.md#the-two-documented-exceptions)）。
 
-自定义的 `TokenVerifier` 返回 `VerifiedToken`（`me.ahoo.cosec.spi.token`），一个由它校验过的声明构成的不可变值：`id`、`principal`、`tenant`、`app`（令牌的 `aud`）、`roles`、`policies`、`attributes`、时间和成员关系标记。它的构造函数对任何令牌都不允许的声明（以 `(` 开头的 id、空租户、落单代理项、不可能的应用）抛出 `TokenVerificationException`，所以无论哪个校验器读取，`verify` 都会拒绝。
+自定义的 `TokenVerifier` 返回 `VerifiedToken`（`me.ahoo.cosec.spi.token`），一个由它校验过的声明构成的不可变值：`id`、`principal`、`tenant`、`app`（令牌的 `aud`）、`roles`、`policies`、`attributes`、时间和成员关系标记。它的构造函数对任何令牌都不允许的声明（以 `(` 开头的 id、空白主体、空租户、落单代理项、不可能的应用）抛出 `TokenVerificationException`，所以无论哪个校验器读取，`verify` 都会拒绝。
 
 按契约，`TokenVerifier` 是纯计算：不做 I/O，不做任何阻塞的事，因为流水线在请求的线程上调用它。令牌是否被吊销不由它回答：`TokenAuthenticator`、刷新（`RefreshTokenAuthentication`）和 `TokenRevoker` 都通过挂起式的 `RevocationReader` 读取，并共用同一个判断 `TokenRevocation`。只有 CoSec 自己的校验器签发的令牌才能使用 break-glass。带 `act` 声明的令牌绝不能成为主体（`IDN-4`）：自定义的 `TokenVerifier` 遇到它时抛出 `DelegationUnsupportedException`，`TokenAuthenticator` 把它变成 `token-invalid` 拒绝；自行读取令牌的自定义 `Authenticator` 则返回 `AuthnResult.Rejected(DELEGATION_UNSUPPORTED)`，而不是以它的 `sub` 作为主体。令牌、声明和成员关系对用户意味着什么，见[认证](../integration/authentication.md)。
 
@@ -194,7 +195,7 @@ fun cosecAuthenticator(
 | 扩展点 | 契约 |
 |---|---|
 | `TokenStore` | 吊销的写入侧，由 CoSec 自己的 `TokenRevoker` 调用，你的代码从不直接调用：`revoke(tokenId, ttl)` 接收令牌的 `jti`（`VerifiedToken.id`），不是令牌本身，所以 `revoke(accessToken, ttl)` 会写入一个以有效凭证命名的键，却什么也没吊销。应用通过 `TokenRevoker` 登出用户或吊销主体（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。存储的方法是 `revoke(tokenId, ttl)`、`revokeSubject(tenant, principal, issuedBefore, ttl)`，两者都是挂起函数，不阻塞。条目必须比它吊销的刷新令牌存活得更久。无法吊销某主体全部令牌的存储从 `revokeSubject` 抛出异常，紧急吊销因此绝不会悄悄失效。 |
-| `TokenFamilyStore` | 刷新令牌的会话（[会话](../integration/authentication.md#sessions)）：`create`、`read`，以及只在读到的版本之上 `replace` 一个令牌族，跨实例原子。读取失败或写入无法确认时抛出异常。只在登录、刷新和登出时读写。令牌族的 `expiresAt` 是上界：记录再也不能刷新时就可以丢掉，CoSec 的存储在刷新令牌有效期之后就这样做。每个主体在每个租户保留 `TokenFamilyStore.SESSIONS_PER_PRINCIPAL` 个最近开始的会话：再 `create` 一个时删除最早的那个（`IDN-35`）。 |
+| `TokenFamilyStore` | 刷新令牌的会话（[会话](../integration/authentication.md#sessions)）：`create`、`read`，以及只在读到的版本之上 `replace` 一个令牌族，跨实例原子。读取失败或写入无法确认时抛出异常。只在登录、刷新和登出时读写。令牌族的 `expiresAt` 是上界：记录再也不能刷新时就可以丢掉，CoSec 的存储在刷新令牌有效期之后就这样做。每个主体在每个租户保留 `TokenFamilyStore.SESSIONS_PER_PRINCIPAL` 个最近开始的会话：再 `create` 一个时删除最早的那个（`IDN-35`）。保存令牌族的每个成员，包括 `root`：切换会读回它，没有它时切换被拒绝（`IDN-36`）。 |
 | `RevocationReader` | 吊销的读取侧，每个已认证请求都会调用：`isRevoked(tokenId)`、`subjectRevokedBefore(tenant, principal)`。两者都是挂起函数，不得阻塞。每次读取都必须在它自己的时限内应答或失败，存储无法及时读取时抛出 `RevocationUnavailableException`：CoSec 除认证器的时限外不给你的读取器任何时限，一次永不结束的读取会让请求在认证超时（`cosec.pipeline.timeout` 的 20 %）时返回 `503`，无论 `cosec.authentication.revocation.fail-closed` 如何。CoSec 自己的读取器用吊销读取超时（认证超时的 30 %）限制每次读取。 |
 | `ApiKeyReader` | `findByHash(hash): ApiKey?`，挂起函数。未知的 key 返回 null；查找失败时抛出异常（请求应答 `503`）。 |
 
@@ -427,6 +428,7 @@ fun problemRenderer(): ProblemRenderer {
 使用 `cosec-control` 时，控制面把修订、变更请求、暂存槽、候选和租约保存在 `ControlStore` 中；starter 提供的是 Redis 上的 `CoCacheControlStore`。存储、它的记录（`ChangeRequest`、`RevisionIndex`、`StageSlot` 等）和影子窗口端口（位于 `cosec-spi`；`CandidateStore`、`ShadowReportSink`、`ShadowReportReader` 及其报告）是 `@ExperimentalCoSecApi`：控制面的契约是它的 HTTP API，这些随它变化，可能在次版本中改变。`ChangeListener` 和它收到的 `ChangeEvent` 是稳定的。存储无法应答时抛出 `ControlStoreException`：控制 API 返回 `503`，维护任务本轮什么都不做（`CTL-52`）。读到的值无法解码时抛出 `SnapshotFormatException`，即 `500`。两种情况都绝不回答"不存在"。除了按 key 读写这些记录，存储还要回答维护任务需要访问什么：
 
 - `documents()`：它为之建立了修订索引的每个文档。可以多列，不能少列。
+- `endedChanges(document, endedBefore, limit)` 和 `removeChange(document, id, expected)`：一个文档中在某时刻之前结束的变更，最早的在前；以及删除一条已结束变更的记录（`CTL-83`）。终态变更的 `putChange` 在写入之前，以它的 `updatedAt` 把它登记进去，所以落败的写入只会多留一条，不会少一条；按某条登记行事的一方先读它的记录。`removeChange` 只在记录仍是 `expected` 时删除它，并移除该变更的每条登记；`expected` 为 `null` 时只在没有记录时生效，于是记录已不在的登记被移除。控制面在结束变更的那次写入上，让每个文档至多保留 `max-count` 个已结束的变更；回收任务删除超过 `min-age` 且发布的修订已不再保留的那些。
 - `openChanges(document)` 和 `changes(state, after, limit, documents)`：一个文档中未结束的变更，以及处于某个状态的一页变更，每个都是此刻读取的（`CTL-54`）。每个已写入且未结束的变更都在其中；记录无法解码的变更是 `ListedChange.Unreadable`，从不省略，维护任务本轮跳过它的文档或它的窗口。`openChangesKept()` 说明这些列表是否可信；在可信之前维护任务不回收任何东西，`keepOpenChanges()` 让新存储的列表可信。
 - `acquireLease(name, holder, duration)` 和 `releaseLease(name, holder)`：每项任务同一时间只有一个实例。只有 `holder` 仍持有租约时，释放才会删除它，检查与删除是一步原子操作（CoCache 的 `deleteIfMatch`）：期间过期并被另一个实例取得的租约仍归对方。
 - `withdrawCandidate(key, window)`：只在文档的候选仍是 `window` 的候选时删除它，一步原子操作（`CTL-26`）。变更在结束之后撤回候选，此时另一个变更可能已暂存了自己的候选。

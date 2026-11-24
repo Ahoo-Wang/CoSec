@@ -3,15 +3,15 @@
 # Tests: :login:test --tests me.ahoo.cosec.login.token.TokenFamiliesTest :conformance:test
 
 diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-index a07e8edf..abb680b9 100644
+index 6f03a3ff4..59d3750a6 100644
 --- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
 +++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-@@ -128,7 +128,7 @@ class TokenFamilies @JvmOverloads constructor(
+@@ -161,7 +161,7 @@ class TokenFamilies @JvmOverloads constructor(
                      }
                      // Another refresh moved the family in between: read it again, the pair is now the one before.
                  }
--                session.generation == family.generation - 1 && family.rotatedAt?.plus(leeway)?.isAfter(now) == true ->
-+                session.generation == family.generation - 1 ->
-                     // A retry, or another tab: the pair was current a moment ago. Nothing is written.
+-                session.generation == family.generation - 1 && family.rotatedAt?.plus(leeway)?.isAfter(now) == true -> {
++                session.generation == family.generation - 1 -> {
+                     // A retry, or another tab: the pair was current a moment ago. Nothing of the family is written.
+                     requireRootLive(family)
                      return Issue(TokenSession(family.id, family.authTime, family.generation), family.expiresAt)
-                 session.generation < family.generation -> {

@@ -114,7 +114,7 @@
       "type": "integer"
     },
     "rid": {
-      "description": "The gateway's CoSec-Request-Id.",
+      "description": "The gateway's CoSec-Request-Id, never blank.",
       "examples": [
         "0TEC7Hw00001zR0"
       ],
@@ -160,7 +160,7 @@
       "type": "object"
     },
     "sub": {
-      "description": "The principal's id.",
+      "description": "The principal's id, never blank (IDN-38).",
       "examples": [
         "alice",
         "svc-billing"
@@ -169,6 +169,7 @@
       "type": "string"
     },
     "tenant": {
+      "description": "The principal's tenant, never blank.",
       "examples": [
         "acme",
         "(platform)"
