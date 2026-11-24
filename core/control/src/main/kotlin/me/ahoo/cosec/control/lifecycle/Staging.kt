@@ -150,29 +150,49 @@ internal class Staging(
         } catch (e: Exception) {
             throw ChangeRejectedException(UNAVAILABLE, "the shadow reports of ${state.window} could not be read", e)
         }
-        if (look.waiting.isNotEmpty() && look.summary == null) {
+        if (look.summary == null) waiting(id, state, look)
+        // Every instance seen is kept, so that one dropped from the window's reporters later still has to report.
+        // A window still open writes only reporters the record lacks: none new is no write, on every pass of the loop.
+        val summary = look.summary ?: return if (state.reporters.containsAll(look.reporters)) {
+            change
+        } else {
+            flow.transitionUnless(id, ChangeStep.SHADOWED) { current ->
+                seen(current, state, look)?.takeIf { it.shadow?.reporters != current.shadow?.reporters }
+            } ?: flow.get(id)
+        }
+        val closed = flow.transitionUnless(id, ChangeStep.SHADOWED) { current ->
+            seen(current, state, look)?.let {
+                it.copy(state = PublishRules.afterWindow(it), shadow = it.shadow?.copy(closed = summary))
+            }
+        } ?: return flow.get(id)
+        slots.withdraw(closed)
+        flow.audit(ChangeEvent.Kind.SHADOWED, closed, closed.author)
+        return closed
+    }
+
+    /** Says what an open window of [id] waits for: the reports of some instances, or their acknowledgement. */
+    private fun waiting(id: ChangeId, state: ShadowState, look: ShadowLook) {
+        if (look.waiting.isNotEmpty()) {
             log.info { "Shadow window ${state.window} of change ${id.value} is waiting for ${look.waiting.sorted()}." }
         }
         val unacknowledged = look.acknowledgement.waitingFor
-        if (unacknowledged.isNotEmpty() && look.summary == null) {
+        if (unacknowledged.isNotEmpty()) {
             log.info {
                 "Shadow window ${state.window} of change ${id.value} is waiting for the acknowledgement of " +
                     "${unacknowledged.take(Acknowledgement.SHOWN)}${more(unacknowledged)}."
             }
         }
-        // Every instance seen is kept, so that one dropped from the window's reporters later still has to report.
-        val seen = state.copy(reporters = look.reporters)
-        val summary = look.summary ?: return if (seen == state) {
-            change
-        } else {
-            flow.transition(id, ChangeStep.SHADOWED) { it.copy(shadow = seen) }
-        }
-        val closed = flow.transition(id, ChangeStep.SHADOWED) {
-            it.copy(state = PublishRules.afterWindow(it), shadow = seen.copy(closed = summary))
-        }
-        slots.withdraw(closed)
-        flow.audit(ChangeEvent.Kind.SHADOWED, closed, closed.author)
-        return closed
+    }
+
+    /**
+     * [current] with what [look] saw of [state]'s window, or null when the record's window is no longer [state]'s
+     * (DR1-E-6): its candidate was lost and the change staged again meanwhile, and what this pass read is the evidence of
+     * the window before. The reporters are the union of the record's and the look's, so that two passes that overlap
+     * each keep the instances the other saw (`CTL-56`).
+     */
+    private fun seen(current: ChangeRequest, state: ShadowState, look: ShadowLook): ChangeRequest? {
+        val shadow = current.shadow?.takeIf { it.window == state.window } ?: return null
+        return current.copy(shadow = shadow.copy(reporters = shadow.reporters + look.reporters))
     }
 
     /**
