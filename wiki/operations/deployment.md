@@ -797,7 +797,7 @@ What it covers, each as an observable over the network:
 
 A second job of the same workflow applies the manifests of [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) on a
 [kind](https://kind.sigs.k8s.io/) cluster with that gateway image and the control-plane host image built from the commit,
-both loaded into the cluster (nothing is pulled from a registry): the dev overlay starts without the Service its demo route names;
+both loaded into the cluster (neither of CoSec's images is pulled): the dev overlay starts without the Service its demo route names;
 the pod stays live but out of the Service until `cosec-migrate publish`, then turns ready; a decision is made (`401`, `403`, and a
 permit that fails only at the missing backend); the Prometheus endpoint of the management port is read from another pod, and the
 Service does not publish that port; and the example `NetworkPolicy` for a service behind the gateway is valid for the API server

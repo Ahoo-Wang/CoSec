@@ -17,8 +17,8 @@
 #
 # Usage: run.sh <gateway image> <control image> <cosec-migrate>
 #
-# Needs docker, kind, kubectl and python3. It creates the cluster `cosec-system`, loads both images (nothing is pulled from a
-# registry), applies `k8s/overlays/dev` with them in place of the published ones, and checks, in order:
+# Needs docker, kind, kubectl and python3. It creates the cluster `cosec-system`, loads both images (neither of CoSec's images
+# is pulled), applies `k8s/overlays/dev` with them in place of the published ones, and checks, in order:
 #   1. the dev overlay starts WITHOUT the Service its demo route names (cosec-auth, which no overlay provides): the gateway
 #      runs, is live, and stays out of the Service (not ready) while no platform document is published, and is not restarted
 #      in one liveness window without documents (a restart before it was live, Redis not yet reachable, is reported only);
@@ -253,7 +253,7 @@ ok "the decisions of step 3 are counted: a permit and an explicit deny"
 # The dev overlay states the control host's boundary (its first lines say why that is unsafe on a shared cluster). kindnet
 # enforces the policies of k8s/control, so the check, from a pod no policy admits, finds every connection dropped. Then the
 # policies are deleted, and a fresh run of the check must reach the host: both verdicts are the check's own.
-# The host's image is the one loaded into the cluster (nothing is pulled), and the host listens once its JVM is up, ready
+# The host's image is the one loaded into the cluster (not pulled), and the host listens once its JVM is up, ready
 # or not.
 job_finished() {
   case "$(kc get job "$1" -o jsonpath='{.status.conditions[?(@.status=="True")].type}')" in *Complete* | *Failed*) return 0 ;; *) return 1 ;; esac

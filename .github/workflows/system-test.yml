@@ -316,7 +316,7 @@ jobs:
           fi
 
       # The control-plane host's image, as its Dockerfile ships it, built from the ref as the Compose legs build it, whatever
-      # the image input (a gateway image only): the script loads it into the cluster, so nothing is pulled from a registry.
+      # the image input (a gateway image only): the script loads it into the cluster, so neither of CoSec's images is pulled.
       - name: Build the control-plane host image
         run: docker build --build-context shared=platform --tag cosec-control:system platform/control-server
 
