@@ -23,6 +23,7 @@ import me.ahoo.cosec.control.sdk.ControlRefusedException
 import me.ahoo.cosec.control.sdk.RoutedControlService
 import me.ahoo.cosec.control.sdk.ServiceCall
 import me.ahoo.cosec.document.identity.IdentityHeader
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
@@ -96,10 +97,12 @@ internal class HttpTransport(
         identity(caller)
     } catch (e: RequestEndedException) {
         val security = caller.context?.let(RequestSecurity::of)
+        // Both ids are opaque text a token or an authenticator chose: printed escaped, they cannot forge a line (RC1-15).
+        val principal = Identifiers.printable(security?.principal?.id?.value ?: "anonymous")
         ended.warn {
-            "A control call $call was made for request [${e.requestId}] of principal " +
-                "[${security?.principal?.id?.value ?: "anonymous"}] of tenant [${security?.scope?.tenant?.value}] after it " +
-                "ended: refused, not sent, so no host records it (PIP-26)"
+            "A control call $call was made for request [${Identifiers.printable(e.requestId)}] of principal " +
+                "[$principal] of tenant [${security?.scope?.tenant?.value}] after it ended: refused, not sent, so no " +
+                "host records it (PIP-26)"
         }
         throw ControlRefusedException(ProblemType.FORBIDDEN.status, forbidden(e.requestId)).apply { initCause(e) }
     }
