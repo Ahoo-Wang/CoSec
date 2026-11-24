@@ -188,6 +188,11 @@ class HttpPathPatternParityTest {
     }
 
     private fun check(pattern: String, path: String, options: Options): String? {
+        // A backslash escapes in the engine and is text to Spring: the oracle test of cosec-engine compares the spellings.
+        if (intendedDifference(pattern) == IntendedDifference.RESERVED_CHARACTER) {
+            val refused = cosec(pattern, path, options) == Outcome.PatternRejected
+            return if (refused || '\\' in pattern) null else "pattern [$pattern]: a reserved character compiled unescaped"
+        }
         val expected = spring(pattern, path, options)
         val actual = cosec(pattern, path, options)
         if (expected == actual) {

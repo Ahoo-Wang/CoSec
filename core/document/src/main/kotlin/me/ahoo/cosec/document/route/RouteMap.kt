@@ -235,9 +235,22 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
         private fun simpleSegments(path: String): List<String?>? = path.removePrefix("/").split('/').map { segment ->
             when {
                 SIMPLE_VARIABLE.matches(segment) -> null
-                segment.isEmpty() || segment.any { it in PATTERN_CHARS } -> return null
+                segment.isEmpty() || hasPatternChar(segment) -> return null
                 else -> segment
             }
+        }
+
+        /** Whether [segment] holds one of [PATTERN_CHARS] that is not escaped text (`DOC-15`). */
+        private fun hasPatternChar(segment: String): Boolean {
+            var index = 0
+            while (index < segment.length) {
+                when (segment[index]) {
+                    '\\' -> index++
+                    in PATTERN_CHARS -> return true
+                }
+                index++
+            }
+            return false
         }
 
         private val SIMPLE_VARIABLE = Regex("""\{[A-Za-z_][A-Za-z0-9_]*}""")

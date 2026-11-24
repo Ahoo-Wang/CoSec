@@ -215,7 +215,7 @@ class OpenAPIServiceGeneratorTest {
               "/files/a*b": {"get": {"operationId":"star"}},
               "/files/what?": {"get": {"operationId":"question"}},
               "/odata/${'$'}metadata": {"get": {"operationId":"metadata"}},
-              "/Products({id})": {"get": {"operationId":"product"}}
+              "/odata/v1/Products({id})": {"get": {"operationId":"product"}}
             }
             """.trimIndent(),
         )
@@ -224,14 +224,14 @@ class OpenAPIServiceGeneratorTest {
             "/files/a\\*b",
             "/files/what\\?",
             "/odata/\\${'$'}metadata",
-            "/Products\\({id}\\)",
+            "/odata/v1/Products\\({id}\\)",
         )
         val routes = RouteMapCodec.load(listOf("generated" to RouteMapCodec.encode(document)))
         (routes.resolve("GET", "/files/a*b") as RouteResolution.Mapped).action.verb.assert().isEqualTo("star")
         routes.resolve("GET", "/files/axyzb").assert().isEqualTo(RouteResolution.Unmapped)
         routes.resolve("GET", "/files/whatx").assert().isEqualTo(RouteResolution.Unmapped)
         (routes.resolve("GET", "/odata/${'$'}metadata") as RouteResolution.Mapped).action.verb.assert().isEqualTo("metadata")
-        val product = routes.resolve("GET", "/Products(42)") as RouteResolution.Mapped
+        val product = routes.resolve("GET", "/odata/v1/Products(42)") as RouteResolution.Mapped
         product.resource.id.assert().isEqualTo("42")
     }
 

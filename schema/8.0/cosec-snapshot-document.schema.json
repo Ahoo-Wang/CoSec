@@ -20,9 +20,10 @@
         "order:*",
         "order:read",
         "http:GET",
-        "http:*"
+        "http:*",
+        "http:M\\!"
       ],
-      "pattern": "^(?!http:(HEAD|[^:]*[a-z][^:]*)$)(\\*|[^:*\\s\\x00-\\x1F\\x7F-\\x9F]+:(\\*|[^:*\\s\\x00-\\x1F\\x7F-\\x9F]+))$",
+      "pattern": "^(?!http:(HEAD|[^:]*[a-z][^:]*)$)(\\*|([^:*?{}\\[\\]()|!^$\\\\\\s\\x00-\\x1F\\x7F-\\x9F]|\\\\[\\[\\]()|!^$\\\\*?{}])+:(\\*|([^:*?{}\\[\\]()|!^$\\\\\\s\\x00-\\x1F\\x7F-\\x9F]|\\\\[\\[\\]()|!^$\\\\*?{}])+))$",
       "type": "string"
     },
     "appDocument": {
@@ -1033,15 +1034,17 @@
       ]
     },
     "resourcePattern": {
-      "description": "`type/segment/...` or `http:path:<pattern>` (RFC 0005 §5.1, §5.2). A DENY cannot name a bare type.",
+      "description": "`type/segment/...` or `http:path:<pattern>` (RFC 0005 §5.1, §5.2). A DENY cannot name a bare type. `[ ] ( ) | ! ^ $ \\` are reserved: a backslash writes one, or `*`, `?`, `{`, `}`, as text (`DOC-15`).",
       "examples": [
         "order/{orderId}",
         "order/**",
         "http:path:/orders/{id}",
-        "http:path:/admin/**"
+        "http:path:/admin/**",
+        "http:path:/odata/\\$metadata",
+        "file/a\\(1\\).txt"
       ],
-      "maxLength": 2058,
-      "pattern": "^(http:path:(?!.*[^/].*/(\\*\\*|\\{\\*[^/]*\\})/)([^{}]|\\{\\*?[^/{}*?:\\s\\d-][^/{}*?:\\s]*\\})+|(?!http(/|$))[^/*?{}:\\s\\x00-\\x1F\\x7F-\\x9F]+(/(\\*|\\{[^/{}*?:\\s\\d-][^/{}*?:\\s]*\\}|[^/*?{}\\s\\x00-\\x1F\\x7F-\\x9F]+))*(/\\*\\*)?)$",
+      "maxLength": 4106,
+      "pattern": "^(http:path:(?!.*[^/].*/(\\*\\*|\\{\\*[^/]*\\})/)([^{}\\[\\]()|!^$\\\\;\\x00-\\x1F\\x7F-\\x9F]|\\\\[\\[\\]()|!^$*?{}]|\\{\\*?[^/{}*?:\\s\\d-][^/{}*?:\\s]*\\})+|(?!http(/|$))([^/*?{}:\\[\\]()|!^$\\\\\\s\\x00-\\x1F\\x7F-\\x9F]|\\\\[\\[\\]()|!^$\\\\*?{}])+(/(\\*|\\{[^/{}*?:\\s\\d-][^/{}*?:\\s]*\\}|([^/*?{}\\[\\]()|!^$\\\\\\s\\x00-\\x1F\\x7F-\\x9F]|\\\\[\\[\\]()|!^$\\\\*?{}])+))*(/\\*\\*)?)$",
       "type": "string"
     },
     "statement": {

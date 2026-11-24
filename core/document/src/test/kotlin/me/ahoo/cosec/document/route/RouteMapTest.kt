@@ -51,6 +51,36 @@ class RouteMapTest {
 
     private fun mapped(method: String, path: String) = routes.resolve(method, path) as RouteResolution.Mapped
 
+    /** DOC-15: a route map's path, action and resource template reserve what a document's patterns do. */
+    @Test
+    fun `a route reserves the characters a document's patterns reserve, and writes them escaped`() {
+        for ((path, action, resource) in listOf(
+            Triple("/odata/${'$'}metadata", "odata:metadata", "odata"),
+            Triple("/odata/metadata", "odata:meta!", "odata"),
+            Triple("/odata/metadata", "odata:metadata", "odata/meta(data)"),
+            Triple("/odata/metadata", "odata:metadata", "od|ata"),
+        )) {
+            assertThrows<RouteMapException> { load(file(route("GET", path, action, resource))) }
+                .message.assert().describedAs("$path $action $resource").contains("is reserved for a future pattern syntax")
+        }
+        val escaped = load(
+            file(
+                route("GET", "/odata/\\\\${'$'}metadata", "odata:meta\\\\!", "odata/meta\\\\(data\\\\)"),
+                route("GET", "/Products\\\\({id}\\\\)", "odata:product", "pro\\\\(duct/{id}"),
+            ),
+        )
+        (escaped.resolve("GET", "/odata/${'$'}metadata") as RouteResolution.Mapped).let {
+            it.action.verb.assert().isEqualTo("meta!")
+            it.resource.type.assert().isEqualTo("odata")
+            it.resource.id.assert().isEqualTo("meta(data)")
+        }
+        (escaped.resolve("GET", "/Products(7)") as RouteResolution.Mapped).let {
+            it.resource.type.assert().isEqualTo("pro(duct")
+            it.resource.id.assert().isEqualTo("7")
+        }
+        escaped.resolve("GET", "/odata/metadata").assert().isEqualTo(RouteResolution.Unmapped)
+    }
+
     @Test
     fun `a matching route gives its action and its typed resource`() {
         routes.size.assert().isEqualTo(4)

@@ -74,7 +74,12 @@ class HttpPathPatternOracleTest {
             val filled = value(random, tokens.takeIf { random.nextInt(3) > 0 })
             val end = tail.takeIf { random.nextInt(5) > 0 }.orEmpty()
             val path = "$head/$filled$end"
-            val expected = spring(springText, path, caseSensitive)
+            val expected = try {
+                spring(springText, path, caseSensitive)
+            } catch (_: IllegalStateException) {
+                // Spring's matcher gave up on a backtracking-heavy case ("Too many character access attempts"): no answer.
+                return@repeat
+            }
             val parsed = HttpPath.parse(path)
             val captured = pattern.match(parsed, scratch)?.toMap()
             val decided = pattern.matches(parsed, scratch)
