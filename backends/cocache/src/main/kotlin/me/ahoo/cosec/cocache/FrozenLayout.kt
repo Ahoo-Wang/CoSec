@@ -99,6 +99,63 @@ internal enum class FrozenLayout(val what: String, val ifChanged: IfChanged) {
         "the keys of an instance's status, its resident documents and the list of instances",
         IfChanged.REFUSES
     ),
+
+    // What the replicas of the control plane share: two replicas of two releases run side by side during a rolling
+    // upgrade, and each writes what the other reads (`cosec-migrate` too).
+
+    /**
+     * `<s>:control:revision:<doc>:<digest>` (`RevisionRecordKeyEncoder`), `<s>:control:revisions:<doc>` and their channel
+     * `<s>:control:inv:revision`. A publish writes the head conditionally on the index it read (`CTL-4`): two replicas
+     * that each read their own index compare against a record the other never wrote, and one publishes over the other,
+     * whose revision, its DENYs included, is lost; a rollback finds no revision the other wrote.
+     */
+    CONTROL_REVISIONS("the keys of a document's revisions and of its revision index", IfChanged.WIDENS),
+
+    /**
+     * `<s>:control:stage:<doc>`: the one change that may stage a document (RFC 0007 §5.5). Two slots let two changes
+     * stage and publish one document at once, the second over the first.
+     */
+    CONTROL_STAGE("the key of a document's staging slot", IfChanged.WIDENS),
+
+    /**
+     * `<s>:control:change:<id>` and the sets of open and ended changes, `<s>:control:changes:doc:<doc>`,
+     * `:state:<STATE>`, `:kept` and `:ended:<doc>` (`OpenChangeSets`): a replica cannot find a change the other proposed,
+     * so it cannot approve, publish or list it, and each counts its own open changes against the limit (`CTL-83`).
+     */
+    CONTROL_CHANGES("the keys of a change and of the sets of open and ended changes", IfChanged.REFUSES),
+
+    /**
+     * `<s>:control:refs:<doc>:<policyId>` (`ReferenceKeyEncoder`) and its channel `<s>:control:inv:refs`: a replica that
+     * cannot see who refers to a platform policy removes it while a tenant still binds it, and that tenant's requests
+     * are Indeterminate (503) until the binding goes.
+     */
+    CONTROL_REFERENCES("the keys of a policy's back-references", IfChanged.REFUSES),
+
+    /**
+     * `<s>:control:documents:all`, `<s>:control:apps:all` and their channel `<s>:control:inv:documents`: a replica that
+     * reads another list lists fewer documents, and finds the app list incomplete, so every tenant grant over every app
+     * waits for a person (`UNREADABLE`).
+     */
+    CONTROL_LISTS("the keys of the document list and of the app list", IfChanged.REFUSES),
+
+    /**
+     * `<s>:control:lease:<name>` (`shadow-windows`, `reclaim-pass`): the exclusion a lease exists for is lost, and two
+     * replicas close the same shadow windows, or reclaim the same revisions, at once.
+     */
+    CONTROL_LEASES("the key of a control-plane lease", IfChanged.WIDENS),
+
+    /**
+     * `<s>:candidate:<doc>`, `<s>:candidate-staged:all` and their channel `<s>:inv:candidate`: a data-plane instance that
+     * reads another key finds no candidate, compares nothing and acknowledges no window, which then never passes on its
+     * traffic.
+     */
+    CANDIDATES("the keys of a staged candidate and of the staged list", IfChanged.REFUSES),
+
+    /**
+     * `<s>:shadow:report:<window>:<instance>`, `<s>:shadow:reporters:<window>` and their channel `<s>:shadow:inv:report`:
+     * a window whose reports the control plane reads elsewhere has no evidence, and waits or closes insufficient.
+     */
+    SHADOW_REPORTS("the keys of a shadow window's reports and of who reported", IfChanged.REFUSES),
     ;
 
     /** What a mixed deployment does when two releases derive an entry apart. */

@@ -359,7 +359,7 @@ class CoCacheControlStore internal constructor(
         private const val DOCUMENTS = "documents"
 
         private const val OPEN_CHANGES = "open-changes"
-        private const val APP_LIST = "all"
+        internal const val APP_LIST = "all"
 
         /** As `ControlDerived.ORPHAN_AGE`: one reclaim pass. */
         val DEFAULT_MISSING_GRACE: Duration = Duration.ofHours(1)

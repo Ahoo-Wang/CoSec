@@ -18,14 +18,26 @@ package me.ahoo.cosec.cocache
 import io.mockk.mockk
 import me.ahoo.cocache.api.spi.Keyspace
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cocache.control.CoCacheControlStore
+import me.ahoo.cosec.cocache.control.ControlSets
+import me.ahoo.cosec.cocache.control.OpenChangeSets
+import me.ahoo.cosec.cocache.control.ReferenceKey
+import me.ahoo.cosec.cocache.control.ReferenceKeyEncoder
+import me.ahoo.cosec.cocache.control.RevisionRecordKey
+import me.ahoo.cosec.cocache.control.RevisionRecordKeyEncoder
 import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiter
 import me.ahoo.cosec.cocache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
+import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.lifecycle.ControlMaintenance
 import me.ahoo.cosec.engine.CompiledRateLimit
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.apikey.ApiKeys
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterAll
@@ -68,7 +80,12 @@ class FrozenLayoutTest {
             each.revokedTokenCache
             each.revokedSubjectCache
             each.tokenFamilyCache
-            each.factory.createLocked(CoSecCacheSpecs.policySnapshot(prefix))
+            // The control plane's caches, the candidates' and the documents' among them, as a control host creates them.
+            CoCacheControlStore.create(
+                each.factory,
+                each.factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(prefix)),
+                prefix
+            )
             CoCacheShadowReports.create(each.factory, prefix)
         }
     }
@@ -181,6 +198,98 @@ class FrozenLayoutTest {
         },
         Golden(FrozenLayout.INSTANCE_STATUS, "the list of instances", "cosec:shadow:instances:all") {
             storageKey("cosec", CoSecCacheSpecs.INSTANCE_INDEX_CACHE_NAME, ShadowCacheSpecs.INDEX_KEY)
+        },
+        Golden(
+            FrozenLayout.CONTROL_REVISIONS,
+            "a revision of a tenant document",
+            "cosec:control:revision:tenant:acme:SHA-256:" + "0".repeat(64),
+        ) {
+            val key = RevisionRecordKey(
+                SnapshotKey.Tenant("acme"),
+                SnapshotDigest(SnapshotDigest.SHA_256, ByteArray(32))
+            )
+            storageKey("cosec", CoSecCacheSpecs.REVISION_RECORD_CACHE_NAME, RevisionRecordKeyEncoder.encode(key))
+        },
+        Golden(FrozenLayout.CONTROL_REVISIONS, "a document's revision index", "cosec:control:revisions:tenant:acme") {
+            storageKey(
+                "cosec",
+                CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME,
+                SnapshotKeyEncoder.encode(SnapshotKey.Tenant("acme"))
+            )
+        },
+        Golden(FrozenLayout.CONTROL_REVISIONS, "the revisions' channel", "cosec:control:inv:revision") {
+            channel("cosec", CoSecCacheSpecs.REVISION_RECORD_CACHE_NAME)
+        },
+        Golden(FrozenLayout.CONTROL_STAGE, "a document's staging slot", "cosec:control:stage:platform") {
+            storageKey("cosec", CoSecCacheSpecs.STAGE_CACHE_NAME, SnapshotKeyEncoder.encode(SnapshotKey.Platform))
+        },
+        Golden(FrozenLayout.CONTROL_CHANGES, "a change", "cosec:control:change:c-1") {
+            storageKey("cosec", CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME, "c-1")
+        },
+        Golden(FrozenLayout.CONTROL_CHANGES, "a document's open changes", "cosec:control:changes:doc:tenant:acme") {
+            storageKey(
+                "cosec",
+                CoSecCacheSpecs.CONTROL_CHANGE_SET_CACHE_NAME,
+                OpenChangeSets.documentKey(SnapshotKey.Tenant("acme"))
+            )
+        },
+        Golden(FrozenLayout.CONTROL_CHANGES, "the open changes of a state", "cosec:control:changes:state:SHADOWING") {
+            storageKey(
+                "cosec",
+                CoSecCacheSpecs.CONTROL_CHANGE_SET_CACHE_NAME,
+                OpenChangeSets.stateKey(ChangeState.SHADOWING)
+            )
+        },
+        Golden(FrozenLayout.CONTROL_CHANGES, "the marker that the sets are kept", "cosec:control:changes:kept") {
+            storageKey("cosec", CoSecCacheSpecs.CONTROL_CHANGE_SET_CACHE_NAME, OpenChangeSets.KEPT)
+        },
+        Golden(FrozenLayout.CONTROL_CHANGES, "a document's ended changes", "cosec:control:changes:ended:platform") {
+            storageKey(
+                "cosec",
+                CoSecCacheSpecs.CONTROL_CHANGE_SET_CACHE_NAME,
+                OpenChangeSets.endedKey(SnapshotKey.Platform)
+            )
+        },
+        Golden(FrozenLayout.CONTROL_REFERENCES, "who refers to a platform policy", "cosec:control:refs:platform:p-1") {
+            val key = ReferenceKey(SnapshotKey.Platform, PolicyId("p-1"))
+            storageKey("cosec", CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME, ReferenceKeyEncoder.encode(key))
+        },
+        Golden(FrozenLayout.CONTROL_REFERENCES, "the references' channel", "cosec:control:inv:refs") {
+            channel("cosec", CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME)
+        },
+        Golden(FrozenLayout.CONTROL_LISTS, "the document list", "cosec:control:documents:all") {
+            storageKey("cosec", CoSecCacheSpecs.CONTROL_DOCUMENT_SET_CACHE_NAME, ControlSets.DOCUMENT_SET)
+        },
+        Golden(FrozenLayout.CONTROL_LISTS, "the app list", "cosec:control:apps:all") {
+            storageKey("cosec", CoSecCacheSpecs.CONTROL_APP_LIST_CACHE_NAME, CoCacheControlStore.APP_LIST)
+        },
+        Golden(FrozenLayout.CONTROL_LISTS, "the lists' channel", "cosec:control:inv:documents") {
+            channel("cosec", CoSecCacheSpecs.CONTROL_DOCUMENT_SET_CACHE_NAME)
+        },
+        Golden(FrozenLayout.CONTROL_LEASES, "the shadow windows' lease", "cosec:control:lease:shadow-windows") {
+            storageKey("cosec", CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME, ControlMaintenance.SHADOW_LEASE)
+        },
+        Golden(FrozenLayout.CANDIDATES, "a staged candidate", "cosec:candidate:tenant:acme") {
+            storageKey(
+                "cosec",
+                CoSecCacheSpecs.CANDIDATE_CACHE_NAME,
+                SnapshotKeyEncoder.encode(SnapshotKey.Tenant("acme"))
+            )
+        },
+        Golden(FrozenLayout.CANDIDATES, "the staged list", "cosec:candidate-staged:all") {
+            storageKey("cosec", CoSecCacheSpecs.CANDIDATE_STAGED_CACHE_NAME, ControlSets.STAGED_SET)
+        },
+        Golden(FrozenLayout.CANDIDATES, "the candidates' channel", "cosec:inv:candidate") {
+            channel("cosec", CoSecCacheSpecs.CANDIDATE_CACHE_NAME)
+        },
+        Golden(FrozenLayout.SHADOW_REPORTS, "an instance's report of a window", "cosec:shadow:report:c1@1:pod-a.1") {
+            storageKey("cosec", CoSecCacheSpecs.SHADOW_REPORT_CACHE_NAME, ShadowCacheSpecs.reportKey("c1@1", "pod-a.1"))
+        },
+        Golden(FrozenLayout.SHADOW_REPORTS, "who reported on a window", "cosec:shadow:reporters:c1@1") {
+            storageKey("cosec", CoSecCacheSpecs.SHADOW_REPORTER_CACHE_NAME, "c1@1")
+        },
+        Golden(FrozenLayout.SHADOW_REPORTS, "the reports' channel", "cosec:shadow:inv:report") {
+            channel("cosec", CoSecCacheSpecs.SHADOW_REPORT_CACHE_NAME)
         },
     )
 
