@@ -129,6 +129,9 @@ object GuardAllowlist {
             "spring-boot:ControlServiceParityTest#a DENY on the caller's attributes decides alike through both implementations - CTL-77",
             "runtime:IdentityForwardingTest#a relayed caller's every attribute reads on the host as the engine reads it here",
             "runtime:IdentityForwardingTest#a relayed caller whose attributes do not fit fails before anything is sent, naming them, never their values",
+            "spring-boot:ControlServiceParityTest#an ended request's caller is refused alike through both implementations - CTL-77",
+            "control-http:HttpControlServiceTest#an ended request's caller is refused before anything is sent",
+            "runtime:IdentityForwardingTest#an ended request's caller is not stated, by any issuer",
             // CTL-76: the typed control objects say what the wire says.
             "control-sdk:TypedWireTest#each document entry reads exactly the members of the document format - CTL-76",
             "control-sdk:TypedWireTest#every tenant and app document of the wiki reads and writes back as the same document - CTL-76",
