@@ -82,7 +82,11 @@ internal object RoleChecks {
      * of its own, never a failed check (DR1-E-11).
      */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun sharedSystemRoles(candidate: PolicyDocument, current: CurrentDocuments, findings: MutableList<Finding>) {
+    private suspend fun sharedSystemRoles(
+        candidate: PolicyDocument,
+        current: CurrentDocuments,
+        findings: MutableList<Finding>
+    ) {
         if (candidate.roles.isEmpty()) return
         val context = current.unrecorded
         val unread = ArrayList<String>()
@@ -91,7 +95,9 @@ internal object RoleChecks {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            log.warn(e) { "The app list could not be read; the system roles of app ${candidate.owner} are not compared." }
+            log.warn(
+                e
+            ) { "The app list could not be read; the system roles of app ${candidate.owner} are not compared." }
             findings += roleWarning("$.roles", "The app list could not be read: whether another app defines these roles is not known")
             return
         }

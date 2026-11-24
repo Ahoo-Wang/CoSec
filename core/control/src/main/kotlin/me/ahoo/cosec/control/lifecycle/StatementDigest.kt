@@ -47,7 +47,13 @@ internal object StatementDigest {
      * with a confirmed `nomatch` DENY is still a copy (DR1-E-9).
      */
     fun ofCopy(policy: PolicyDefinition): String = EntryDigest.of(
-        PolicyDefinition(policy.id, policy.attachable, policy.condition, policy.statements.map(::unconfirmed), policy.boundary)
+        PolicyDefinition(
+            policy.id,
+            policy.attachable,
+            policy.condition,
+            policy.statements.map(::unconfirmed),
+            policy.boundary
+        )
     )
 
     internal fun unconfirmed(statement: StatementSource): StatementSource =

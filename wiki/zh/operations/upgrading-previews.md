@@ -27,6 +27,9 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **破坏性变更：变更不能写入应用之后还含 `/` 的权限策略 id，也不能写入含 `/` 的目录权限 id**（`CTL-8`，DR1-E-5）。受影响的是写入
+  `perm:<app>/a/b` 或目录条目 `a/b` 的应用所有者。这种 id 能逃出以 `perm:<app>/` 加末尾 `*` 写成的规则。变更会以 `V2`（422）被拒；已存的条目照常生效，也可以删除。去掉权限名里的 `/` 重新命名。
+- **破坏性变更：`cosec.control.changes.expire-after` 与 `cosec.control.approval.expire-after` 必须为正**（DR1-E-16）。为零时启动失败并点名该属性；为零时每个变更一提出就过期，或每次审批一给出就失效。
 - **破坏性变更：开启了 CoSec 的 Web 宿主没有 CoSec 的门时启动失败**（`STA-1`，DR1-G-6）。受影响的是保留 `cosec.enabled`，
   却排除了 `CoSecPipelineWebAutoConfiguration`、或用另一种类型的过滤器替换了适配器 bean 的应用。它原来不经裁决地放行每个请求，
   唯一的迹象是启动摘要里的 `web=none`。保留这个自动配置、自己注册 CoSec 的过滤器，或者设置 `cosec.enabled=false`
