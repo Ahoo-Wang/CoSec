@@ -162,7 +162,7 @@ CoSec 无法决策时，不会放行。每种失败都在 `StatusMapping` 这一
 
 break-glass 在有限时间内授予指定主体某条策略，用于紧急情况。break-glass 绑定：
 
-- 只存在于平台文档中，只绑定主体，并且必须有 `expiresAt`；
+- 只存在于平台文档中，只绑定主体，并且必须有 `expiresAt`。过期由各实例各自判断：请求时间（取自作出判定的那个实例的时钟）过了 `expiresAt`，引擎就跳过这个绑定，所以时钟落后的实例仍会应用它；绑定会一直留在文档里，直到被撤销（DR1-E-15）；
 - 绑定 `cosec:root` 时，只对平台租户 `(platform)` 的主体生效；
 - 只能通过控制面创建：一人申请，另一人批准，有效期最长为 `cosec.control.break-glass.max-duration`（[策略测试](../policies/testing.md)）；
 - 是最后一个候选。它只放行别处都不放行的请求，所有 DENY 对该主体照常生效；

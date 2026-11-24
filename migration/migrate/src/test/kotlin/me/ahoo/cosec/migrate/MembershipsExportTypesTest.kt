@@ -59,6 +59,25 @@ class MembershipsExportTypesTest {
         }
     }
 
+    /** `MIG-6`: the optional attachments are read as roles are, and nothing else may stand beside them. */
+    @Test
+    fun `attachments are an optional array of strings, and no other member is read`() {
+        val json = """[{"tenant":"acme","principal":"svc","roles":[],"attachments":["deny-x"]},""" +
+            """{"tenant":"acme","principal":"other","roles":["r"]}]"""
+        MembershipsExport.attachments(json.encodeToByteArray())
+            .assert().isEqualTo(mapOf((TenantId("acme") to "svc") to setOf("deny-x")))
+        MembershipsExport.read(json.encodeToByteArray()).keys.assert().hasSize(2)
+        listOf(
+            """{"tenant":"acme","principal":"svc","roles":[],"attachments":"deny-x"}""",
+            """{"tenant":"acme","principal":"svc","roles":[],"attachments":[1]}""",
+            """{"tenant":"acme","principal":"svc","roles":[],"extra":[]}""",
+            """{"tenant":"acme","principal":"svc"}""",
+            "[]",
+        ).forEach { entry ->
+            assertThrows<IllegalArgumentException> { read(entry) }
+        }
+    }
+
     @Test
     fun `a real empty array still means no roles`() {
         read("""{"tenant":"acme","principal":"svc","roles":[]}""")

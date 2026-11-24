@@ -3,11 +3,11 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.ControlAuthorizationTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
-index 7ca9ffb2..7cd56bd9 100644
+index 82a7506f5..dddc29274 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
-@@ -89,7 +89,6 @@ internal class Publishing(
-         }
+@@ -87,7 +87,6 @@ internal class Publishing(
+         writtenBefore(change, publisher, again)?.let { return it }
          PublishRules.requireState(change, ChangeStep.PUBLISH.from)
          PublishRules.acknowledged(change, ack)
 -        candidates.authorize(publisher, change)

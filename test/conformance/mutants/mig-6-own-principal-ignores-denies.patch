@@ -1,0 +1,17 @@
+# Rule: MIG-6
+# Mutant: a key whose principal a DENY names moves to a principal of its own all the same, escaping the DENY
+# Tests: :migrate:test --tests me.ahoo.cosec.migrate.ApiKeyMigrationTest
+
+diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/ApiKeyMigration.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/ApiKeyMigration.kt
+index 0000000..0000000 100644
+--- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/ApiKeyMigration.kt
++++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/ApiKeyMigration.kt
+@@ -198,7 +198,7 @@ class ApiKeyMigration(
+         val blocked = BlacklistExport.value(key.tenant, key.principalId)
+         val denies = documents.deniesNaming(key.tenant, key.principalId, attached) +
+             listOfNotNull("the blacklist entry [${Identifiers.printable(blocked)}]".takeIf { blacklist?.contains(blocked) == true })
+-        if (denies.isNotEmpty()) {
++        if (denies.isNotEmpty() && false) {
+             val name = Identifiers.printable(key.principalId)
+             return Planned.Refused(
+                 "its principal [$name] is named by a DENY or the blacklist, which a principal of its own ($principal) " +

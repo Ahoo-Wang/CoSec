@@ -1,0 +1,16 @@
+# Rule: CTL-56
+# Mutant: a shadow pass writes the reporters it saw over the record's, so a reporter another pass added is dropped and need not report again
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ShadowWindowRaceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
+@@ -182,7 +182,7 @@ internal class Staging(
+      */
+     private fun seen(current: ChangeRequest, state: ShadowState, look: ShadowLook): ChangeRequest? {
+         val shadow = current.shadow?.takeIf { it.window == state.window } ?: return null
+-        return current.copy(shadow = shadow.copy(reporters = shadow.reporters + look.reporters))
++        return current.copy(shadow = shadow.copy(reporters = look.reporters))
+     }
+ 
+     /**

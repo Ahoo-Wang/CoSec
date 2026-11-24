@@ -17,6 +17,7 @@ package me.ahoo.cosec.spring.boot.control
 
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -51,6 +52,7 @@ import org.springframework.web.servlet.function.ServerRequest as ServletServerRe
  */
 class ControlBodyLimitTest {
     private val plane = mockk<ControlPlane>().also { plane ->
+        every { plane.work } returns ControlDerived.workBudget()
         coEvery { plane.read(any(), any(), any()) } returns
             PolicyDocument(DocumentKind.TENANT, "acme", 1, Instant.parse("2026-11-01T00:00:00Z"), emptyList(), emptyList())
     }

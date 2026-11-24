@@ -31,6 +31,8 @@ import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.lifecycle.BreakGlass
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.ControlDerived
+import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.ProvenanceKind
@@ -48,10 +50,15 @@ class DefaultControlPlane(
     private val revisions: Revisions,
     private val authority: ChangeAuthority,
     private val simulator: Simulator = Simulator(),
+    /**
+     * The host's one work budget (`CTL-85`), which its control API holds a call's work in. A host passes the one it has;
+     * the default is for a plane of its own, in a test.
+     */
+    override val work: WorkBudget = ControlDerived.workBudget(),
 ) : ControlPlane {
     override val breakGlass: BreakGlass = BreakGlass(changes, revisions)
 
-    private val retained = RetainedDocuments(revisions, simulator.cache)
+    private val retained = RetainedDocuments(revisions, simulator.cache, work)
     private val reads = DocumentReads(authority, revisions, changes, retained)
 
     override val listing: DocumentListing = DocumentListing(revisions, authority, revisions.clock)

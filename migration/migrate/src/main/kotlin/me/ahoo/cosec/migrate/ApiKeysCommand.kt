@@ -54,6 +54,11 @@ internal object ApiKeysCommand {
     const val PARTIAL_EXISTENCE_CHECK = "NOTE   Without --memberships, whether each apikey:<key id> is already a " +
         "principal was checked against the documents only: one only your membership provider knows is not seen, and " +
         "a key moved to it would act with what it holds. Run with --memberships to check it."
+
+    /** Without `--blacklist`, what the tool cannot know of the application's blacklist (DR2-M-9). */
+    const val UNSEEN_BLACKLIST = "NOTE   No --blacklist was given: a key whose principal your application's blacklist " +
+        "blocks moved like any other, and is no longer blocked. Keep such a key in place, or block the value the report " +
+        "names for it (blockIfPrincipalBlocked, <tenant>:apikey:<key id>) before the key is used."
     private val REPLACEABLE_STATUS = setOf(ApiKeyMigrationPlan.STATUS_DRY_RUN, ApiKeyMigrationPlan.STATUS_REJECTED)
 
     /**
@@ -73,7 +78,10 @@ internal object ApiKeysCommand {
         val apiKeyPrefix = CoSecCacheSpecs.apiKeyPrefix(keyPrefix)
         val outDirectory = Path.of(options.required("out"))
         val dryRun = options.flag("dry-run")
-        val memberships = options.value("memberships")?.let { MembershipsExport.read(Files.readAllBytes(Path.of(it))) }
+        val export = options.value("memberships")?.let { Files.readAllBytes(Path.of(it)) }
+        val memberships = export?.let(MembershipsExport::read)
+        val attachments = export?.let(MembershipsExport::attachments)
+        val blacklist = options.value("blacklist")?.let { BlacklistExport.read(Files.readAllBytes(Path.of(it))) }
         val grantTo = options.value("grant-to-principal")?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
             ?.toSet().orEmpty()
         val client = RedisClient.create(RedisURI.create(uri))
@@ -88,6 +96,8 @@ internal object ApiKeysCommand {
                         grantTo,
                         options.value("role-prefix") ?: ApiKeyMigration.DEFAULT_ROLE_PREFIX,
                         options.value("app"),
+                        attachments = attachments,
+                        blacklist = blacklist,
                     ).plan(stored.legacy)
                 }.withRejections(stored.unreadable)
                 val report = outDirectory.resolve(API_KEYS_REPORT_FILE)
@@ -107,7 +117,7 @@ internal object ApiKeysCommand {
                     out.println(PARTIAL_EXISTENCE_CHECK)
                 }
                 out.println("Wrote $report")
-                return outcome(plan, dryRun, changed, out)
+                return outcome(plan, dryRun, changed, out, blacklist != null)
             }
         } finally {
             client.shutdown()
@@ -177,7 +187,13 @@ internal object ApiKeysCommand {
             )
         }.map { it.legacy.hash }
 
-    private fun outcome(plan: ApiKeyMigrationPlan, dryRun: Boolean, changed: List<String>, out: PrintStream): Int = when {
+    private fun outcome(
+        plan: ApiKeyMigrationPlan,
+        dryRun: Boolean,
+        changed: List<String>,
+        out: PrintStream,
+        blacklistGiven: Boolean,
+    ): Int = when {
         !plan.accepted -> {
             out.println("Rejected: fix the ${plan.rejections.size} rejection(s) and run again. No key was written.")
             FAILED
@@ -199,8 +215,9 @@ internal object ApiKeysCommand {
         else -> {
             out.println(
                 "Converted ${plan.keys.size} key(s). Grant the memberships and add the bindings in the report: until " +
-                    "then the keys are refused or narrower, never wider."
+                    "then, by the documents, memberships and blacklist given, the keys are refused or narrower, never wider."
             )
+            if (!blacklistGiven && plan.keys.any { it.blockIfBlocked != null }) out.println(UNSEEN_BLACKLIST)
             OK
         }
     }
@@ -216,6 +233,7 @@ internal object ApiKeysCommand {
                 line("WARN   API key [$id] has no tenant: it goes to the default tenant.")
             }
             key.lost.forEach { line("WARN   API key [$id] no longer reaches $it.") }
+            key.denied.forEach { line("NOTE   API key [$id] stays under the DENY binding $it.") }
         }
         plan.memberships.forEach { principal ->
             principal.newlyGained?.takeIf { it.isNotEmpty() }?.let {

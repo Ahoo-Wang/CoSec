@@ -35,8 +35,9 @@ A control request is an ordinary request first: the host pipeline authenticates 
 documents must allow the operators' requests to the API path. Each step is then authorized again as that principal,
 in the app `cosec.control.app-id` (default `cosec-control`), with a `cosec:<verb>` action on the document
 (`doc/platform`, `doc/app/<appId>`, `doc/tenant/<tenantId>`) or entry it touches. An entry's id is one segment of its
-resource, so a change cannot put an id with a `/`; the one exception is a permission policy's `perm:<app>/<id>`, which a
-rule reaches with `**`. Before any policy, a hard rule
+resource, so a change cannot put an id with a `/`; the one exception is the `/` after the app of a permission policy's
+`perm:<app>/<id>`, which a rule reaches with `perm:<app>/` and a final `*`, and neither `<id>` nor a catalog permission's
+id holds one. Before any policy, a hard rule
 applies: a tenant's principals act only on their own tenant document; the platform and app documents belong to
 principals of the `(platform)` tenant.
 
@@ -115,13 +116,13 @@ the HTTP `status` it stands for and a `severity`:
 | Check | Status | Finds |
 |---|---|---|
 | `V1` | 400 | The candidate does not read back as a document. |
-| `V2` | 400, 422, 503 | The document is over 8 MB; a count would go over one of the platform's [entry budgets](./language.md#entry-budgets) and over the count of the head it replaces (`422` at `$.policies` or `$.bindings`, naming the budget, the count and the limit; a count over its budget that the change does not raise is a warning, `CTL-40`); an id uses a reserved prefix (`cosec:`, `g:`, `r:`); an id a change puts holds a `/` (`422`; a permission policy's `perm:<app>/<id>` may, and an entry that already holds one can stay or be removed); a tenant policy reuses a platform policy's id without being an exact copy of it (an exact copy is the first step of the [partition flow](../operations/upgrading.md#partition-plan)); a platform policy takes an id a tenant document already defines or binds, or changes while a tenant document holds a copy of it, which the finding names (`503` when such a tenant's document cannot be read); a binding is in an app that cannot be an app id (blank, `*`, `:`, `/`, a control character or an unpaired surrogate, over 128 characters), anywhere in the candidate (`400` at `$.bindings[i].app`: a document that still holds one must remove it, and a change that only removes it is valid). |
+| `V2` | 400, 422, 503 | The document is over 8 MB; a count would go over one of the platform's [entry budgets](./language.md#entry-budgets) and over the count of the head it replaces (`422` at `$.policies` or `$.bindings`, naming the budget, the count and the limit; a count over its budget that the change does not raise is a warning, `CTL-40`); an id uses a reserved prefix (`cosec:`, `g:`, `r:`); an id a change puts holds a `/` (`422`; a permission policy's `perm:<app>/<id>` holds the one after its app, never one in `<id>` or in a catalog permission's id, and an entry that already holds one can stay or be removed); a tenant policy reuses a platform policy's id without being an exact copy of it (an exact copy is the first step of the [partition flow](../operations/upgrading.md#partition-plan); copies are compared without the confirmations of their `nomatch` DENYs, since a copy carries its own author's); a platform policy takes an id a tenant document already defines or binds, or changes while a tenant document holds a copy of it, which the finding names (`503` when such a tenant's document cannot be read); a binding is in an app that cannot be an app id (blank, `*`, `:`, `/`, a control character or an unpaired surrogate, over 128 characters), anywhere in the candidate (`400` at `$.bindings[i].app`: a document that still holds one must remove it, and a change that only removes it is valid). |
 | `COMPILE` | 422 | A policy, condition, pattern, binding or rule does not compile, with the platform's limits, the platform's declared attributes and those of the control host's attribute providers. |
-| `REFERENCES` | 422 | A binding names a policy that resolves nowhere, or a platform boundary, which is not bound; a platform or app change removes a policy another document refers to (one an app's short form derives included), or turns one into a boundary or a boundary into a policy (`CTL-30`; a tenant that defines a policy of that id itself does not count); a tenant's `boundary` is not a platform boundary. |
+| `REFERENCES` | 422 | A binding names a policy that resolves nowhere, or a platform boundary, which is not bound; a platform or app change removes a policy another document refers to (one an app's short form derives included), or turns one into a boundary or a boundary into a policy (`CTL-30`; a tenant that defines a policy of that id itself does not count); the head a platform or app change is based on derives more than the role grant limit (one `cosec-migrate` or a restore wrote), so what the change removes cannot be compared; a tenant's `boundary` is not a platform boundary. |
 | `OPERATION` | 422 | An operation removes what is not there, or sets a section the document does not have. |
 | `IF_MATCH` | 412 | An entry is no longer what the operation's `ifMatch` says. |
 | `V3` (warning) | | The platform's `limits` or `attributes` change: other documents are compiled again on every instance, and one that no longer compiles fails closed. |
-| `REFERENCES` (warning) | | A role may mean more than it seems to: a tenant's role with the id of one of its app's system roles (a member holding it gets both); an app's system role whose id another app defines (a member whose roles are not issued per app holds it in both apps, `ROL-12`); a role with a space that lists a permission that applies only in the default space ([Roles](./role-permissions.md#roles)). |
+| `REFERENCES` (warning) | | A role may mean more than it seems to: a tenant's role with the id of one of its app's system roles (a member holding it gets both); an app's system role whose id another app defines (a member whose roles are not issued per app holds it in both apps, `ROL-12`; the other apps' heads it reads are not what the change was checked with, and one that cannot be read is a warning of its own); a role with a space that lists a permission that applies only in the default space ([Roles](./role-permissions.md#roles)). |
 | `ROUTES` (warning) | | The candidate holds `http:` DENY statements or rate limit rules that a mapped route of the services escapes: the route's requests are decided as its `service:verb` and do not meet them ([Route maps](../scenarios/route-maps.md)). One finding with the count and the first five. Only with [`cosec.control.analysis.route-maps`](../operations/configuration.md#control-plane); without it, a candidate with such statements says that no route maps were given. |
 
 A change with any error stays `DRAFT` and cannot be staged or published; fix it by proposing a new change. A clean
@@ -173,7 +174,7 @@ change's candidate too:
 | `action` | Required, `service:verb` (`http:GET` for an unmapped HTTP request). An `http` action is read as a request's method: `http:HEAD` is decided and analyzed as `http:GET`, and a verb with a lower-case letter is `400` (`PIP-18`). |
 | `resource` | Required: `type/id`, or a path starting with `/` for an `http` resource. An `http` path is normalized as a request's path is: one enforcement refuses (a dot segment, a malformed escape, over 2,048 characters or 256 per `/` segment) is `400`, and path parameters (`;v=2`) are removed. A typed id is held to the same lengths. |
 | `remoteIp`, `time` | The client address, and an ISO instant (default: now). |
-| `principalBindings`, `breakGlass` | What the credential may use, both `true` by default (CoSec's own token). For an API key, set `breakGlass` to `false`; for a key with a role cap, set `principalBindings` to `false` too: then the attachments and principal bindings grant nothing, and their DENYs still apply. Only a boolean is accepted. |
+| `principalBindings`, `breakGlass` | What the credential may use, both `true` by default (CoSec's own token). For an API key, set `breakGlass` to `false`; for a key with a role cap, set `principalBindings` to `false` too: then the attachments and principal bindings grant nothing, and their DENYs still apply. Only a boolean is accepted. Left out, a simulation of an API key's request applies what the key could not use, so it can show permits enforcement would not give, never the reverse (DR1-F-11): state both for any credential but CoSec's own token. |
 
 The answer has `enforced`, `candidate` when one was asked for, and `differs`. Each decision is `Permit`, `Deny`,
 `Indeterminate` (with its `cause`, the kind of failure) or `Rejected` (the scope was refused, with its `reason`:
@@ -218,7 +219,8 @@ tenant to bound what such a document costs. To bound what one caller's calls cos
 
 `explain` takes the same `request`, authorized and checked as `simulate`'s, and, optionally, `at`: the document revisions a decision used, as its audit event
 records them (`{"platform": 12, "app": 3, "tenant": 4}`). It evaluates on those revisions, as long as they are still
-kept, and returns the decision with its trace, so you can see why a past request was decided as it was. Whether the app
+kept (a `410` otherwise, which names neither the document nor the revision: `at` names the platform's and an app's
+revisions too, which you may not read, DR1-F-13), and returns the decision with its trace, so you can see why a past request was decided as it was. Whether the app
 document was read is decided as enforcement decided it, with the tenant document at its recorded revision, and the
 revisions it answers with are those it read: no `app` member when it read no app document, never a `null`. The `version` an `explain` answers with can be sent back as `at`. Its fields and how to find the
 request are in [Checks in code](../integration/checks.md).
@@ -261,11 +263,17 @@ A change is a set of entry operations on one document, made on the revision you 
 | `setLimits` | `limits` with all six condition limits, each a positive integer as in a document, and any of the [entry budgets](./language.md#entry-budgets) | Sets the platform's limits, the section as a whole: a budget left out is its default; without `limits`, back to the defaults. A value of another type is a `400`. |
 | `setAttributes` | `attributes`, an array as in a document | Sets the platform's declared attributes; without `attributes`, removes them. Anything but an array of attributes is a `400`. |
 
-A change carries at most the platform's `maxChangeOperations` operations (20,000 by default), and the control API reads
-a body of at most 10 MB (the document cap and 2 MB): a larger change is a `400` before any operation is
-checked, so propose it as several (`CTL-41`, [Entry budgets](./language.md#entry-budgets)). Every other route, one
-that carries no document (`simulate`, `explain`, `analyze`, a step of a change, a rollback, break-glass), reads at most
-64 KB, and a larger body is a `400` before it is parsed (DR1-F-3).
+A change carries at most the platform's `maxChangeOperations` operations (20,000 by default), and the control API
+reads a body of at most 10 MB (the document cap and 2 MB): a larger change is a `400` before any operation is checked,
+so propose it as several (`CTL-41`, [Entry budgets](./language.md#entry-budgets)). Every other route, one that carries
+no document (`simulate`, `explain`, `analyze`, a step of a change, a rollback, break-glass), reads at most 64 KB, and
+a larger body is a `400` before it is parsed (DR1-F-3). Before a route that carries a document parses its body, it
+holds the body's weight in the control plane's work budget, after the hard rule when its path names the document; so
+does a call that decodes a document too large for the cache (`CTL-85`). A call that does not fit waits its tenant's
+turn, at most half the pipeline timeout, and is otherwise `503` with `Retry-After: 1`, before anything was read or
+decided: try again. Each tenant takes at most half the budget while another waits, so one tenant writing large
+documents in a loop does not hold the others back. One call counts at most the whole budget, whatever its pieces, so
+the heaviest call is always answered, alone.
 
 `ifMatch` is the SHA-256 of the entry as the document writes it: the operation applies only if the entry is still
 that. Instead of writing operations, `POST /documents/{key}:apply` takes a whole document (`{"document", "mode",
@@ -425,9 +433,11 @@ A listing by state is decided before anything is read, as [listing documents](#l
 
 Each request reads at most four pages of changes, whatever you may see. When it reaches that bound first, it answers
 the changes it found, a short or empty page, with a `next` to go on from where it stopped. So an empty page with a
-`next` is not the end: follow `next` until it is `null`. That `next` may point at a change you may not see. It tells you
-only that some document of a layer you may list has an open change in that state, and that change is still a `404` by
-id. A listing by document reads that document's open changes only, and its `next` is always a change you see.
+`next` is not the end: follow `next` until it is `null`. That `next` may point at a change you may not see, and since it
+is an encoding of the position (the change's document and id), it shows that change's id to whoever decodes it: listing
+with `limit=1`, a principal of a tenant can count the open changes of its tenant's document in each state, and learn
+their ids, without `cosec:read` (DR1-E-8). Nothing else of such a change is told: it is still a `404` by id. An opaque
+position is for 8.1. A listing by document reads that document's open changes only, and its `next` is always a change you see.
 
 ### Listing cursors {#listing-cursors}
 
@@ -740,7 +750,9 @@ else what it would wait on.
 
 ## Publishing and rolling back
 
-`POST /changes/{id}:publish` publishes a `READY` change. When its window saw `WIDENED`, `NARROWED`,
+`POST /changes/{id}:publish` publishes a `READY` change. It answers `200` with the change whatever came of it: read
+its `state`, which is `PUBLISHED` only when it was published, never only the status (DR1-F-12; a recheck may leave it
+`CONFLICTED`, `DRAFT` or `AWAITING_APPROVAL`, as below). When its window saw `WIDENED`, `NARROWED`,
 `BECAME_INDETERMINATE`, `BECAME_DENIED` or `OBLIGATIONS_CHANGED` requests, or closed as insufficient, the publisher must acknowledge exactly those numbers, or
 the answer is `428`:
 
@@ -756,6 +768,8 @@ with the candidate in place, the operator's request in progress as the pipeline 
 memberships, headers and time), and `cosec:publish` on the document in the control app. A change that would keep
 the operator out carries a `V4` `WARNING` at proposal; at publish, checked for the publisher, it is a `422` unless they
 acknowledge it with `"lockout": true` in the publish's body, which the change then records with who acknowledged it.
+The finding names the statement that decides only to an operator who may read the document its policy is defined in, as
+`simulate` shows one (`CTL-51`); to another it says which request would be denied, without the statement (DR1-F-13).
 Moving the control API to another path, role or policy is a legitimate handover: acknowledge it, or do it in two
 changes (add the new way in, publish, then remove the old). The way back from a lock-out is
 [`cosec-migrate restore`](../operations/storage.md#recovering-from-a-lock-out). The check's limits:
@@ -778,8 +792,10 @@ document's staging slot meanwhile, the change is `CONFLICTED`; if the candidate 
 documents, it is `DRAFT` with the findings. A publish whose revision was written but whose answer was lost is
 `PUBLISHED` when it is retried: the control plane finds the change's own revision on the chain, under later ones too,
 finishes what followed the write, and records the events as the publisher the revision names. A publish that wrote
-the head and could not finish after it (a store failing or timing out) answers `503`: the revision is in effect, and
-publishing the change again settles it without adding a revision. That holds once the change is `PUBLISHED` too: when
+the head and could not finish after it (a store failing or timing out, or the change moving while it was settled)
+answers `503`, never `409`: the revision is in effect, and publishing the change again settles it without adding a
+revision. Nobody has to: when its expiry comes, a change whose own revision is in effect is settled `PUBLISHED`, never
+`EXPIRED` (DR1-E-7), and publishing a change an earlier preview recorded `EXPIRED` so settles it too. That holds once the change is `PUBLISHED` too: when
 only releasing its staging slot failed, publishing it again releases the slot and records the publish, once.
 
 Only the document's own head is compared when it is written. Another document the checks read, a platform change
