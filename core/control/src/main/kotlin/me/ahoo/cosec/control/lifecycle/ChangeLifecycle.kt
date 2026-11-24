@@ -62,6 +62,9 @@ internal class ChangeLifecycle(
      */
     private val written: suspend (ChangeRequest) -> ChangeRequest? = { null },
 ) {
+    /** The most bytes a record of a change is written with (`CTL-83`): a record past it is not written. */
+    val recordCap: Long = ChangeRecordBudget.recordCap(options.maxDocumentBytes.toLong())
+
     /**
      * The change [id] as [operator] may see it (review K2): one that does not exist, is of a document the hard rule
      * keeps them from, or that they neither wrote nor may `cosec:read`, is the same 404, before its state is looked at
@@ -172,6 +175,7 @@ internal class ChangeLifecycle(
             val expired = current.value.copy(state = ChangeState.EXPIRED, updatedAt = laterThan(current.value))
             // The table says where an expiry may end; anything else is a fault and nothing is written.
             check(expired.state in ChangeStep.EXPIRE.to)
+            ChangeRecordBudget.requireWithin(expired, recordCap)
             if (store.putChange(current.digest, expired, current.value.state)) {
                 slots.release(expired)
                 ended.bound(expired.key)
@@ -214,6 +218,7 @@ internal class ChangeLifecycle(
             val updated = (next(current.value) ?: return null).copy(updatedAt = laterThan(current.value))
             // The table decides where a step may take a change: anything else is a fault, and nothing is written.
             check(updated.state in step.to) { "$step leaves a change in ${step.to}, not in ${updated.state}" }
+            ChangeRecordBudget.requireWithin(updated, recordCap)
             if (store.putChange(current.digest, updated, current.value.state)) {
                 if (updated.state.terminal) ended.bound(updated.key)
                 return updated

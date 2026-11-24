@@ -15,7 +15,12 @@ package me.ahoo.cosec.control.sdk
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
-/** Why what a change grants waits for a person (`escalations`, RFC 0007 §7.4): [subject], for [reason]. */
+/**
+ * Why what a change grants waits for a person (`escalations`, RFC 0007 §7.4): [subject], for [reason]. An entry of the
+ * grant analysis stands for the fragments of one statement: its [subject] names how many and their digest, and its
+ * [detail] the first three. A change answers at most about 200 of them (`CTL-88`, `contract/control/escalations.json`),
+ * so an approval screen can show them all.
+ */
 @ExperimentalCoSecApi
 class Escalation(val subject: String, val reason: EscalationReason, val detail: String) {
     override fun equals(other: Any?): Boolean =

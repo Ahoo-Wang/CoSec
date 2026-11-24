@@ -21,6 +21,7 @@ import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.store.ControlStore
@@ -42,31 +43,59 @@ private val log = KotlinLogging.logger {}
  * the bound the author's own oldest such draft is abandoned to make room, and only then is the new change refused
  * ([ConflictKind.OPEN_LIMIT], naming the oldest open change). A
  * change that can still move on is never abandoned for room, nor another author's, nor a break-glass change.
+ *
+ * The open records are bounded in bytes too (DR2-E-2): with the new one they weigh at most [byteBudget], `max-count`
+ * times the document cap, as the document's revision records do (`CTL-84`), and each is at most
+ * [ChangeRecordBudget.recordCap]. Past it the same author's draft makes room, and the change is otherwise refused with
+ * the same conflict, saying it is the bytes.
  */
 internal class OpenLimit(
     private val store: ControlStore,
     private val flow: ChangeLifecycle,
     private val maxOpen: Int,
+    /** The most bytes the open records of a document weigh with a new one (DR2-E-2): max-count times the cap. */
+    private val byteBudget: Long,
 ) {
-    /** Before [author] stores a new change of [key]: room for it, or a `409 OPEN_LIMIT`. */
-    suspend fun makeRoom(key: SnapshotKey, author: Operator) {
+    /** Before [author] stores a new change of [key], whose record is [bytes] long: room for it, or a `409 OPEN_LIMIT`. */
+    suspend fun makeRoom(key: SnapshotKey, author: Operator, bytes: Long) {
         val listed = store.openChanges(key)
-        // A change that does not read still counts: it may be open, and it may pin a revision.
+        // A change that does not read still counts: it may be open, and it may pin a revision. It weighs its share of the
+        // bytes, a document's worth, so that it never refuses a change on its own.
         val unreadable = listed.count { it is ListedChange.Unreadable }
         val open = listed.filterIsInstance<ListedChange.Readable>()
             .map { flow.current(it.change) }
             .filterNot { it.state.terminal }
-        if (open.size + unreadable < maxOpen) return
+        val sizes = open.associate { it.id to ChangeRequestCodec.encode(it).size.toLong() }
+        var count = open.size + unreadable
+        var held = sizes.values.sum() + unreadable * (byteBudget / maxOpen)
+        if (fits(count, held, bytes)) return
         val failed = open.filter { failedDraftOf(it, author) }.minByOrNull { it.createdAt }
-        if (failed != null && abandoned(failed, author) && open.size + unreadable - 1 < maxOpen) return
+        if (failed != null && abandoned(failed, author)) {
+            count -= 1
+            held -= sizes.getValue(failed.id)
+            if (fits(count, held, bytes)) return
+        }
         val oldest = open.filterNot { it.id == failed?.id }.minByOrNull { it.createdAt } ?: failed
-            ?: throw ChangeRejectedException.conflict(ConflictKind.OPEN_LIMIT, "[$key] holds $maxOpen open changes that do not read")
-        throw ChangeRejectedException.openLimit(
-            oldest.id,
-            "[$key] holds $maxOpen open changes, the most it may (cosec.control.revisions.max-count): abandon one, " +
-                "or wait for it to expire; the oldest is ${oldest.id.value}",
-        )
+            ?: throw ChangeRejectedException.conflict(ConflictKind.OPEN_LIMIT, "[$key] holds $count open changes that do not read")
+        throw refusal(key, oldest, count, held, bytes)
     }
+
+    /** The `409 OPEN_LIMIT` of [key], naming [oldest]: past the count of open changes, or past their bytes. */
+    private fun refusal(key: SnapshotKey, oldest: ChangeRequest, count: Int, held: Long, bytes: Long) =
+        ChangeRejectedException.openLimit(
+            oldest.id,
+            if (count >= maxOpen) {
+                "[$key] holds $maxOpen open changes, the most it may (cosec.control.revisions.max-count): abandon one, " +
+                    "or wait for it to expire; the oldest is ${oldest.id.value}"
+            } else {
+                "the open changes of [$key] weigh $held bytes, and this one $bytes more, over the $byteBudget bytes they " +
+                    "may weigh (cosec.control.revisions.max-count times the document cap): abandon one, or wait for it " +
+                    "to expire; the oldest is ${oldest.id.value}"
+            },
+        )
+
+    /** Whether a document holding [count] open changes of [held] bytes takes one more of [bytes]. */
+    private fun fits(count: Int, held: Long, bytes: Long): Boolean = count < maxOpen && held + bytes <= byteBudget
 
     /** Whether [change] is [author]'s own ordinary change whose checks failed: a draft, which cannot be edited. */
     private fun failedDraftOf(change: ChangeRequest, author: Operator): Boolean =

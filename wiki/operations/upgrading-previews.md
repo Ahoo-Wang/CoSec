@@ -215,8 +215,25 @@ Which preview of the library may run behind which preview of the gateway image: 
   them), and what reads a change's escalations. Such a change is counted before it is split: none of it is analysed,
   and it waits for approval with the one entry `change of tenant:<t>`. Before, it was split whole, one escalation each,
   and one statement of a thousand actions and a thousand resources could exhaust the control plane's heap. The grants an
-  analysis reaches past its four million comparisons are one entry too, `<n> fragments of tenant:<t>`, where each was
-  its own. An approval of such a change in beta.7 does not cover the new entry: approve it again.
+  analysis reaches past its four million comparisons are one entry too, `<n> fragments of tenant:<t> <sha-256>`, where
+  each was its own. An approval of such a change in beta.7 does not cover the new entry: approve it again.
+- **The escalations of a statement are one entry, and a change has at most about 200 of them** (`CTL-88`, DR2-E-1,
+  DR2-E-3). Affected: a tenant change that grants what its author does not hold, and what reads or shows a change's
+  escalations. The fragments of one statement that are not proven contained, for one reason, are one escalation,
+  `<policy>[<index>] <REASON>: <n> fragments <sha-256>`, with the first three in its `detail`; past 200 statements, the
+  rest are one `TOO_LARGE` entry, `<n> more fragments of tenant:<t> <sha-256>`. Before, each fragment was an escalation
+  of its own, and one proposal could record tens of thousands of them, each repeating its resource: a change record of
+  about 100 MB. A change needs an approval exactly when it did. An approval given in beta.7 names the old subjects, so
+  it does not cover the new ones: approve such a change again. A client that parsed a subject as one fragment reads the
+  first fragments from `detail` now ([what a change answers](../policies/testing.md#what-a-change-answers),
+  `contract/control/escalations.json`).
+- **A document's change records are bounded in bytes** (`CTL-83`, DR2-E-2). Affected: a client that proposes many
+  large changes on one document, and whoever sizes Redis. With a new change, a document's open changes weigh at most
+  `max-count` times the document cap (400 MB by default): past it the new change is `409` `OPEN_LIMIT`, as past the
+  count, and its `detail` says it is the bytes. A change record is at most the largest body plus the document cap
+  (18 MB); one larger is not stored and the proposal is `422`, which only a caller of the plane in process can reach.
+  The startup line `CoSec derived, not configured` now states what one tenant document stores at most, about 1.7 GB by
+  default, and that it multiplies by the documents ([Storage](./storage.md#how-much-one-document-stores)).
 - **A service calling the control plane as its own principal is recorded as `service`** (`ControlCaller.service`,
   `IDN-34`). Affected: what reads the records of control requests, and the order you upgrade in.
   - **Records.** The identity such a service states names its credential `service`, where beta.7 named it `api-key`.

@@ -27,10 +27,13 @@ import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.WorkBudget
+import me.ahoo.cosec.engine.ViewVersion
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
+import java.util.concurrent.CopyOnWriteArrayList
 
 /** `CTL-85` at the control API: what a route holds in the work budget, and what a call it refuses answers. */
 class ControlWorkRoutesTest {
@@ -119,6 +122,27 @@ class ControlWorkRoutesTest {
         // With room, the same call is answered as before.
         http.handle(ControlHttpRequest("POST", "/changes", emptyMap(), body), alice).status.assert().isNotEqualTo(503)
     }
+
+    /**
+     * DR2-F-2 (`CTL-85`): what reading a document the cache will not keep costs is charged to the tenant of whoever asks,
+     * whichever document it is. A tenant's `explain` at the platform's and its own revisions waits in its own turn,
+     * never in the platform's operators', whose own calls on the platform document are the platform's.
+     */
+    @Test
+    fun `a tenant's explain of the platform's revisions is charged to the tenant, never to the platform - DR2-F-2`() =
+        runBlocking<Unit> {
+            val budget = WorkBudget(capacity = 1L shl 40, free = 0, patience = Duration.ZERO)
+            val charged = CopyOnWriteArrayList<String>()
+            budget.granted = { tenant, _, _, _ -> charged += tenant }
+            val plane = planeOver(budget, DocumentCache(maxHeap = 1))
+
+            budget.call { plane.explain(fixture.alice, fixture.bob("order:read"), ViewVersion(1, null, 1)) }
+            charged.assert().isNotEmpty().containsOnly(ACME.value)
+
+            charged.clear()
+            budget.call { plane.explain(fixture.plato, fixture.bob("order:read")) }
+            charged.assert().isNotEmpty().containsOnly(TenantId.PLATFORM.value)
+        }
 
     private companion object {
         val OPTIONS = ChangeOptions(shadow = IMMEDIATE_WINDOW)

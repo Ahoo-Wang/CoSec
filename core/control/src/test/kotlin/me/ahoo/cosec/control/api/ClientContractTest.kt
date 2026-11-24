@@ -25,6 +25,7 @@ import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.Severity
+import me.ahoo.cosec.control.lifecycle.UnknownEscalations
 import me.ahoo.cosec.control.store.ChangePage
 import me.ahoo.cosec.control.store.ListedChange
 import me.ahoo.cosec.document.ProvenanceKind
@@ -142,6 +143,30 @@ class ClientContractTest {
         files.check("control/cursor.json", cursor)
     }
 
+    /**
+     * `CTL-88` (DR2-E-1, DR2-E-3): how many escalations a change answers, and what an entry stands for, so that a client
+     * that renders an approval screen or pages a listing knows its size. Each number is the analysis's own.
+     */
+    @Test
+    fun `a change's escalations follow the bounds of their contract file - CTL-88`() {
+        val escalations = files.objectNode()
+        escalations.put("grouped", "the grant analysis's: one entry per statement of a policy and reason")
+        escalations.put("groups", UnknownEscalations.MAX_GROUPS)
+        escalations.put("rest", "one TOO_LARGE entry for the fragments of the statements past groups")
+        escalations.put("examples", UnknownEscalations.EXAMPLES)
+        escalations.put("clipped", UnknownEscalations.MAX_TEXT)
+        escalations.put(
+            "subject",
+            "names how many fragments the entry stands for and their SHA-256: another count or another fragment is " +
+                "another subject, which an approval of the first does not cover",
+        )
+        escalations.put(
+            "others",
+            "one per entry of the document they name, its roles expanded, one for the document, one for its boundary",
+        )
+        files.check("control/escalations.json", escalations)
+    }
+
     @Test
     fun `each route that moves a change writes the change kinds of its contract file`() {
         files.check("control/routes.json", RouteKinds().record())
@@ -161,6 +186,7 @@ class ClientContractTest {
                 "routes.json",
                 "conflict.json",
                 "change-check.json",
+                "escalations.json",
             ),
         )
     }
