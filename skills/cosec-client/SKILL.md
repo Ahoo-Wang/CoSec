@@ -247,10 +247,16 @@ What it does (`JwtTokenManager.switchTenant`, from the code and its tests agains
 - **Stores the answer as one write**, which other tabs on a shared storage read as a new sign-in, so the React hooks and
   `currentUser` follow. If the stored session changed meanwhile (a sign-out or sign-in elsewhere), nothing is stored:
   `RefreshSessionChangedError`.
-- **A refused pair ends the session**: a `401` from the route (`token-revoked`: a logout, a pair presented again, or
-  the end of the login's session for a session a switch started, `IDN-36`; `token-expired`; `token-invalid`) removes
-  the stored pair if it is still the one sent, calls `onUnauthorized` once, and rejects with
-  `TenantSwitchError` (`sessionEnded: true`, `problem`, `status`).
+- **`401 token-expired` is refreshed once.** The route is reached with the access token, so the pipeline answers
+  `token-expired` when the access token expired at the server though the device clock (behind) says otherwise, and the
+  route answers it when the session's lifetime is over. The pair is refreshed once and the switch sent again (wire:
+  switch, refresh, switch). A session that is over refuses the refresh, which ends it as any refused refresh does:
+  `RefreshTokenError`, the pair removed, `onUnauthorized` once, no second switch. A second `token-expired` after a
+  refresh that succeeded keeps the (refreshed) pair: `TenantSwitchError` with `sessionEnded: false`.
+- **Any other refused pair ends the session**: a `401` from the route (`token-revoked`: a logout, a pair presented
+  again, or the end of the login's session for a session a switch started, `IDN-36`; `token-invalid`) removes the
+  stored pair if it is still the one sent, calls `onUnauthorized` once, and rejects with `TenantSwitchError`
+  (`sessionEnded: true`, `problem`, `status`).
 - **Anything else keeps the session**: `TenantSwitchError` with `sessionEnded: false` for the application's own refusal
   (its `TenantSwitch` threw: a `403` of its own, which also reaches `onForbidden`), a `503` (the revocations or the
   session store), a network error or timeout (no `status`). Nothing is retried. Calling again is safe: the server checks

@@ -179,6 +179,8 @@ export class FakeCoSecHost {
   loseNextSwitchResponses = 0;
   /** What each switch did to the session it was presented from. */
   readonly switches: { generation: number; outcome: string }[] = [];
+  /** How far the server's clock is ahead of the client's `Date.now()`, ms: a device clock that is behind. */
+  clockAhead = 0;
   /** Replaces an answer after the server produced it (a proxy, a fault). */
   after?: (seen: Seen, response: Response) => Response | Promise<Response>;
 
@@ -196,7 +198,7 @@ export class FakeCoSecHost {
   }
 
   private nowSec(): number {
-    return Math.floor(Date.now() / 1000);
+    return Math.floor((Date.now() + this.clockAhead) / 1000);
   }
 
   private pair(session: Session): FakeToken {

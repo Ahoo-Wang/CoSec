@@ -18,12 +18,14 @@ import type { CoSecTenantSwitcher } from '../src';
 import {
   JwtTokenManager,
   RefreshSessionChangedError,
+  RefreshTokenError,
   TenantSwitchError,
   TokenStorage,
+  type CoSecProblem,
   type TokenRefresher,
 } from '../src';
 import { createClient, destroyClients } from './support/client';
-import { claims, FakeCoSecHost } from './support/fakeCoSec';
+import { claims, FakeCoSecHost, problemResponse } from './support/fakeCoSec';
 
 /** Web Locks as far as the client uses them: one holder per name, in turn. */
 function fakeLocks() {
@@ -159,41 +161,112 @@ describe('a tenant switch with the session pair (IDN-22)', () => {
 });
 
 describe('a refused switch', () => {
-  it.each([
-    [
-      'revoked',
+  it('ends the session here when it is revoked: the pair removed, onUnauthorized once, nothing retried', async () => {
+    const host = new FakeCoSecHost();
+    const pair = host.login();
+    const onUnauthorized = vi.fn();
+    const { configurer, tokens } = createClient(host, {
+      signedIn: pair,
+      config: { onUnauthorized },
+    });
+    host.logout(pair);
+
+    const error = await switchError(
+      configurer.tokenManager!.switchTenant({ endpoint: '/auth/switch/acme' }),
+    );
+
+    expect(error.sessionEnded).toBe(true);
+    expect(error.status).toBe(401);
+    expect(error.problem?.slug).toBe('token-revoked');
+    expect(tokens.get()).toBeNull();
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    expect((onUnauthorized.mock.calls[0][1] as CoSecProblem).slug).toBe(
       'token-revoked',
-      (host: FakeCoSecHost, pair: ReturnType<FakeCoSecHost['login']>) =>
-        host.logout(pair),
-    ],
-    ['over', 'token-expired', (host: FakeCoSecHost) => host.expireSessions()],
-  ] as const)(
-    'ends the session here when it is %s: the pair removed, onUnauthorized once, nothing retried',
-    async (_, slug, end) => {
-      const host = new FakeCoSecHost();
-      const pair = host.login();
-      const onUnauthorized = vi.fn();
-      const { configurer, tokens } = createClient(host, {
-        signedIn: pair,
-        config: { onUnauthorized },
-      });
-      end(host, pair);
+    );
+    expect(wire(host)).toEqual(['/auth/switch/acme 401']);
+  });
 
-      const error = await switchError(
-        configurer.tokenManager!.switchTenant({
-          endpoint: '/auth/switch/acme',
-        }),
-      );
+  it('refreshes once on an access token the server finds expired, and switches with the new pair', async () => {
+    const host = new FakeCoSecHost();
+    const pair = host.login();
+    const onUnauthorized = vi.fn();
+    const { configurer, tokens } = createClient(host, {
+      signedIn: pair,
+      config: { onUnauthorized },
+    });
+    // The device clock is behind: the token looks valid here, and has expired at the server.
+    host.clockAhead = 11 * 60_000;
+    expect(tokens.get()?.access.isExpired).toBe(false);
 
-      expect(error.sessionEnded).toBe(true);
-      expect(error.status).toBe(401);
-      expect(error.problem?.slug).toBe(slug);
-      expect(tokens.get()).toBeNull();
-      expect(onUnauthorized).toHaveBeenCalledTimes(1);
-      expect(host.on('/auth/switch/acme')).toHaveLength(1);
-      expect(host.on('/auth/refresh')).toHaveLength(0);
-    },
-  );
+    await configurer.tokenManager!.switchTenant({
+      endpoint: '/auth/switch/acme',
+    });
+
+    expect(wire(host)).toEqual([
+      '/auth/switch/acme 401',
+      '/auth/refresh 200',
+      '/auth/switch/acme 200',
+    ]);
+    const [, retried] = host.on('/auth/switch/acme');
+    const body = retried.body as Record<string, string>;
+    expect(retried.headers.get('authorization')).toBe(
+      `Bearer ${body.accessToken}`,
+    );
+    expect(body.refreshToken).not.toBe(pair.refreshToken);
+    expect(tokens.currentUser?.tenantId).toBe('acme');
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it("ends the session through the refresh when the session's lifetime is over: one notification, no second switch", async () => {
+    const host = new FakeCoSecHost();
+    const pair = host.login();
+    const onUnauthorized = vi.fn();
+    const { configurer, tokens } = createClient(host, {
+      signedIn: pair,
+      config: { onUnauthorized },
+    });
+    host.expireSessions();
+
+    const error = await configurer
+      .tokenManager!.switchTenant({ endpoint: '/auth/switch/acme' })
+      .catch((error: unknown) => error);
+
+    expect(error).toBeInstanceOf(RefreshTokenError);
+    expect((error as RefreshTokenError).problem?.slug).toBe('token-expired');
+    expect(wire(host)).toEqual(['/auth/switch/acme 401', '/auth/refresh 401']);
+    expect(tokens.get()).toBeNull();
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the refreshed pair when the switch is token-expired again after a refresh that succeeded', async () => {
+    const host = new FakeCoSecHost();
+    const onUnauthorized = vi.fn();
+    const { configurer, tokens } = createClient(host, {
+      signedIn: host.login(),
+      config: { onUnauthorized },
+    });
+    host.after = (seen, response) =>
+      seen.path.startsWith('/auth/switch/')
+        ? problemResponse('token-expired')
+        : response;
+
+    const error = await switchError(
+      configurer.tokenManager!.switchTenant({ endpoint: '/auth/switch/acme' }),
+    );
+
+    expect(error.sessionEnded).toBe(false);
+    expect(error.problem?.slug).toBe('token-expired');
+    expect(wire(host)).toEqual([
+      '/auth/switch/acme 401',
+      '/auth/refresh 200',
+      '/auth/switch/acme 401',
+    ]);
+    expect(tokens.get()).not.toBeNull();
+    expect(claims(tokens.get()!.token.refreshToken)['cosec.generation']).toBe(
+      2,
+    );
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
 
   it('ends the session without onUnauthorized when no callback is configured', async () => {
     const host = new FakeCoSecHost();

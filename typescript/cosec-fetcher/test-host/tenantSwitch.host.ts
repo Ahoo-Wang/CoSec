@@ -31,7 +31,12 @@ beforeEach(resetStats);
 afterEach(() => {
   destroyHostClients();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
+
+/** The client's clock an hour behind the host's: a token the host refuses as expired still looks valid here. */
+const clockBehind = () =>
+  vi.useFakeTimers({ toFake: ['Date'], now: Date.now() - 3_600_000 });
 
 const switchError = async (promise: Promise<unknown>) => {
   const error = await promise.then(
@@ -92,6 +97,50 @@ describe('a tenant switch against a real host (IDN-22)', () => {
     expect(tokens.get()).toBeNull();
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
     expect(wire).toEqual(['/auth/switch/acme 401']);
+  });
+
+  it('refreshes once when the host finds the access token expired, and switches with the new pair', async () => {
+    const onUnauthorized = vi.fn();
+    const { configurer, tokens } = createHostClient({
+      config: { onUnauthorized },
+    });
+    tokens.signIn(await loginExpired('alice'));
+    clockBehind();
+    expect(tokens.get()?.access.isExpired).toBe(false);
+    const wire = recordWire();
+
+    await configurer.tokenManager!.switchTenant({
+      endpoint: '/auth/switch/acme',
+    });
+
+    expect(wire).toEqual([
+      '/auth/switch/acme 401',
+      '/auth/refresh 200',
+      '/auth/switch/acme 200',
+    ]);
+    expect(tokens.currentUser?.tenantId).toBe('acme');
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it('ends the session through the refresh when the host refuses it: one notification, no second switch', async () => {
+    const onUnauthorized = vi.fn();
+    const { configurer, tokens } = createHostClient({
+      config: { onUnauthorized },
+    });
+    const pair = await loginExpired('alice');
+    tokens.signIn(pair);
+    await endSession(pair);
+    clockBehind();
+    const wire = recordWire();
+
+    const error = await configurer
+      .tokenManager!.switchTenant({ endpoint: '/auth/switch/acme' })
+      .catch((error: unknown) => error);
+
+    expect(error).toBeInstanceOf(RefreshTokenError);
+    expect(wire).toEqual(['/auth/switch/acme 401', '/auth/refresh 401']);
+    expect(tokens.get()).toBeNull();
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the session on the application's own refusal", async () => {

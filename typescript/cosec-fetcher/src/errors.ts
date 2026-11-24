@@ -125,11 +125,13 @@ const CAUSE_DEPTH = 8;
  * route answered.
  *
  * - `sessionEnded`: the route refused the pair (`401`, or what
- *   `isRefreshRejected` names): the session the switch was presented from is
+ *   `isRefreshRejected` names), other than a `token-expired`, which is
+ *   refreshed once: the session the switch was presented from is
  *   over, and its pair was removed here if it was still the stored one.
  * - Otherwise the session is unchanged and its pair kept: the application's
  *   own refusal (a `403` of its `TenantSwitch`, say), a `503`, a `5xx`, a
- *   network error or a timeout (no `status`), or an answer that is not a pair.
+ *   network error or a timeout (no `status`), an answer that is not a pair, or
+ *   a second `token-expired` after the refresh a first one started succeeded.
  *   A switch never moves the session it is presented from, so calling
  *   `switchTenant` again presents the same current pair safely.
  */

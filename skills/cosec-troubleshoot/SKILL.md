@@ -539,8 +539,12 @@ the server's CoSec version, the error's `name` with its `problem` and `status` (
   switch started whose login's session has ended (`IDN-36`), or the pair presented was older than the session's current
   one, which revokes the session (a switch of the application's own that did not take the lock refreshes take);
   `token-invalid` when `Authorization` and the body were not one pair (the same cause), or the credential has no session
-  (an API key, a token of a `TokenVerifier` of the application's); `token-expired` at the session's lifetime. An
-  application route that refuses a non-member with `401` ends the session too: it must refuse with another status.
+  (an API key, a token of a `TokenVerifier` of the application's). An application route that refuses a non-member with
+  `401` ends the session too: it must refuse with another status. A `token-expired` is not on this list: the client
+  refreshes once and switches again (wire: switch `401`, refresh, switch), so a switch that ends in `RefreshTokenError`
+  is a session whose lifetime is over (or ended), and `TenantSwitchError` `token-expired` with `sessionEnded: false`
+  after a refresh that succeeded is a route that refuses the fresh access token: check the server's clock and the
+  route's own answer.
   `sessionEnded: false` keeps the pair: `503` while the revocation or session store cannot be read (call again), no
   `status` (network error or timeout: calling again is safe, the switch does not rotate the pair), or the application's
   own refusal (its `TenantSwitch`). A switch request without the pair in its body fails against an endpoint of

@@ -304,12 +304,7 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
           const adopted = this.adoptStoredToken(jwtToken);
           if (adopted) return adopted;
         }
-        return this.sendRefresh(
-          jwtToken,
-          this.requestOf(jwtToken, notification),
-        )
-          .then(newToken => this.store(jwtToken, newToken))
-          .catch(error => this.settleFailure(jwtToken, notification, error));
+        return this.refreshPair(jwtToken, notification);
       },
     ).finally(() => {
       if (this.refreshInProgress?.promise === promise) {
@@ -318,6 +313,16 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
     });
     this.refreshInProgress = { token: jwtToken, promise, notification };
     return promise;
+  }
+
+  /** Sends the refresh of `jwtToken` and settles it: the caller holds the lock. */
+  private refreshPair(
+    jwtToken: JwtCompositeToken,
+    notification: RefreshNotification,
+  ): Promise<JwtCompositeToken> {
+    return this.sendRefresh(jwtToken, this.requestOf(jwtToken, notification))
+      .then(newToken => this.store(jwtToken, newToken))
+      .catch(error => this.settleFailure(jwtToken, notification, error));
   }
 
   /**
@@ -617,10 +622,19 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
    *   share the storage: the same Web Lock), with the pair read again once the
    *   lock is held. No refresh replaces the pair while the switch is on its
    *   way, and `Authorization` and the body are always that one pair.
-   * - **A refused pair ends the session here.** A `401` from the switch route
-   *   (or what `isRefreshRejected` names) removes the stored pair if it is
-   *   still the one sent, `onUnauthorized` is called once, and it rejects with
-   *   a {@link TenantSwitchError} whose `sessionEnded` is true.
+   * - **`token-expired` is refreshed once.** The route is reached with the
+   *   access token, so a `401 token-expired` may be the pipeline's (a device
+   *   clock behind the server's) or the route's (the session's lifetime is
+   *   over): the pair is refreshed once and the switch sent again with the new
+   *   pair, as `AuthorizationResponseInterceptor` does for any request. A
+   *   session that is over refuses that refresh, which ends it as any refused
+   *   refresh does (`RefreshTokenError`, `onUnauthorized` once); a second
+   *   `token-expired` after a refresh that succeeded keeps the pair
+   *   ({@link TenantSwitchError}, `sessionEnded` false).
+   * - **Any other refused pair ends the session here.** A `401` from the
+   *   switch route (or what `isRefreshRejected` names) removes the stored pair
+   *   if it is still the one sent, `onUnauthorized` is called once, and it
+   *   rejects with a {@link TenantSwitchError} whose `sessionEnded` is true.
    * - **Anything else keeps the session**: the application's own refusal
    *   (say a `403` of its `TenantSwitch`), a `503`, a network error or a
    *   timeout reject with a {@link TenantSwitchError} and leave the pair as it
@@ -672,33 +686,50 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
     }
   }
 
-  /** The switch itself, under the lock: present the stored pair, settle, store. */
+  /**
+   * The switch itself, under the lock: present the stored pair, settle, store.
+   *
+   * The switch route is reached with the access token, so a `401
+   * token-expired` may be the pipeline's (the access token expired, which a
+   * device clock behind the server's does not see) or the route's (the
+   * session's lifetime is over). As for any request
+   * (`AuthorizationResponseInterceptor`), it is refreshed once and the switch
+   * sent again with the new pair: a session that is over refuses the refresh,
+   * which ends it. A second `token-expired` after a refresh that succeeded
+   * keeps the pair.
+   */
   private async sendSwitch(
     switcher: CoSecTenantSwitcher,
     request: TenantSwitchRequest,
     locked: boolean,
   ): Promise<void> {
     const storage = this.tokenStorage;
-    const sent = locked ? storage.reload() : this.currentToken;
+    const rejected = this.options.isRefreshRejected ?? isRefreshRejection;
+    let sent = locked ? storage.reload() : this.currentToken;
     if (!sent) throw new Error('No token found');
-    let ended = false;
-    // Removes the pair once, if it is still the one sent; tells the
-    // unauthorized interceptor whether this exchange is the one to notify.
-    const endSession = (): boolean => {
-      if (ended || !isSameToken(sent, storage.reload())) return false;
-      storage.remove();
-      ended = true;
-      return true;
-    };
+    let refreshed = false;
     let answer: CompositeToken;
-    try {
-      answer = await switcher.switch(sent.token, request, endSession);
-    } catch (error) {
-      const refused = (this.options.isRefreshRejected ?? isRefreshRejection)(
-        error,
-      );
-      if (refused) endSession();
-      throw new TenantSwitchError(error, refused);
+    for (;;) {
+      try {
+        // The switch's own 401 notifies nobody: what it means is decided here.
+        answer = await switcher.switch(sent.token, request, () => false);
+        break;
+      } catch (error) {
+        if (!rejected(error)) throw new TenantSwitchError(error, false);
+        const expired =
+          getCoSecProblem(error)?.slug === CoSecProblemType.TOKEN_EXPIRED;
+        if (expired && refreshed) throw new TenantSwitchError(error, false);
+        if (expired && sent.isRefreshable) {
+          refreshed = true;
+          sent = await this.refreshInSwitch(sent, error);
+          continue;
+        }
+        if (isSameToken(sent, storage.reload())) {
+          storage.remove();
+          await notifyUnauthorized(error, error);
+        }
+        throw new TenantSwitchError(error, true);
+      }
     }
     if (!isCompositeToken(answer)) {
       throw new TenantSwitchError(new InvalidRefreshResponseError(), false);
@@ -707,6 +738,27 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
       throw new RefreshSessionChangedError();
     }
     storage.signIn(answer);
+  }
+
+  /**
+   * The one refresh of a switch answered `token-expired`, under the lock the
+   * switch holds. A refusal ends the session as any refresh's does, and the
+   * unauthorized notification goes to the switch's request, once.
+   */
+  private async refreshInSwitch(
+    jwtToken: JwtCompositeToken,
+    switchError: unknown,
+  ): Promise<JwtCompositeToken> {
+    // The refresh request notifies nobody either: the switch's does, below.
+    const notification = { hasHandler: true, handled: false };
+    try {
+      return await this.refreshPair(jwtToken, notification);
+    } catch (error) {
+      if (error instanceof RefreshTokenError && this.currentToken === null) {
+        await notifyUnauthorized(switchError, error);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -730,4 +782,26 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
     }
     return this.currentToken.isRefreshable;
   }
+}
+
+/**
+ * Hands the unauthorized notification of a switch to the
+ * `UnauthorizedErrorInterceptor` of the `Fetcher` that sent it, once: the
+ * switch's request reached the error phase before its outcome was known.
+ * `error` is what the interceptor reports (the switch's own refusal, or the
+ * refresh that ended the session).
+ */
+async function notifyUnauthorized(
+  switchError: unknown,
+  error: unknown,
+): Promise<void> {
+  const exchange = (switchError as { exchange?: FetchExchange } | undefined)
+    ?.exchange;
+  const interceptor = exchange?.fetcher?.interceptors.error.interceptors.find(
+    each => each.name === UNAUTHORIZED_ERROR_INTERCEPTOR_NAME,
+  );
+  if (!exchange || !interceptor) return;
+  if (error !== switchError) exchange.error = error as Error;
+  exchange.attributes.set(UNAUTHORIZED_ERROR_INTERCEPTOR_NAME, () => true);
+  await interceptor.intercept(exchange);
 }
