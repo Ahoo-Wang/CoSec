@@ -3,23 +3,14 @@
 # Tests: :document:test --tests me.ahoo.cosec.document.shadow.ShadowCodecTest
 
 diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/shadow/ShadowCodec.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/shadow/ShadowCodec.kt
-index a80add209..f1ed48a49 100644
+index 54d7decff..f1ed48a49 100644
 --- a/core/document/src/main/kotlin/me/ahoo/cosec/document/shadow/ShadowCodec.kt
 +++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/shadow/ShadowCodec.kt
-@@ -92,6 +92,8 @@ object ShadowCodec {
-                 status.windows?.let { windows -> node.putArray("windows").apply { windows.sorted().forEach(::add) } }
-                 // Only when false (CTL-10): absent is an instance that shadows, as an older one does.
-                 if (!status.shadows) node.put("shadows", false)
-+                // RFC 0014 R5 (SNP-25): absent is an unknown release, which a publish counts as the GA baseline.
-+                status.release?.let { node.put("release", it) }
-             }
-         },
-     )
-@@ -111,6 +113,8 @@ object ShadowCodec {
-                 node.get("windows")?.let(::windows),
+@@ -114,7 +114,7 @@ object ShadowCodec {
                  node.get("shadows")?.let { if (it.isBoolean) it.asBoolean() else throw malformed("shadows is not a boolean") }
                      ?: true,
-+                // Optional (SNP-25): a status of a release before it does not say; it reads as an unknown release.
+                 // Optional (SNP-25): a status of a release before it does not say; it reads as an unknown release.
+-                node.get("release")?.let { if (it.isString) it.asString() else throw malformed("release is not a string") },
 +                node.need("release").let { if (it.isString) it.asString() else throw malformed("release is not a string") },
              )
          }

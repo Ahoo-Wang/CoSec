@@ -3,11 +3,11 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.shadow.StatusReadingsTest --tests me.ahoo.cosec.cocache.CacheTtlPolicyTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-index 8c30fb627..abe83389c 100644
+index 6ebaac714..d87b7e99a 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-@@ -87,7 +87,6 @@ internal object CacheLocks {
-                     // so the key lives exactly STATUS_TTL. CoCache's default jitter would make it 1 to 3 minutes. A
+@@ -95,7 +95,6 @@ internal object CacheLocks {
+                     // its key expires (CTL-73), so the key lives exactly STATUS_TTL, without CoCache's default jitter. A
                      // resident record is rewritten at half its life (CTL-75), which a jittered life could undercut.
                      lock(PolicyField.TTL_JITTER)
 -                    constrain(PolicyField.TTL_JITTER) { Duration.ZERO }
@@ -15,10 +15,10 @@ index 8c30fb627..abe83389c 100644
              }
  
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/ShadowCacheSpecs.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/ShadowCacheSpecs.kt
-index 9961b3621..995050756 100644
+index b9da5801b..7677afb8e 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/ShadowCacheSpecs.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/ShadowCacheSpecs.kt
-@@ -134,7 +134,7 @@ internal object ShadowCacheSpecs {
+@@ -137,7 +137,7 @@ internal object ShadowCacheSpecs {
              .codec(codec)
              .policy {
                  this.ttl = ttl

@@ -2,16 +2,16 @@
 # Mutant: the starter compiles staged candidates with the entry point of the enforced source
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.ShadowReportingWiringTest
 
-diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
-index ba42d352..56f7c244 100644
---- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
-+++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
-@@ -238,7 +238,7 @@ class CoSecSnapshotAutoConfiguration {
-                 cosec.keyPrefix,
-                 readOnly = !ControlPlaneCondition.wired(resources.classLoader, environment),
-             )
--            return CachingCandidateSource(store, compiler::compileCandidate)
-+            return CachingCandidateSource(store, compiler::compile)
-         }
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecShadowConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecShadowConfiguration.kt
+index d47f6ba0f..60f99a677 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecShadowConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecShadowConfiguration.kt
+@@ -91,7 +91,7 @@ class CoSecShadowConfiguration {
+             cosec.keyPrefix,
+             readOnly = !ControlPlaneCondition.wired(resources.classLoader, environment),
+         )
+-        return CachingCandidateSource(store, compiler::compileCandidate)
++        return CachingCandidateSource(store, compiler::compile)
+     }
  
-         @Bean
+     /** The status configuration's, when it runs ([CoSecInstanceStatusAutoConfiguration]); otherwise this one. */

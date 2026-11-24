@@ -2,26 +2,15 @@
 # Mutant: the readers of the store answer any operator, so a tenant's administrator lists every instance
 # Tests: :control:test --tests me.ahoo.cosec.control.api.InstancesRouteTest
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-index 045ac0d7f..050c195c9 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-@@ -25,6 +25,7 @@ import me.ahoo.cosec.control.change.ChangeId
- import me.ahoo.cosec.control.change.ChangeRequest
- import me.ahoo.cosec.control.change.ChangeState
- import me.ahoo.cosec.control.change.Confirmation
-+import me.ahoo.cosec.control.change.InstanceReaders
- import me.ahoo.cosec.control.change.Operation
- import me.ahoo.cosec.control.change.Propagation
- import me.ahoo.cosec.control.change.ShadowAck
-@@ -80,6 +81,10 @@ class DefaultControlPlane(
-     override suspend fun propagation(operator: Operator, key: SnapshotKey, revision: Long): Propagation =
-         reads.propagation(operator, key, revision)
- 
-+    override suspend fun instances(operator: Operator): InstanceReaders {
-+        return changes.readers()
-+    }
-+
-     override suspend fun simulate(operator: Operator, request: SimulatedRequest, candidate: ChangeId?): Simulation =
-         decisions.simulate(operator, request, candidate)
- 
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/InstanceReads.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/InstanceReads.kt
+index fa0804863..1530e3faa 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/InstanceReads.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/InstanceReads.kt
+@@ -32,7 +32,6 @@ class InstanceReads internal constructor(
+     private val readers: suspend () -> InstanceReaders,
+ ) {
+     suspend fun read(operator: Operator): InstanceReaders {
+-        authority.require(operator, SnapshotKey.Platform, ControlActions.READ)
+         return readers()
+     }
+ }
