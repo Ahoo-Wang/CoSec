@@ -84,7 +84,9 @@ class CoSecInstanceStatusAutoConfiguration {
             val meters = registry.ifAvailable ?: return@AfterSingletons
             reporting.ifAvailable?.let { bound ->
                 FunctionCounter.builder(FAILED_WRITES, bound) { it.reporter.failedWrites.get().toDouble() }
-                    .description("Writes of this instance's status that failed: the control plane cannot see it (SNP-25)")
+                    .description(
+                        "Writes of this instance's status that failed: the control plane cannot see it (SNP-25)"
+                    )
                     .register(meters)
             }
         }

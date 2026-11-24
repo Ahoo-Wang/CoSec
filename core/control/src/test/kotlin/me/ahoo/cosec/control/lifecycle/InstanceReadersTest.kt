@@ -67,7 +67,11 @@ class InstanceReadersTest {
             windows.readers()
             clock.now = clock.now.plus(InstanceStatuses.MAX_AGE).plusMillis(1)
             windows.readers()
-            val said = logged.captured().map { it.formattedMessage }.filter { it.contains("release(s) read this store") }
+            val said = logged.captured().map { it.formattedMessage }.filter {
+                it.contains(
+                    "release(s) read this store"
+                )
+            }
             said.assert().hasSize(1)
             said.single().assert().contains("8.0.0-beta.8 ×1").contains("8.0.0-beta.9 ×1").contains("SNP-25")
         } finally {

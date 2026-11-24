@@ -40,7 +40,11 @@ class InstanceReporting(val reporter: InstanceReporter) : AutoCloseable, Startup
 
     init {
         // Bounded: a Redis that does not answer delays the start by this much at most, and the loop tries again.
-        runBlocking { withTimeoutOrNull(FIRST_REPORT_BUDGET.toMillis()) { reporter.report(windows = null, shadows = false) } }
+        runBlocking {
+            withTimeoutOrNull(
+                FIRST_REPORT_BUDGET.toMillis()
+            ) { reporter.report(windows = null, shadows = false) }
+        }
         scope.launch { reporter.run() }
     }
 

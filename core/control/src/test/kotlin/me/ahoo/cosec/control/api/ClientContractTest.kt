@@ -116,7 +116,10 @@ class ClientContractTest {
             setOf("control-c.3"),
             at,
         )
-        files.check("control/instances.json", Shapes.of(listOf(ControlResponseJson.instances(readers)), setOf("releases")))
+        files.check(
+            "control/instances.json",
+            Shapes.of(listOf(ControlResponseJson.instances(readers)), setOf("releases"))
+        )
     }
 
     @Test

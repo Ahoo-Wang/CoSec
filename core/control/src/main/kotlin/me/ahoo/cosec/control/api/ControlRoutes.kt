@@ -53,7 +53,7 @@ internal class ControlRoutes(
         "analyze" to RouteHandler { operator, request, _ -> queries.analyze(operator, request) },
         // `CTL-89`: the readers of the store and their releases (RFC 0014 R5); the operators' only, never the service's.
         "instances" to RouteHandler { operator, request, _ ->
-            if (request.method != "GET") methodNotAllowed() else json(ControlResponseJson.instances(plane.instances(operator)))
+            if (request.method != "GET") methodNotAllowed() else json(ControlResponseJson.instances(plane.instances.read(operator)))
         },
     )
 

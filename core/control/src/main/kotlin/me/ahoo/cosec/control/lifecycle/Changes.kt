@@ -102,7 +102,7 @@ class Changes(
     val unreadableStatuses: Long get() = windows.unreadableStatuses
 
     /** The readers of the store (`SNP-25`, `CTL-89`): every instance with a status in the last hour, and its release. */
-    suspend fun readers(): InstanceReaders = windows.readers()
+    val readers: suspend () -> InstanceReaders = { windows.readers() }
 
     /** How many releases the readers ran at the last read: more than one is a mixed deployment (RFC 0014 G3). */
     val readerReleases: Int get() = windows.readerReleases.size

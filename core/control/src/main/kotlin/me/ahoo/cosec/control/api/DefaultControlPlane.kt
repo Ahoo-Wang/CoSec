@@ -25,7 +25,6 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Confirmation
-import me.ahoo.cosec.control.change.InstanceReaders
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowAck
@@ -62,6 +61,8 @@ class DefaultControlPlane(
 
     override val breakGlass: BreakGlass = BreakGlass(changes, revisions)
 
+    override val instances: InstanceReads = InstanceReads(authority, changes.readers)
+
     private val retained = RetainedDocuments(revisions, simulator.cache, work)
     private val reads = DocumentReads(authority, revisions, changes, retained)
 
@@ -80,11 +81,6 @@ class DefaultControlPlane(
 
     override suspend fun propagation(operator: Operator, key: SnapshotKey, revision: Long): Propagation =
         reads.propagation(operator, key, revision)
-
-    override suspend fun instances(operator: Operator): InstanceReaders {
-        authority.require(operator, SnapshotKey.Platform, ControlActions.READ)
-        return changes.readers()
-    }
 
     override suspend fun simulate(operator: Operator, request: SimulatedRequest, candidate: ChangeId?): Simulation =
         decisions.simulate(operator, request, candidate)

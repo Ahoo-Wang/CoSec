@@ -72,7 +72,9 @@ internal class ControlMetersConfiguration {
         val meters = registry.ifAvailable ?: return@AfterSingletons
         changes.ifAvailable?.let { bound ->
             Gauge.builder(READER_RELEASES, bound) { it.readerReleases.toDouble() }
-                .description("Releases of the CoSec instances that read this store in the last hour, as last read: above 1 is a mixed deployment")
+                .description(
+                    "Releases of the CoSec instances that read this store in the last hour, as last read: above 1 is a mixed deployment"
+                )
                 .register(meters)
         }
     }

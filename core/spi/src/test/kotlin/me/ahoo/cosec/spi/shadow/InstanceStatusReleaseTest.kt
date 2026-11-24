@@ -48,14 +48,23 @@ class InstanceStatusReleaseTest {
     fun `the release reads from a repackaged jar without a manifest`(@TempDir dir: Path) {
         val jar = dir.resolve("app.jar").toFile()
         JarOutputStream(jar.outputStream()).use { out ->
-            for (name in listOf(CLASS, "${CLASS.removeSuffix(".class")}\$Companion.class", InstanceStatus.RELEASE_RESOURCE)) {
+            for (name in listOf(
+                CLASS,
+                "${CLASS.removeSuffix(".class")}\$Companion.class",
+                InstanceStatus.RELEASE_RESOURCE
+            )) {
                 out.putNextEntry(JarEntry(name))
-                checkNotNull(InstanceStatus::class.java.classLoader.getResourceAsStream(name)) { name }.use { it.copyTo(out) }
+                checkNotNull(
+                    InstanceStatus::class.java.classLoader.getResourceAsStream(name)
+                ) { name }.use { it.copyTo(out) }
                 out.closeEntry()
             }
         }
         val kotlin = File(KotlinVersion::class.java.protectionDomain.codeSource.location.toURI())
-        URLClassLoader(arrayOf(jar.toURI().toURL(), kotlin.toURI().toURL()), ClassLoader.getPlatformClassLoader()).use { loader ->
+        URLClassLoader(
+            arrayOf(jar.toURI().toURL(), kotlin.toURI().toURL()),
+            ClassLoader.getPlatformClassLoader()
+        ).use { loader ->
             val repackaged = loader.loadClass(InstanceStatus::class.java.name)
             repackaged.classLoader.assert().isSameAs(loader)
             repackaged.getField("RELEASE").get(null).assert().isEqualTo(version)

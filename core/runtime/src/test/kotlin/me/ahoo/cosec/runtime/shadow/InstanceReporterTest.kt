@@ -59,7 +59,8 @@ class InstanceReporterTest {
         val loop = async { reporter.run(Duration.ofMillis(5)) }
         delay(50)
         store.statuses().map { it.instance }.assert().containsExactly("gw-1")
-        val shadow = ShadowReporter(ShadowRecorder("gw-1"), store, { mapOf(SnapshotKey.Platform to 3L) }, status = reporter)
+        val shadow =
+            ShadowReporter(ShadowRecorder("gw-1"), store, { mapOf(SnapshotKey.Platform to 3L) }, status = reporter)
         shadow.instanceReporter.assert().isSameAs(reporter)
         reporter.drivenByShadows.assert().isTrue()
         val before = reporter.lastWritten
@@ -77,7 +78,9 @@ class InstanceReporterTest {
         val failing = object : ShadowReportSink {
             override suspend fun write(report: ShadowReport) = Unit
 
-            override suspend fun write(status: InstanceStatus) = error("NOPERM this user has no permissions to access one of the keys")
+            override suspend fun write(status: InstanceStatus) = error(
+                "NOPERM this user has no permissions to access one of the keys"
+            )
 
             override suspend fun write(resident: ResidentDocuments) = error("NOPERM")
         }

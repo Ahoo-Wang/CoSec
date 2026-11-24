@@ -119,7 +119,9 @@ class InstanceReporter(
      * host has made the first report already.
      */
     suspend fun run(interval: Duration = INTERVAL) {
-        require(interval >= ShadowReporter.MIN_INTERVAL) { "The report interval is at least one millisecond, not $interval." }
+        require(
+            interval >= ShadowReporter.MIN_INTERVAL
+        ) { "The report interval is at least one millisecond, not $interval." }
         while (currentCoroutineContext().isActive) {
             delay(interval.toMillis())
             if (!drivenByShadows) report(windows = null, shadows = false)

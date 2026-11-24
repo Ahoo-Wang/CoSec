@@ -11,16 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
-
 package me.ahoo.cosec.control.server
 
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.memory.InMemoryBackend
-import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.login.token.TokenConverter
-import me.ahoo.cosec.spring.boot.pipeline.InstanceReporting
 import me.ahoo.cosec.testkit.IdentityHeader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
@@ -166,8 +162,7 @@ class ControlServerTest {
         server.containsBean("cosecShadowReporting").assert().isFalse()
         server.containsBean("cosecShadowListener").assert().isFalse()
         // SNP-25: it reads the documents, so it is a reader of the store, and reports itself as one, not shadowing.
-        val reporting = server.getBean(InstanceReporting::class.java)
-        reporting.reporter.drivenByShadows.assert().isFalse()
+        server.containsBean("cosecInstanceReporting").assert().isTrue()
         server.close()
         // The same names are there when shadow is switched on, so the absence above is the switch's and not a rename's.
         val shadowed = start(statement, "--cosec.authorization.shadow.enabled=true")

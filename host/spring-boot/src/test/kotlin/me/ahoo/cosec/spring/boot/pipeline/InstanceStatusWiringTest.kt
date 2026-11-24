@@ -129,7 +129,9 @@ class InstanceStatusWiringTest {
         runner.withPropertyValues("cosec.authorization.shadow.enabled=false").run { context ->
             val health = context.getBean(InstanceStatusHealthIndicator::class.java).health()
             health.status.assert().isEqualTo(Status.UP)
-            health.details["instance"].assert().isEqualTo(context.getBean(InstanceReporting::class.java).reporter.instance)
+            health.details["instance"].assert().isEqualTo(
+                context.getBean(InstanceReporting::class.java).reporter.instance
+            )
             health.details["release"].assert().isEqualTo(InstanceStatus.RELEASE)
             health.details.assert().containsKey("lastWritten")
         }
