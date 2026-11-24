@@ -30,6 +30,27 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+**Upgrade in this order.** Three changes of this preview read a header or a request the other side writes, so a
+rolling upgrade has an order; finish each step before the next:
+
+1. **The gateways, and the applications that call a control-plane host's service port** (`HttpControlService`): they
+   write `CoSec-Identity`'s new `memberships` (`IDN-39`), which a beta.7 host reads past. Point no service at a host's
+   operators' port meanwhile, nor ever: a beta.7 host there takes a service's own `service` credential for a person's
+   (`IDN-34`).
+2. **Then the hosts that decide on the forwarded identity** (`cosec.pipeline.caller=forwarded-identity`: the
+   control-plane image, an IAM service that embeds the control plane, a service port): they refuse a header without
+   `memberships` with `400`. A service in `gateway` mode reads both and can go in either step.
+3. **The clients of a tenant switch with, or before, the switch endpoint**: an upgraded switch needs the session's
+   token pair in its request (`IDN-22`). The instances that issue and refresh CoSec's tokens are best upgraded
+   together: a session a switch starts on an upgraded instance ends at its next refresh on a beta.7 one (`IDN-36`).
+
+The entries below say what each change asks of you.
+
+- **Breaking: the control-plane image refuses every setting that leaves it serving nothing** (`STA-10`, DR1-F-19).
+  Affected: a deployment of `cosec-control` that sets `cosec.enabled=false`, `cosec.control.http.enabled=false`,
+  `cosec.pipeline.mode` other than `enforce`, or `cosec.pipeline.caller` other than `forwarded-identity`. Each left the
+  host up with no control route, or refusing every call as anonymous; it now fails to start, naming the key. Remove the
+  setting: the image's defaults are the only ones it serves with ([Deployment](./deployment.md#the-control-plane-host)).
 - **Breaking: a tenant switch presents the session's token pair** (`IDN-22`). Affected: every application with a switch
   endpoint. A switch opened a session that refreshes on an access token alone, so a copied access token became a session
   until the login ended, and an access token of a generation already refreshed still switched. Now
@@ -208,8 +229,8 @@ Which preview of the library may run behind which preview of the gateway image: 
   goes, each as the text the engine reads, and such a DENY refuses through both. The attributes now reach the host,
   behind the service port's network policy. A user whose attributes exceed the header (8 KB in all, 1,024 characters
   for one string) can no longer call through it: the call fails before it is sent, naming the attribute and its size.
-  Upgrade the hosts before the callers if you can; a beta.7 host reads the attributes too
-  ([Deployment](./deployment.md#the-control-plane-host)).
+  Either side may go first for this change, since a beta.7 host reads the attributes too: the order at the top of this
+  section is `IDN-39`'s ([Deployment](./deployment.md#the-control-plane-host)).
 - **A change too large to analyse is one `TOO_LARGE` entry** (`CTL-49`, DR1-E-1). Affected: a tenant change whose
   granted ALLOWs come to more than 80,000 fragments (each action times each resource, for each binding that reaches
   them), and what reads a change's escalations. Such a change is counted before it is split: none of it is analysed,
@@ -243,13 +264,14 @@ Which preview of the library may run behind which preview of the gateway image: 
     service callers by `api-key` must look for `service` too.
   - **What it may do does not change.** `service`, like `api-key`, is a workload's credential: it never approves and is
     never the trust root, and it has no session and no break-glass (`AuthenticatedPrincipal.workload`, new).
-  - **Upgrade the control-plane hosts first, then the services that call them.** A beta.7 host does not know `service`
-    and takes it for a person's credential. On its service port that changes nothing: approvals are not served there and
-    nothing there is the trust root. But a service whose `cosec.control.service-url` names an operators' port of a beta.7
-    host (one that believes `CoSec-Identity`) could approve changes, and be the trust root if it is a platform
-    administrator holding `cosec:approve`, where beta.7's `api-key` could do neither. An upgraded caller of a beta.7
-    host's service port is safe; point no service at an operators' port in any case. A beta.7 caller of an upgraded
-    host keeps sending `api-key`, which the upgraded host still takes for a workload's.
+  - **The order.** A beta.7 host does not know `service` and takes it for a person's credential. On its service port
+    that changes nothing: approvals are not served there and nothing there is the trust root, so an upgraded caller of a
+    beta.7 host's service port is safe, and the order at the top of this section (callers first, `IDN-39`) holds. But a
+    service whose `cosec.control.service-url` names an operators' port of a beta.7 host (one that believes
+    `CoSec-Identity`) could approve changes, and be the trust root if it is a platform administrator holding
+    `cosec:approve`, where beta.7's `api-key` could do neither: point no service at an operators' port, whatever the
+    versions. A beta.7 caller of an upgraded host keeps sending `api-key`, which the upgraded host still takes for a
+    workload's.
 - **Your own `Authenticator` that names its credential `service`** now names a workload's: its principals can no longer
   approve a change or be the trust root, as for `api-key`. Affected: only an authenticator that used that name. Rename
   its method if its principals are people; otherwise nothing to do
@@ -344,8 +366,8 @@ Which preview of the library may run behind which preview of the gateway image: 
     Before, only the decided space's roles travelled, and a DENY attached to the caller, or one on `subject.roles` for
     a role held in another space, did not apply on such a host: the same call was denied in process.
   - Such a host refuses a header without `memberships` with `400` `invalid-request`. **Upgrade the gateways and the
-    applications that call a service port first, then the control hosts**: a beta.7 gateway's header has no
-    `memberships`. A service in `gateway` mode reads both.
+    applications that call a service port first, then the control hosts** (the order at the top of this section): a
+    beta.7 gateway's header has no `memberships`. A service in `gateway` mode reads both.
   - An application that builds an `Identity` and writes it (`IdentityHeader.write`) for such a host sets `memberships`:
     `Identity.Memberships.NONE` when the principal has nothing beyond its roles there. `Identity`'s constructor gained the
     parameter, last and nullable. The test kit's `IdentityHeader.forSubject` writes it empty.

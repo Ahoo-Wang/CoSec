@@ -27,6 +27,15 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+**按这个顺序升级。** 这个预览版有三处改动要读对方写的请求头或请求，所以滚动升级有先后；每一步完成后再做下一步：
+
+1. **网关，以及调用控制面宿主服务端口的应用**（`HttpControlService`）：它们写 `CoSec-Identity` 新增的 `memberships`（`IDN-39`），beta.7 的宿主读到时会跳过。这期间（以及任何时候）都不要让服务指向宿主的运维端口：beta.7 宿主在那里会把服务自己的 `service` 凭证当作人的凭证（`IDN-34`）。
+2. **然后是按转发身份判定的宿主**（`cosec.pipeline.caller=forwarded-identity`：控制面镜像、内嵌控制面的 IAM 服务、服务端口）：它们以 `400` 拒绝没有 `memberships` 的请求头。`gateway` 模式的服务两种都读，放在哪一步都可以。
+3. **租户切换的客户端要与切换端点同时或更早升级**：升级后的切换要求请求里带上会话的令牌对（`IDN-22`）。签发与刷新 CoSec 令牌的实例最好一起升级：在已升级实例上切换出来的会话，下一次在 beta.7 实例上刷新时会结束（`IDN-36`）。
+
+下面各条写明每项改动要你做什么。
+
+- **破坏性变更：控制面镜像拒绝一切让它什么都不提供的设置**（`STA-10`，DR1-F-19）。受影响的是设置了 `cosec.enabled=false`、`cosec.control.http.enabled=false`、`cosec.pipeline.mode` 不为 `enforce` 或 `cosec.pipeline.caller` 不为 `forwarded-identity` 的 `cosec-control` 部署。以前这些设置让宿主起来却没有控制路由，或把每个调用都当作匿名拒绝；现在启动失败并点名该键。去掉这个设置：镜像只按它自己的默认值提供服务（[部署](./deployment.md#the-control-plane-host)）。
 - **破坏性变更：租户切换出示会话的令牌对**（`IDN-22`）。受影响的是所有提供切换端点的应用。以前切换凭一张访问令牌就开出一个能刷新的会话，被复制的访问令牌因此能变成一个活到登录结束的会话，已经刷新过的代际的访问令牌也还能切换。现在 `SwitchTenantCredentials` 携带 `accessToken` 和 `refreshToken`，`SwitchTenantAuthentication` 的第一个参数是 CoSec 的 `TokenVerifier`：`SwitchTenantAuthentication(tokenVerifier, families, revocation, YourCredentials::class.java) { ... }`。像刷新路由一样从请求体读取令牌对（`{"accessToken", "refreshToken"}`），并让客户端在切换时发送它。令牌对必须是该请求所用的那一对，属于会话的当前代际（轮换宽限期内也接受刚被替换的那一代）；更早的令牌对会像刷新那样吊销会话。切换不再推进它所出自的会话（[切换租户和应用](../integration/authentication.md#switching-tenant-and-app)）。
 - **破坏性变更：`JwtTokenConverter.toToken(subject, access, refresh)` 拒绝长于配置值的有效期**（`IDN-37`）。受影响的是自己签发令牌、且指定的 access 或 refresh 有效期长于 `cosec.jwt.token-validity.access` 或 `.refresh` 的应用。吊销记录只保留到配置的有效期之后，这样的令牌在吊销记录过期后会重新有效。现在这个调用会抛出 `IllegalArgumentException` 并点名属性：改为调高属性，保留期随之变长。
 - **控制面把调用的大块工作限定在一个预算内**（`CTL-85`，DR1-F-3、DR1-F-4）。受影响的：同时提议、应用或解释许多大文档的客户端。控制面宿主拿堆的八分之一，给一次调用为自己解析的请求体、解码或编译的文档；放不下的调用按租户轮流等待，至多等 `cosec.pipeline.timeout` 的一半，否则答 `503` 加 `Retry-After: 1`，请重试。`StageBudgets` 的启动行写明等待时间，控制面的启动行写明预算；新增两个度量：`cosec.control.work.held` 与 `cosec.control.work.refused`。无需配置。
@@ -131,7 +140,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   经 `HttpControlService` 调用控制面宿主、且控制策略读取 `subject.attributes` 的应用。此前调用不带任何属性，这样的 DENY
   经 HTTP 匹配不上，调用只按 ALLOW 判定，而进程内的门面会拒绝它。现在全部属性都随调用发出，每一项都是引擎读到的文本，
   这样的 DENY 两条路都拒绝。属性因此会到达宿主，由服务端口的网络策略保护。属性超出请求头上限（合计 8 KB，单个字符串
-  1,024 个字符）的用户不能再经它调用：调用在发出之前失败，写明属性与大小。宿主能先升级就先升级；beta.7 的宿主同样会读这些属性
+  1,024 个字符）的用户不能再经它调用：调用在发出之前失败，写明属性与大小。就这项改动而言哪一方先升级都可以，因为 beta.7 的宿主同样会读这些属性：本节开头的顺序由 `IDN-39` 决定
   （[部署](./deployment.md#the-control-plane-host)）。
 - **太大而无法分析的变更只有一项 `TOO_LARGE`**（`CTL-49`，DR1-E-1）。受影响的：被授出的 ALLOW 合计超过 80,000 个片段
   （每个动作乘每个资源，再乘到达它的每条绑定）的租户变更，以及读变更越权项的程序。这样的变更在拆分之前就被计数：任何部分都不分析，
@@ -153,7 +162,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **以自己的主体调用控制面的服务记为 `service`**（`ControlCaller.service`，`IDN-34`）。受影响的：读取控制请求记录的东西，以及升级的顺序。
   - **记录。** 这样的服务所声明的身份把凭证命名为 `service`，beta.7 命名为 `api-key`。它不是 API key，记录现在照实写：它对控制面宿主的请求在决策事件与审计里的 `subject.method`、变更日志里的 `origin.via.method` 都是 `service`（经进程内 `ControlService` 的调用仍是 `in-process`）。此前存储的变更保留 `api-key`。按 `api-key` 找服务调用方的看板、告警或查询，也要找 `service`。
   - **它能做什么没有变。** `service` 和 `api-key` 一样是工作负载的凭证：从不审批，也从不是信任根，没有会话，也没有 break-glass（新增 `AuthenticatedPrincipal.workload`）。
-  - **先升级控制面宿主，再升级调用它们的服务。** beta.7 宿主不认识 `service`，把它当作人的凭证。在它的服务端口上这不改变什么：那里不提供审批，也没有人是信任根。但如果某个服务的 `cosec.control.service-url` 指向 beta.7 宿主的运维端口（相信 `CoSec-Identity` 的端口），它就能审批变更；如果它是持有 `cosec:approve` 的平台管理员，还会是信任根，而 beta.7 的 `api-key` 两样都做不到。已升级的调用方调用 beta.7 宿主的服务端口是安全的；无论如何都不要让服务指向运维端口。beta.7 调用方调用已升级的宿主时仍发送 `api-key`，已升级的宿主仍把它当作工作负载的凭证。
+  - **顺序。** beta.7 宿主不认识 `service`，把它当作人的凭证。在它的服务端口上这不改变什么：那里不提供审批，也没有人是信任根，所以已升级的调用方调用 beta.7 宿主的服务端口是安全的，本节开头的顺序（先升级调用方，`IDN-39`）成立。但如果某个服务的 `cosec.control.service-url` 指向 beta.7 宿主的运维端口（相信 `CoSec-Identity` 的端口），它就能审批变更；如果它是持有 `cosec:approve` 的平台管理员，还会是信任根，而 beta.7 的 `api-key` 两样都做不到。无论什么版本，都不要让服务指向运维端口。beta.7 调用方调用已升级的宿主时仍发送 `api-key`，已升级的宿主仍把它当作工作负载的凭证。
 - **你自己的 `Authenticator` 把凭证命名为 `service`** 时，现在命名的是工作负载的凭证：它的主体不再能审批变更或成为信任根，与 `api-key` 相同。受影响的：只有用了这个名字的认证器。如果它的主体是人，请改名；否则无需改动（[扩展 CoSec](../architecture/extending.md)）。
 - **服务器不报告对端地址的请求，其客户端地址读作取不到**（`PIP-17`，DR1-C-8）。受影响的：服务器不报告对端（例如监听 Unix 域套接字的 Reactor Netty）、且有语句或黑名单读 `environment.ip` 的主机。此前地址为空，读作不存在：按它的 DENY 不匹配，IP 黑名单也不被查询。现在它是 `unknown`，与可信代理写的 `unknown` 条目一样：这样的 DENY 与黑名单返回 `503`，三个适配器一致。在这样的主机前放一个写 `X-Forwarded-For` 的代理，并把该索引设为 `1` 或更大（[Web 集成](../integration/web.md)）；服务器报告对端的主机不受影响。
 - **长于 256 个字符的限流键值改用其哈希命名桶**（`OBL-6`，DR1-C-1）。受影响的：`key` 读取这么长的值的规则，几乎总是客户端自选的请求头。这样的桶现在是 `h:<sha-256>`，此前是 `k:<value>`（[限流](../policies/rate-limiting.md#keys)），所以它的计数会重新开始一次：在 Redis 上旧键不再被读取，两个窗口后过期；本地限流器的计数本来就只属于该实例。滚动升级期间两个版本同时服务时，这样的值会计入两个桶（每个版本一个），所以在最后一个实例升级之前，它最多得到两倍的限额。256 个字符及以内的值保留原来的桶与计数。无需改动。
@@ -174,7 +183,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **社交登录的 state 有了上界**（DR1-D-9）。受影响的：提供社交登录的部署。一个部署最多持有 Redis 报告的内存的六十四分之一的进行中登录（每个 512 字节；Redis 不报告内存时为 100,000），超过时开始登录以 `SocialAuthenticationException`（“稍后再试”）拒绝，而不是再写两把键。提供社交登录的进程需要 Redis 的 `INFO` 权限，`SNP-3` 本来就要求；没有时使用固定上界，并记一条 WARN。`InMemorySocialStateStore` 最多持有 10,000 个。除了在边缘对开始登录的路由限流，无需改动（[存储](./storage.md#redis-keys)）。
 - **破坏性变更：`CoSec-Identity` 带上调用方的全部成员关系，按它做判定的宿主要求它在**（`IDN-39`，DR2-F-1，DR2-C-1）。受影响的：`cosec.pipeline.caller=forwarded-identity` 的宿主（控制面镜像、内嵌控制面的 IAM 服务、服务端口），以及自己向这类宿主写这个请求头的应用。
   - 请求头新增 `memberships`：主体在其他每个空间中的角色，以及它附加的策略的 id。网关的转发与 `HttpControlService` 的转述总是写它，没有更多时写空的。此前只带判定所在空间的角色，附加到调用方的 DENY、或针对其在另一个空间所持角色的 `subject.roles` DENY，在这类宿主上不生效：同一调用在进程内却被拒绝。
-  - 这类宿主以 `400` `invalid-request` 拒绝没有 `memberships` 的请求头。**先升级网关和调用服务端口的应用，再升级控制面宿主**：beta.7 网关的请求头没有 `memberships`。`gateway` 模式的服务两种都读。
+  - 这类宿主以 `400` `invalid-request` 拒绝没有 `memberships` 的请求头。**先升级网关和调用服务端口的应用，再升级控制面宿主**（本节开头的顺序）：beta.7 网关的请求头没有 `memberships`。`gateway` 模式的服务两种都读。
   - 自己构造 `Identity` 并写出（`IdentityHeader.write`）给这类宿主的应用要设置 `memberships`：主体在那里的角色之外别无其他时用 `Identity.Memberships.NONE`。`Identity` 的构造函数新增了这个参数，排在最后，可为 null。测试工具包的 `IdentityHeader.forSubject` 写空的。
 
 ## 从 8.0.0-beta.6 升级 {#from-8-0-0-beta-6}
