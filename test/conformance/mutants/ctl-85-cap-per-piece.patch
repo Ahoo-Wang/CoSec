@@ -1,0 +1,18 @@
+# Rule: CTL-85
+# Mutant: each piece is capped at the budget, not each call: a call whose body holds it all is refused the document it then decodes, every time, alone on the host
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlWorkRoutesTest --tests me.ahoo.cosec.control.lifecycle.WorkBudgetTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/WorkBudget.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/WorkBudget.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/WorkBudget.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/WorkBudget.kt
+@@ -100,9 +100,7 @@ class WorkBudget(
+         // One call counts at most the capacity in all: a call that holds all of it runs alone already, and takes no
+         // more; one that holds part takes at most the rest. Its heaviest pieces together always fit, never refused for
+         // their sum alone.
+-        val room = capacity - scope.weight()
+-        if (room <= 0) return
+-        scope.add(acquire(tenant, weight.coerceAtMost(room), patience, scope.holds()))
++        scope.add(acquire(tenant, weight.coerceAtMost(capacity), patience, scope.holds()))
+     }
+ 
+     /** What the current call holds, in all: at most [capacity] (`CTL-85`); 0 outside a call. */

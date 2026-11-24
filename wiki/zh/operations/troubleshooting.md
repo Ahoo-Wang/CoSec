@@ -866,6 +866,10 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 | `... is set, but this application serves no HTTP ...`、`... is set, but login or JWT is off ...`、`... is not one plain absolute path ...`、`... name one path ...` | 取消设置[登录路由路径](./configuration.md#authentication)，或给宿主它所要求的：一个 Web 栈、`cosec.authentication.login.enabled` 和 `cosec.jwt.enabled`、每个路由一个普通路径。 |
 | `A token revocation is kept for <d>: the longer of cosec.jwt.token-validity.access (<d>) and cosec.jwt.token-validity.refresh (<d>), plus cosec.authentication.revocation.skew (<d>), shorter than cosec.control.approval.expire-after (<d>): ...` | 调大某个令牌有效期，或调小审批的有效期：吊销记录必须比它的令牌给出的每一次审批都活得长。 |
 
+## 控制调用答 503 并带 Retry-After {#a-control-call-is-503-with-retry-after}
+
+控制调用答 `503` 并带 `Retry-After: 1`，`cosec.control.work.refused` 在计数，宿主在 `INFO` 记 `... is 503: [<tenant>]'s work of <n> bytes is refused`。这不是存储故障（那种 `503` 不带 `Retry-After`，在 `WARN` 记 `the store did not answer`）：控制面的工作预算被同时解析、解码或编译的大文档占满了，这个调用在管道超时的一半之内没能放进去（`CTL-85`）。此时什么都还没读取、没决定：请重试。如果持续出现，给控制面宿主更多的堆（预算是堆的八分之一，启动行写明最大的请求体同时能跑几个），或错开大的 `POST /changes` 与 `:apply`；有别的租户在等时，循环写入的租户至多占预算的一半。
+
 ## 控制面错误 {#control-plane-errors}
 
 发往控制 API 的请求像其他请求一样先经过宿主的管道，所以管道自己的 `401`、`403`、`429`
