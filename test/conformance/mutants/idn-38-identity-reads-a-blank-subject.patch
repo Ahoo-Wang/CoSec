@@ -1,0 +1,17 @@
+# Rule: IDN-38
+# Mutant: a forwarded identity may name a blank tenant, subject or request id, so a service takes no one for an authenticated principal
+# Tests: :document:test --tests me.ahoo.cosec.document.identity.IdentityCodecTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt
+index 0000000..0000000 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt
+@@ -311,7 +311,7 @@ object IdentityCodec {
+      * Who and where: the tenant, the subject and the request. Not blank, empty or white space only (`IDN-38`): a
+      * blank subject is no one, and a service would take it as an authenticated principal. Not trimmed: ids are opaque.
+      */
+-    private fun JsonNode.name(path: String): String = id(path).ifBlank { throw malformed("$path is blank") }
++    private fun JsonNode.name(path: String): String = id(path).ifEmpty { throw malformed("$path is blank") }
+ 
+     private fun JsonNode.seconds(path: String): Instant {
+         if (!isIntegralNumber || !canConvertToLong() || longValue() !in 0..MAX_SECONDS) {

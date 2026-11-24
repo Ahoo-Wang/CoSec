@@ -138,13 +138,15 @@
     {
       "id": "SNP-9",
       "source": "RFC 0003 §4.1; RC1-46; review M3 of #1200",
-      "statement": "Every key a deployment writes to Redis lives under its one `cosec.key-prefix`: snapshot documents, control-plane records, candidates, shadow reports, revocations, memberships, API keys, rate limit counters and OAuth states. Two deployments on one Redis that differ in it share no key. An environment that sets one of the three prefixes it replaced fails startup as a key CoSec does not read, and no property turns that check off, so no revocation is left where nothing reads it.",
+      "statement": "Every key a deployment writes to Redis lives under its one `cosec.key-prefix`: snapshot documents, control-plane records, candidates, shadow reports, revocations, memberships, API keys, rate limit counters and OAuth states. Two deployments on one Redis that differ in it share no key. An environment that sets one of the three prefixes it replaced fails startup as a key CoSec does not read, and no property turns that check off, so no revocation is left where nothing reads it. The prefix is letters, digits, `_`, `.` and `-` only, never `:`, so that no deployment's prefix nests inside another's; any other prefix fails startup, naming what it holds (DR1-D-4).",
       "level": "startup",
       "guards": [
         "spring-boot:DeploymentKeyPrefixTest#every key family the starter wires lives under cosec key-prefix",
         "spring-boot:UnknownPropertiesTest#a key prefix cosec key-prefix replaced fails startup",
         "spring-boot:UnknownPropertiesTest#a replaced key prefix in the environment fails startup",
-        "spring-boot:UnknownPropertiesTest#no property turns the check off"
+        "spring-boot:UnknownPropertiesTest#no property turns the check off",
+        "spring-boot:KeyPrefixValidationTest#a prefix that could nest inside another's fails, saying what it holds and what to do",
+        "spring-boot:KeyPrefixValidationTest#startup fails on such a prefix, naming the property"
       ],
       "pending": null
     },

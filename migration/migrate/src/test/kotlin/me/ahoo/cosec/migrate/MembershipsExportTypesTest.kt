@@ -50,6 +50,15 @@ class MembershipsExportTypesTest {
             .message.assert().contains("entry 0").contains("principal")
     }
 
+    /** `IDN-38`: an entry of no one is refused, naming the entry, never read as a principal. */
+    @Test
+    fun `a blank principal is refused, naming the entry`() {
+        for (blank in listOf("", " ", "\\t")) {
+            assertThrows<IllegalArgumentException> { read("""{"tenant":"acme","principal":"$blank","roles":[]}""") }
+                .message.assert().contains("entry 0").contains("principal is blank")
+        }
+    }
+
     @Test
     fun `a real empty array still means no roles`() {
         read("""{"tenant":"acme","principal":"svc","roles":[]}""")

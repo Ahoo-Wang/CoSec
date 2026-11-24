@@ -25,6 +25,8 @@ dependencies {
     // The control API and the change records are JSON (RFC 0007 §9); Jackson stays internal (RFC 0011 D3).
     implementation("tools.jackson.core:jackson-databind")
     // PIP-25: ContractFiles, which ClientContractTest checks contract/control/ with (CTL-61).
+    // DocumentCacheTest holds the measured heap a cache entry retains (DR1-F-5).
+    testImplementation("org.openjdk.jol:jol-core")
     testImplementation(testFixtures(project(":runtime")))
     // CTL-85: the work budget's waits, on virtual time.
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")

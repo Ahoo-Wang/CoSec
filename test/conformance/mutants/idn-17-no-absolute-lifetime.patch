@@ -3,10 +3,10 @@
 # Tests: :login:test --tests me.ahoo.cosec.login.token.TokenFamiliesTest
 
 diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-index e882423e..ac41e95b 100644
+index 6f03a3ff4..3a179c92e 100644
 --- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
 +++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-@@ -116,9 +116,6 @@ class TokenFamilies @JvmOverloads constructor(
+@@ -138,9 +138,6 @@ class TokenFamilies @JvmOverloads constructor(
      suspend fun rotate(token: VerifiedToken): Issue {
          val session = token.session ?: throw TokenVerificationException("The token belongs to no session: sign in again.")
          val now = clock.instant()
@@ -16,7 +16,7 @@ index e882423e..ac41e95b 100644
          repeat(MAX_ATTEMPTS) {
              val read = sessionStore("read a session") { store.read(session.id) }
                  ?: throw TokenVerificationException("The token's session is unknown: sign in again.")
-@@ -127,9 +124,6 @@ class TokenFamilies @JvmOverloads constructor(
+@@ -149,9 +146,6 @@ class TokenFamilies @JvmOverloads constructor(
              if (family.revoked) {
                  throw TokenRevokedException("The token's session has been revoked.")
              }
@@ -25,4 +25,4 @@ index e882423e..ac41e95b 100644
 -            }
              when {
                  session.generation == family.generation -> {
-                     val next = family.rotated(now)
+                     requireRootLive(family)

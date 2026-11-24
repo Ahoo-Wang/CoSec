@@ -44,7 +44,7 @@ internal class DeliverRequired(
         if (listeners.required.isEmpty()) {
             return outcome
         }
-        val event = state.event(ids.generate(), outcome)
+        val event = state.event(state.eventId(ids), outcome)
         val failed = if (outcome.proceed) {
             val remaining = timeout - (System.nanoTime() - state.startNanos).nanoseconds
             val delivered = remaining.takeIf { it.isPositive() }?.let { left ->

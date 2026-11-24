@@ -1,0 +1,80 @@
+{
+  "rules": [
+    "CTL-83"
+  ],
+  "level": "control",
+  "options": {
+    "maxCount": 2
+  },
+  "polarity": "negative",
+  "description": "DR1-E-2: up to max-count ended changes stay: the platform document with max-count 2 keeps both of its ended changes.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "p1",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "abandon": "c1"
+    },
+    {
+      "advance": "PT1M"
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "p2",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "abandon": "c2"
+    },
+    {
+      "advance": "PT1M"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "ABANDONED",
+      "advanced",
+      "CHECKED",
+      "ABANDONED",
+      "advanced"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "platform": 0
+    }
+  }
+}

@@ -50,6 +50,7 @@ class InMemorySessionIndex(private val now: () -> Instant = Instant::now) : Sess
         val pushedOut = mutableListOf<String>()
         sessions.compute(owner) { _, existing ->
             val entry = existing ?: Sessions(ArrayDeque(), until).also { releases.add(Release(until, owner)) }
+            family.root?.let { root -> if (entry.ids.remove(root)) entry.ids.addLast(root) }
             entry.ids.remove(family.id)
             entry.ids.addLast(family.id)
             while (entry.ids.size > limit) pushedOut += entry.ids.removeFirst()

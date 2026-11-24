@@ -47,6 +47,15 @@ internal class JwtTokenConverterTest {
         }
     }
 
+    /** `IDN-38`: no token is issued for no one; white space around an id is part of it. */
+    @Test
+    fun aBlankSubjectIsNotIssued() {
+        for (id in listOf("", " ", "\t\n")) {
+            assertThrownBy<IllegalArgumentException> { jwtTokenConverter.toToken(TokenSubject(id)) }
+        }
+        Jwts.decode(jwtTokenConverter.toToken(TokenSubject(" a ")).accessToken).subject.assert().isEqualTo(" a ")
+    }
+
     @Test
     fun toToken() {
         val principal =

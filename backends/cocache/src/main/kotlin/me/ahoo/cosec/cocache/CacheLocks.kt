@@ -54,6 +54,16 @@ internal object CacheLocks {
     /** How long a revocation table keeps "not revoked" locally ([RevokedTokenCache.MISSING_TTL_SECONDS]). */
     private val NOT_REVOKED_FOR: Duration = Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS)
 
+    /** The declared local max age of a revocation table is at most [NOT_REVOKED_FOR] (`IDN-26`, DR1-D-3). */
+    private fun revocationsHeldAtMost(spec: Spec<*, *>) {
+        val localMaxAge = spec.policy.localMaxAge
+        require(localMaxAge != null && localMaxAge <= NOT_REVOKED_FOR) {
+            "CoSec's ${spec.name} keeps a revocation locally for local-max-age ($localMaxAge), longer than " +
+                "$NOT_REVOKED_FOR: past a lost invalidation, a raised revocation would be read as the older one for that " +
+                "long. Set cosec.authentication.revocation.cache.local-max-age to $NOT_REVOKED_FOR or less (IDN-26)."
+        }
+    }
+
     fun of(cacheName: String, readOnly: Boolean = false): Locks = Locks.builder(LOCKED_BY).apply {
         lockLayout(*LayoutField.entries.toTypedArray())
         // Read-only is CoSec's (SNP-18): where the control plane runs it writes the documents, and elsewhere a
@@ -98,11 +108,16 @@ internal object CacheLocks {
                 // the store's command timeout, from cocache.defaults.store.read-timeout say, would widen that.
                 constrain(PolicyField.READ_TIMEOUT) { COMMAND_TIMEOUT }
                 // "Not revoked" is kept locally for at most MISSING_TTL_SECONDS: past a lost invalidation, a longer
-                // absent-ttl would accept a revoked token for that long. Of the other fields of a Store, none can lengthen
-                // it: a missing entry lives min(absent-ttl, local-max-age); a revocation is written with a lifetime of its
-                // own, which neither ttl nor ttl-jitter shortens in Redis; local-maximum-size only evicts.
+                // absent-ttl would accept a revoked token for that long. A revocation held locally is bounded too, by
+                // local-max-age (DR1-D-3): a subject's revocation raised since is otherwise read as the older one it
+                // replaced, past a lost invalidation, for as long as the local copy lives. So the local max age the cache
+                // ends with, whatever declared or set it (cosec.authentication.revocation.cache.local-max-age, a
+                // cocache.* property, a customizer), is at most as long: a layer may tighten it, and one that lengthens it
+                // past that fails. Of the other fields, none lengthens either answer: a revocation is written with a
+                // lifetime of its own, which neither ttl nor ttl-jitter shortens in Redis; local-maximum-size only evicts.
                 lock(PolicyField.ABSENT_TTL)
                 constrain(PolicyField.ABSENT_TTL) { NOT_REVOKED_FOR }
+                verify { revocationsHeldAtMost(it) }
                 // The local copy holds the revocation tables' share of the heap (IDN-33): the declaration's count, kept.
                 lock(PolicyField.LOCAL_MAXIMUM_SIZE)
             }

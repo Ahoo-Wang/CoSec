@@ -1,0 +1,16 @@
+# Rule: IDN-26
+# Mutant: a revocation table's declared local max age is taken as written, so past a lost invalidation a raised subject revocation is read as the older one for as long as the operator set
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.authorization.cache.StrictCacheFailureTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
+index 005c8643d..f61147ba3 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
+@@ -117,7 +117,6 @@ internal object CacheLocks {
+                 // lifetime of its own, which neither ttl nor ttl-jitter shortens in Redis; local-maximum-size only evicts.
+                 lock(PolicyField.ABSENT_TTL)
+                 constrain(PolicyField.ABSENT_TTL) { NOT_REVOKED_FOR }
+-                verify { revocationsHeldAtMost(it) }
+                 // The local copy holds the revocation tables' share of the heap (IDN-33): the declaration's count, kept.
+                 lock(PolicyField.LOCAL_MAXIMUM_SIZE)
+             }

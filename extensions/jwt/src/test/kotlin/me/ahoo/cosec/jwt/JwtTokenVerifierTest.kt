@@ -330,6 +330,27 @@ class JwtTokenVerifierTest {
         jwtTokenVerifier.verify(signed { withSubject("a(b)") }).principal.assert().isEqualTo("a(b)")
     }
 
+    /**
+     * `IDN-38`: a blank subject is no one. The token is invalid where a request presents it (401 token-invalid) and where
+     * a refresh does; white space around an id is part of it, never trimmed.
+     */
+    @Test
+    fun aBlankSubjectIsInvalidOnTheRequestAndRefreshPaths() {
+        val authenticator = TokenAuthenticator(jwtTokenVerifier, RevocationReader.NONE)
+        for (subject in listOf(" ", "   ", "\t", "\u00A0")) {
+            val access = signed { withSubject(subject).withIssuedAt(issuedAt) }
+            assertThrows(TokenVerificationException::class.java) { jwtTokenVerifier.verify(access) }
+            val result = runBlocking { authenticator.authenticate(Credentials(access, null)) }
+            (result as AuthnResult.Rejected).reason.assert().isEqualTo(AuthnResult.RejectReason.TOKEN_INVALID)
+            assertThrows(TokenVerificationException::class.java) {
+                jwtTokenVerifier.refresh(CompositeToken(access, refreshOf(access)))
+            }
+        }
+        val access = signed { withSubject(" alice ").withIssuedAt(issuedAt) }
+        jwtTokenVerifier.verify(access).principal.assert().isEqualTo(" alice ")
+        jwtTokenVerifier.refresh(CompositeToken(access, refreshOf(access))).principal.assert().isEqualTo(" alice ")
+    }
+
     @Test
     fun aTokenWithoutASubjectOrIdIsInvalid() {
         val exp = Instant.now().plusSeconds(600)

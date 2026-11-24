@@ -97,14 +97,42 @@ class ControlMaintenance(
             }
             return emptyMap()
         }
+        // One instance a pass reads the open changes and reclaims, under the pass's lease (CTL-72, DR1-E-2): the others
+        // read none, where every instance read every document's open changes each hour.
+        val leased = attempt("take the reclaim lease") {
+            store.acquireLease(RECLAIM_LEASE, holder, ControlDerived.RECLAIM_INTERVAL)
+        }
+        if (leased != true) return emptyMap()
+        try {
+            return reclaimLeased(documents)
+        } finally {
+            withContext(
+                NonCancellable
+            ) { attempt("release the reclaim lease") { store.releaseLease(RECLAIM_LEASE, holder) } }
+        }
+    }
+
+    private suspend fun reclaimLeased(documents: Set<SnapshotKey>): Map<SnapshotKey, Reclaimed> {
         val reclaimed = LinkedHashMap<SnapshotKey, Reclaimed>()
         for (key in documents) {
             val keep = attempt("read the open changes of [$key]") { resting(key) } ?: continue
             attempt("reclaim the revisions of [$key]") { revisions.reclaim(key, keep) }
                 ?.takeIf { it.any }
                 ?.let { reclaimed[key] = it }
+            attempt("reclaim the ended changes of [$key]") { reclaimEnded(key) }
         }
         return reclaimed
+    }
+
+    /**
+     * The ended changes of [key] past `min-age` that published no revision still retained (`CTL-83`): after the
+     * revisions, so a revision reclaimed now no longer keeps its change. Nothing while the index does not read.
+     */
+    private suspend fun reclaimEnded(key: SnapshotKey) {
+        val index = store.index(key)?.value ?: return
+        val retained = index.entries.mapTo(HashSet()) { it.revision }
+        val removed = changes.ended.reclaim(key, revisions.retention.minAge, retained)
+        if (removed > 0) log.info { "Reclaimed $removed ended changes of [$key]." }
     }
 
     /**
@@ -264,6 +292,9 @@ class ControlMaintenance(
     @InternalCoSecApi
     companion object {
         const val SHADOW_LEASE = "shadow-windows"
+
+        /** Held by the one instance that reads the open changes and reclaims in a pass (`CTL-72`). */
+        const val RECLAIM_LEASE = "reclaim-pass"
 
         /** How many shadowing changes the pass reads a page. */
         private const val SHADOW_PAGE = 200

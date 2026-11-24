@@ -25,7 +25,7 @@ import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.api.DefaultControlPlane
-import me.ahoo.cosec.control.api.Simulator
+import me.ahoo.cosec.control.api.DocumentCache
 import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.audit.LoggingChangeListener
 import me.ahoo.cosec.control.authz.ControlAuthorizer
@@ -156,8 +156,8 @@ internal class CoSecControlAutoConfiguration {
             DocumentSnapshots.source(
                 documents,
                 compiler,
-                // Half the documents' share: the pipeline's source beside it holds the other half (SNP-24).
-                properties.snapshot.toOptions(pipeline.timeout, sources = 2),
+                // A third of the documents' share, beside the pipeline's source and the document cache (SNP-24, DR1-F-5).
+                properties.snapshot.toOptions(pipeline.timeout, sources = ControlDerived.DOCUMENT_HOLDERS),
                 clock
             ).also(compiler::bind),
             clock,
@@ -275,6 +275,7 @@ internal class CoSecControlAutoConfiguration {
         controlProperties: ControlProperties,
         resourceLoader: ResourceLoader,
         work: WorkBudget,
+        documentCache: DocumentCache,
     ): Changes {
         val ids = idGenerator.getIfAvailable { RandomIdGenerator }
         return Changes(
@@ -289,7 +290,7 @@ internal class CoSecControlAutoConfiguration {
             // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
             reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(factory, cosec.keyPrefix),
             listeners = listeners,
-            lockout = ControlChangeInputs.lockout(revisions, attributes, environment, controlProperties, work),
+            lockout = ControlChangeInputs.lockout(revisions, attributes, environment, controlProperties, work, documentCache),
         )
     }
 
@@ -315,7 +316,7 @@ internal class CoSecControlAutoConfiguration {
         shadowInterval = ControlDerived.shadowCheckInterval(properties.shadow.minDuration),
     )
 
-    /** Not replaceable: every call goes through [ChangeAuthority]. */
+    /** Not replaceable: every call goes through [ChangeAuthority]. simulate and explain compile with the host's attributes (S5). */
     @Bean
     fun cosecControlPlane(
         changes: Changes,
@@ -324,13 +325,13 @@ internal class CoSecControlAutoConfiguration {
         attributes: AttributeProviders,
         environment: Environment,
         work: WorkBudget,
+        documentCache: DocumentCache,
     ): ControlPlane =
-        // simulate and explain compile against the host's attribute providers, as enforcement does (S5).
         DefaultControlPlane(
             changes,
             revisions,
             authority,
-            Simulator(attributes = attributes.catalog, credentialHeaders = credentialHeaders(environment)),
+            ControlChangeInputs.simulator(attributes, environment, documentCache),
             work,
         )
 

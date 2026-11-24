@@ -17,6 +17,7 @@ package me.ahoo.cosec.spring.boot.control
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlLockout
+import me.ahoo.cosec.control.api.DocumentCache
 import me.ahoo.cosec.control.api.Simulator
 import me.ahoo.cosec.control.lifecycle.CandidateCompile
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
@@ -46,6 +47,14 @@ internal object ControlChangeInputs {
         RouteMaps.loadAnalysis(properties.analysis.routeMaps, resourceLoader),
     )
 
+    /** A simulator that compiles as enforcement does, over the host's one document cache (S5, DR1-F-5). */
+    fun simulator(attributes: AttributeProviders, environment: Environment, documentCache: DocumentCache): Simulator =
+        Simulator(
+            attributes = attributes.catalog,
+            credentialHeaders = credentialHeaders(environment),
+            cache = documentCache
+        )
+
     /** UC-6: a change that would keep its operator out of the control plane needs an acknowledgement. */
     fun lockout(
         revisions: Revisions,
@@ -53,9 +62,10 @@ internal object ControlChangeInputs {
         environment: Environment,
         properties: ControlProperties,
         work: WorkBudget,
+        documentCache: DocumentCache,
     ): LockoutCheck = ControlLockout(
         revisions,
-        Simulator(attributes = attributes.catalog, credentialHeaders = credentialHeaders(environment)),
+        simulator(attributes, environment, documentCache),
         AppId(properties.appId),
         work = work,
     )

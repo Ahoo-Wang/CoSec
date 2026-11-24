@@ -63,19 +63,20 @@ revocation reads that miss the local copy times the command timeout. A "not revo
 30 seconds, so a token checked again within that time sends no command.
 The rest of the cache policy stays the application's, through customizers and `cocache.*` properties
 ([Precedence](./configuration.md#precedence) lists every field CoSec locks): on every cache the local cache's size and
-`expireAfterAccess`, and but for the snapshot store `local-max-age`; on every cache but the revocation tables
-`read-timeout`, after which a store of record's read fails closed; on the two revocation tables `absent-ttl`.
-None of these replaces what a cache holds, but some lengthen how long an instance acts on what it read. A longer
-`local-max-age` or `absent-ttl` on the revocation tables keeps a revoked token accepted that much longer
-when the revocation's invalidation message is lost (`cosec.authentication.revocation.cache.local-max-age`, 30 seconds, is the
-default bound). Memberships are not a CoCache cache: each instance holds what its `MembershipLoader` answered in its
+`expireAfterAccess`, and but for the snapshot store and the revocation tables `local-max-age`; on every cache but the
+revocation tables `read-timeout`, after which a store of record's read fails closed.
+None of these replaces what a cache holds, but some lengthen how long an instance acts on what it read. The revocation
+tables are bounded whatever they say: past a lost invalidation, a "not revoked" answer and a revocation held locally (a
+subject's revocation raised since included) both live at most 30 seconds. Their `absent-ttl` is
+locked, and a `local-max-age` above 30 seconds, from `cosec.authentication.revocation.cache.local-max-age` or any
+`cocache.*` property or customizer, fails startup; one may tighten it (`IDN-26`). Memberships are not a CoCache cache: each instance holds what its `MembershipLoader` answered in its
 own memory, for [`cosec.authorization.membership.ttl`](./configuration.md#authorization), and a longer one keeps a removed
 role applied that long on an instance an invalidation did not reach.
 
 ### Redis keys
 
-`<s>` is [`cosec.key-prefix`](./configuration.md#key-prefix) (`cosec` by default) with a trailing `:` removed: every
-key a deployment writes lives under it (`SNP-9`). `<doc>` names one document: `platform`, `app:<appId>` or `tenant:<tenantId>`. App and tenant ids never
+`<s>` is [`cosec.key-prefix`](./configuration.md#key-prefix) (`cosec` by default), which holds no `:`: every key a
+deployment writes lives under it, and no deployment's prefix nests inside another's (`SNP-9`). `<doc>` names one document: `platform`, `app:<appId>` or `tenant:<tenantId>`. App and tenant ids never
 contain `:` or `/`, so a key names one document only.
 
 | Key | Written by | Contents |
@@ -89,7 +90,8 @@ contain `:` or `/`, so a key names one document only.
 | `<s>:control:changes:doc:<doc>`, `<s>:control:changes:state:<STATE>`, `<s>:control:changes:kept` | the control plane, `cosec-migrate` | the open changes, as sets: the ids of a document's open changes, `<doc>#<changeId>@<digest>` of the changes in each state that is not final, and the marker `kept`. A state's member names the record its write put there by that record's digest, as a back-reference names its revision: a write adds the member of the record it writes before it writes it, and after removes the member of the record it replaced from that record's state and, once the change is final, the id from its document. A change that comes back to a state comes back as another record, so a removal that runs late never takes its member. The sets hold every open change and may hold a few more members: a crash, a failed removal or a conditional write that lost leaves one behind. A listing shows a change once, when its record is in that state, whatever members name it; it keeps the member of that record and removes the others at once when the change is final, otherwise once the instance has seen them so for one reclaim pass (1 hour), since a write in flight lists its record before the record is there. Until then a stale member costs each listing of its set one record read. They are trusted only once `kept` is there and no `<s>:control:list:open-changes` is: until then the control plane reclaims nothing and `GET /changes` is `503` (`CTL-54`) |
 | `<s>:control:list:open-changes`, `<s>:control:list:documents` | a control plane before 8.0.0-beta.5 | the open changes and the documents, each as one value, in the format before 8.0.0-beta.5. They are there only until `repair-references` converts the store, which removes each last: while the document list is there, the control plane logs an `ERROR` at startup and `cosecControlStoreFormat` is `DOWN`; while the open-change list is, the open-change sets are not trusted. A control plane of an earlier version writes them again: stop it before the upgrade |
 | `<s>:control:apps:all` | the control plane, `cosec-migrate` | the app list: the app documents there are, and whether the list is complete, which the grant analysis reads on every tenant change ([below](#publishing-through-the-control-plane)) |
-| `<s>:control:change:<changeId>` | the control plane | a change request |
+| `<s>:control:changes:ended:<doc>` | the control plane | the document's ended changes, as a set of `<epoch millis of the end>#<changeId>` (`CTL-83`): a write that ends a change adds its member before it writes the record, so a write that lost leaves an extra member, and the latest end of a change is the one read. A document keeps at most `cosec.control.revisions.max-count` of them: the write that ends a change removes the oldest past that bound, record and members, whatever their age, and the reclamation pass removes those older than `min-age` whose change published no revision still retained. A change that ended under 8.0.0-beta.7 or earlier is not listed, so neither removes it |
+| `<s>:control:change:<changeId>` | the control plane | a change request; an ended one stays only as long as `<s>:control:changes:ended:<doc>` keeps it |
 | `<s>:control:stage:<doc>` | the control plane | the staging slot of a document: which change holds it |
 | `<s>:candidate:<doc>` | the control plane | the staged candidate of a document while its shadow window is open (its window, its base revision and the candidate document, whose header is its own); the change it belongs to removes it, only while it is still its own (`CTL-26`) |
 | `<s>:candidate-staged:all` | the control plane | the staged list (`CTL-46`): one member `<doc>/<window>` per staged candidate, added before the candidate is written and removed after it is withdrawn, so it lists every staged candidate and may list one already gone. The shadow pass withdraws a listed candidate no shadowing change names (a withdrawal that failed) and removes a member whose candidate is gone, each once two passes in a row found it so. An instance skips a member it cannot read (a later form), which costs samples at most. Then a marker, `.kept`, which says a control plane keeps it. Without the marker no list is kept, and instances read candidates by key. Never expires. A downgrade to a control plane that keeps no list must delete this key: a list nobody keeps can only cost shadow samples, never pass a window. A data-plane instance reads it, from Redis, at the start of each report interval ([10 seconds](./configuration.md#computed-not-configured)) and keeps what it read in memory: with a list, it reads only a listed document's candidate and samples only requests whose view reads a listed document, so with no window open a request does no shadow work at all; without the marker, or while the list cannot be read, it reads every candidate by key and samples as before, never taking an unreadable list for an empty one (`CTL-47`). What it read may be one interval old, which costs samples (a new window is sampled from the next read; a closed one is asked for and gives nothing), never a sample of another window's candidate |
@@ -155,7 +157,7 @@ decision inputs stay strict: they carry no such tolerance.
 | Shadow report (`shadow:report:<window>:<instance>`) | `format: 1` | ignored | the window cannot be looked at (`503`) until the report reads or is written again |
 | Reporters of a window (`shadow:reporters:<window>`) | `format: 1` | ignored | the window cannot be judged until it is written again |
 | Instance status and its index (`shadow:status:*`) | `format: 1`, with `formatLevel` | ignored | the propagation of a revision cannot be read (`GET .../propagation`); publishing does not wait for it; no shadow window passes until it can be read (`CTL-10`) |
-| Session (`token:family:<id>`) | `format: 1` | ignored | the session ends: its refresh is refused and the user signs in again |
+| Session (`token:family:<id>`) | `format: 1`; `format: 2` for a session a tenant switch started, which names its `root` (`IDN-36`) | ignored | the session ends: its refresh is refused and the user signs in again |
 | API key (`apikey:*`) | `format: 3` | refused | the key is refused |
 | Revocations, leases, rate-limit counters | none (scalar) | not applicable | as each says above |
 
@@ -466,11 +468,34 @@ customizer reaches only that client, behind the Redis templates (API keys, the r
 builds its own client for the documents, the control-plane records and the revocations ([Redis client](#redis-requirements)),
 and configures it itself.
 
+```kotlin
+@Bean
+fun boundedLettuce(): LettuceClientConfigurationBuilderCustomizer = LettuceClientConfigurationBuilderCustomizer {
+    it.clientOptions(
+        ClientOptions.builder()
+            // The commands one connection holds: about the request rate that sends commands, times the command timeout.
+            .requestQueueSize(2_000)
+            .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS)
+            .build()
+    )
+}
+```
+
+Size `requestQueueSize` as the page reasons for revocations: the rate of commands on that client times the command
+timeout (1,000 commands a second and a 2-second timeout is 2,000). Past it, and while disconnected with
+`REJECT_COMMANDS`, a command fails at once, which each of those features answers as it answers an unavailable Redis. No
+meter counts the commands waiting: what you see while it happens is the latency of the requests that use those
+features (an API key, a Redis rate limit, a social sign-in), and Lettuce's own reconnect lines in the log. CoCache's
+client, connected to a Redis that hangs, has no bound by number either; its command timeout,
+`cocache.redis.command-timeout`, is the bound, and CoSec does not change it.
+
 **Loads in flight are bounded by time, not by number.** A document being loaded counts toward neither its family's bound
 for documents nor the one for ids without a document until its load ends: it fails after the store read timeout (30 seconds)
 while Redis hangs, though the request waiting for it answers `503` after the cold-load timeout. So credentials for new app ids
 used at a high rate keep up to that rate × 30 seconds of loads, and their pending Lettuce commands, in memory
-during such an outage; `requestQueueSize` bounds the commands. None of them ever pushes out an installed document.
+during such an outage; `requestQueueSize` bounds the commands. None of them ever pushes out an installed document. What
+you see: `cosec.snapshot.loads` with `result=timeout` rising ([Metrics](./observability.md)), and the requests that
+needed those documents answered `503`; no meter counts the loads in flight.
 
 **Apps without a document share 256 places.** The app ids an instance remembers as having no document, at most
 the app family's absent entries (256 at 2 GiB, `SNP-7`), are shared by every tenant. Credentials issued for many apps that have no app document push out the real apps

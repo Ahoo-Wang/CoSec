@@ -331,8 +331,9 @@ fun interface MembershipProvider {
 
 `TokenRevoker.revokeSubject(tenant, principal, issuedBefore = now)`（挂起函数）在吊销表里写一条 `(tenant, principal) → issuedBefore`。
 吊销的判断只有一处，`TokenRevocation`（`cosec-runtime`），管道、刷新与登出共用：拒绝 `iat` 早于 `issuedBefore`（再加上时钟偏差
-`cosec.authentication.revocation.skew`）的 token，管道与刷新用同一个偏差，所以管道拒绝的 token 不会被刷新（`MEM-4`）。条目保留到 refresh token
-的最长寿命。一次吊销让每个实例本地的"未吊销"答案立即失效；错过失效通知的实例至多保留 30 秒（`IDN-26`）。这是 RFC 0001 §7.1"紧急撤销"依赖的手段
+`cosec.authentication.revocation.skew`）的 token，管道与刷新用同一个偏差，所以管道拒绝的 token 不会被刷新（`MEM-4`）。条目（与单个 token 的吊销）
+保留到它能点名的每个 token 都已过期之后：`cosec.jwt.token-validity.access` 与 `cosec.jwt.token-validity.refresh` 中较长的一个，再加
+`cosec.authentication.revocation.skew`（签发方的时钟可能快这么多，`IDN-29`）；这个值是算出的，不配置，控制面检查“吊销活得比审批久”时读同一个值（`IDN-37`）。一次吊销让每个实例本地的"未吊销"答案立即失效；错过失效通知的实例至多保留 30 秒（`IDN-26`）。这是 RFC 0001 §7.1"紧急撤销"依赖的手段
 （§3 I17，Q13）。
 
 **读不到吊销表时**：两个吊销表是 CoCache 8 的 `Store`，读失败一律抛出：`RevocationReader` 抛出 `RevocationUnavailableException`，从不回答"未吊销"。

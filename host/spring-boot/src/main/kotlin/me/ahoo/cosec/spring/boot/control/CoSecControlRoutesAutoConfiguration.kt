@@ -29,6 +29,7 @@ import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
+import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
@@ -258,12 +259,15 @@ internal class CoSecControlRoutesAutoConfiguration {
             authorization: RuntimeAuthorizationProperties,
             properties: ControlProperties,
             context: ApplicationContext,
+            bodies: ProblemBodies,
         ): ControlRoutesWebFilter = ControlRoutesWebFilter(
             PipelineWebFilter(
                 pipeline,
                 contributors.orderedStream().toList(),
                 ReactiveClientIp.of(CoSecPipelineWebAutoConfiguration.clientIpOf(context, authorization)),
                 CoSecPipelineWebAutoConfiguration.hostOf(authorization),
+                // PIP-34: the control routes' refusals carry the host's body, as its gateway filter's do (DR1-C-7d).
+                bodies,
             ),
             basePathOf(properties),
         )

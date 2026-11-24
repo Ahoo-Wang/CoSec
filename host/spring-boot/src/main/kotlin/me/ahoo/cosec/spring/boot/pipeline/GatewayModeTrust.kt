@@ -109,7 +109,8 @@ internal object GatewayModeTrust {
         classLoader: ClassLoader? = GatewayModeTrust::class.java.classLoader,
     ): Boolean = !isGatewayMode(environment) && ControlPlaneCondition.wired(classLoader, environment)
 
-    private fun isGatewayMode(environment: Environment): Boolean =
+    /** Whether [PipelineProperties.MODE_KEY] is `gateway`: a service behind a gateway, which believes the identity it is stated. */
+    fun isGatewayMode(environment: Environment): Boolean =
         environment.getProperty(PipelineProperties.MODE_KEY).equals("gateway", ignoreCase = true)
 
     /**

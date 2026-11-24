@@ -27,7 +27,7 @@ description: "把 CoSec 接入 Spring WebFlux、Spring MVC 或 Spring Cloud Gate
 
 **Spring Cloud Gateway。** 类路径上有网关的 `GlobalFilter` 时，starter 注册 `PipelineGatewayFilter`，不注册 `PipelineWebFilter`。差异见[网关](#gateway)。
 
-starter 在启动时检查适配器（STA-1）：缺少 `cosec-webmvc` 的 Spring MVC 宿主、缺少 `cosec-webflux` 的 WebFlux 宿主、缺少 `cosec-gateway` 的 Spring Cloud Gateway 宿主都无法启动，报错信息会给出制品名。即使 `cosec.enabled=false` 也会检查网关宿主，因为剥离客户端 `CoSec-Identity` 头的网关过滤器随 `cosec-gateway` 提供。各模块还需要什么，见[模块列表](../guide/introduction.md#modules)。
+starter 在启动时检查适配器（STA-1）：缺少 `cosec-webmvc` 的 Spring MVC 宿主、缺少 `cosec-webflux` 的 WebFlux 宿主、缺少 `cosec-gateway` 的 Spring Cloud Gateway 宿主都无法启动，报错信息会给出制品名。即使 `cosec.enabled=false` 也会检查网关宿主，因为剥离客户端 `CoSec-Identity` 头的网关过滤器随 `cosec-gateway` 提供。各模块还需要什么，见[模块列表](../guide/introduction.md#modules)。所有 bean 创建完后，它还检查门本身：开启了 CoSec 的 Web 宿主如果三种过滤器一个都没注册（既没有该类型的 bean，也没有包着它的 `FilterRegistrationBean`），就无法启动（[信息](../operations/troubleshooting.md#startup-fails-on-a-missing-module)）。应用可以用同一种过滤器的自己的实例替换适配器的 bean；别的类型的过滤器不算门。
 
 ## 请求的处理过程 {#how-a-request-is-handled}
 
@@ -465,6 +465,10 @@ spring:
 **客户端无法伪造它。** 每个网关宿主都会在任何其他过滤器运行之前移除客户端发送的 `CoSec-Identity`（`IdentityStripFilter`），并在最后一跳、所有路由过滤器之后再移除一次（`IdentityHeadersFilter`），只发送管道转发的值。无论 `cosec.pipeline.mode` 或 `cosec.enabled` 如何设置，两者都会运行，因此添加该请求头的路由过滤器也无法转发身份。按策略决策（`cosec.pipeline.mode=enforce`）的 WebFlux 或 Spring MVC 宿主也会在处理器看到请求之前移除它，因此调用网关之后服务的服务无法转递客户端写的身份。读取 `http.header.cosec-identity` 的条件无法编译。
 
 **不转发身份的情况**：匿名的 Permit、被拒绝的请求、不接收身份的路由、认证器没有给出凭证的主体（CoSec 的令牌和 API key 认证器总会给出），或设置了 `cosec.gateway.identity.enabled=false`。
+
+**由路由决定，而不是最终的 URL。** 请求是否接收身份，按它的路由来读：路由的元数据，或它的 `lb://` URI。之后改写 URL 的路由过滤器（Spring Cloud Gateway 的 `RequestHeaderToRequestUri`，其 URL 来自客户端的头；`SetRequestUri`；或你自己的过滤器）会把身份、以及开启 `forward-authorization` 时的凭证，发往 URL 现在指向的任何地方。不要把这类过滤器与接收身份的路由一起使用。
+
+**参数里的方法覆盖会到达后端。** 网关按请求行的方法判定，并去掉方法覆盖头（`PIP-31`），但 `_method` 查询参数或表单参数会被放过：`POST /orders/1?_method=DELETE` 按 `http:POST` 判定，而运行 Spring hidden-method 过滤器的后端会把它当作 `DELETE` 来处理。网关之后的 CoSec 服务在启动时拒绝这个过滤器（`STA-6`）；在其他后端里请关掉它（`spring.mvc.hiddenmethod.filter.enabled=false`，默认就是关的）。
 
 **它携带的内容。** 值是紧凑 JSON 的 base64url 编码（无填充），格式版本 1；JSON Schema 是 [`schema/8.0/cosec-identity.schema.json`](https://cosec.ahoo.me/schema/8.0/cosec-identity.schema.json)。
 

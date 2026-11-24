@@ -54,6 +54,8 @@ internal class ChangeLifecycle(
     private val slots: StagingSlots,
     private val listeners: ChangeListeners,
     private val authority: ChangeAuthority,
+    /** The bound on each document's ended changes, kept after each write that ends one (`CTL-83`). */
+    private val ended: EndedChanges,
 ) {
     /**
      * The change [id] as [operator] may see it (review K2): one that does not exist, is of a document the hard rule
@@ -162,6 +164,7 @@ internal class ChangeLifecycle(
             check(expired.state in ChangeStep.EXPIRE.to)
             if (store.putChange(current.digest, expired, current.value.state)) {
                 slots.release(expired)
+                ended.bound(expired.key)
                 return expired
             }
         }
@@ -190,6 +193,7 @@ internal class ChangeLifecycle(
             // The table decides where a step may take a change: anything else is a fault, and nothing is written.
             check(updated.state in step.to) { "$step leaves a change in ${step.to}, not in ${updated.state}" }
             if (store.putChange(current.digest, updated, current.value.state)) {
+                if (updated.state.terminal) ended.bound(updated.key)
                 return updated
             }
         }

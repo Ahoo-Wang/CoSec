@@ -38,12 +38,12 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 - **CoSec 无法解码的值使读取失败，并留在 Redis 中。** 它永远不会被回收（删除），因为回收会删掉唯一的副本。用普通
   Redis 命令写入的值就属于这种值：只通过控制面或 `cosec-migrate` 写入文档（[发布文档](#publishing-documents)）。
 
-**CoCache 定制器还能改变什么。** CoSec 锁定决定缓存内容的部分：key 前缀、命名空间、key 编码、编解码器、数据来源、key 过滤器和按条目的生存期（[优先级](./configuration.md#precedence)）。无法读取的吊销使读取失败。影子缓存保持声明的寿命；吊销表的读取等待存储的整个命令超时（`cocache.redis.command-timeout`）：超时的读取是“无法读取”，流水线校验令牌时会接受它，所以任何 `read-timeout` 都不能缩短它。CoSec 的吊销读取器有自己更短的预算：它的两次读取各自在吊销读取超时（认证超时的 30 %，默认 300 毫秒）内结束，两次都远在认证器的预算（认证超时，即 `cosec.pipeline.timeout` 的 20 %，默认 1 秒）之内，因此挂起的 Redis 被当作拒绝连接的 Redis 处理，令牌被接受，而不是每个已认证请求都回答 `503`。超时的吊销读取留下的命令在 CoCache 的 Redis 客户端上等待，直到 `cocache.redis.command-timeout`（2 秒）。该客户端在断开期间拒绝命令，所以 Redis 宕机时每次读取立即失败；而在连接着一个挂起的 Redis 时，没有什么按数量限制等待中的命令（CoCache 不设置 `requestQueueSize`，CoSec 也不配置 CoCache 的客户端）。堆积量是未命中本地副本的吊销读取速率乘以命令超时。“未吊销”的答案在本地最多保留 30 秒，因此在这段时间内再次检查的令牌不会发出命令。缓存策略的其余部分仍由应用经定制器和 `cocache.*` 配置项决定（[优先级](./configuration.md#precedence)列出 CoSec 锁定的每个字段）：每个缓存的本地缓存大小和 `expireAfterAccess`，以及快照存储以外的 `local-max-age`；除吊销表以外每个缓存的 `read-timeout`，超时后权威存储的读取失败即拒绝；两个吊销表还有 `absent-ttl`。这些都不会替换缓存的内容，但有些会延长实例依据已读内容行事的时间。吊销表上更长的 `local-max-age` 或 `absent-ttl`，会在吊销的失效消息丢失时让被吊销的令牌多被接受这么久（默认的界是 `cosec.authentication.revocation.cache.local-max-age`，30 秒）。成员关系不是 CoCache 缓存：每个实例把它的 `MembershipLoader` 的回答放在自己的内存里，保留 [`cosec.authorization.membership.ttl`](./configuration.md#authorization)，更长的值会让已移除的角色在没收到失效通知的实例上多生效这么久。
+**CoCache 定制器还能改变什么。** CoSec 锁定决定缓存内容的部分：key 前缀、命名空间、key 编码、编解码器、数据来源、key 过滤器和按条目的生存期（[优先级](./configuration.md#precedence)）。无法读取的吊销使读取失败。影子缓存保持声明的寿命；吊销表的读取等待存储的整个命令超时（`cocache.redis.command-timeout`）：超时的读取是“无法读取”，流水线校验令牌时会接受它，所以任何 `read-timeout` 都不能缩短它。CoSec 的吊销读取器有自己更短的预算：它的两次读取各自在吊销读取超时（认证超时的 30 %，默认 300 毫秒）内结束，两次都远在认证器的预算（认证超时，即 `cosec.pipeline.timeout` 的 20 %，默认 1 秒）之内，因此挂起的 Redis 被当作拒绝连接的 Redis 处理，令牌被接受，而不是每个已认证请求都回答 `503`。超时的吊销读取留下的命令在 CoCache 的 Redis 客户端上等待，直到 `cocache.redis.command-timeout`（2 秒）。该客户端在断开期间拒绝命令，所以 Redis 宕机时每次读取立即失败；而在连接着一个挂起的 Redis 时，没有什么按数量限制等待中的命令（CoCache 不设置 `requestQueueSize`，CoSec 也不配置 CoCache 的客户端）。堆积量是未命中本地副本的吊销读取速率乘以命令超时。“未吊销”的答案在本地最多保留 30 秒，因此在这段时间内再次检查的令牌不会发出命令。缓存策略的其余部分仍由应用经定制器和 `cocache.*` 配置项决定（[优先级](./configuration.md#precedence)列出 CoSec 锁定的每个字段）：每个缓存的本地缓存大小和 `expireAfterAccess`，以及快照存储和吊销表以外的 `local-max-age`；除吊销表以外每个缓存的 `read-timeout`，超时后权威存储的读取失败即拒绝。这些都不会替换缓存的内容，但有些会延长实例依据已读内容行事的时间。吊销表不受它们影响：失效消息丢失后，“未吊销”的答案和本地持有的吊销（包括之后被提高的主体吊销）都最多保留 30 秒。它们的 `absent-ttl` 被锁定；`local-max-age` 超过 30 秒时启动失败，无论来自 `cosec.authentication.revocation.cache.local-max-age` 还是任何 `cocache.*` 配置项或定制器；可以把它调小（`IDN-26`）。成员关系不是 CoCache 缓存：每个实例把它的 `MembershipLoader` 的回答放在自己的内存里，保留 [`cosec.authorization.membership.ttl`](./configuration.md#authorization)，更长的值会让已移除的角色在没收到失效通知的实例上多生效这么久。
 
 ### Redis key {#redis-keys}
 
-`<s>` 是 [`cosec.key-prefix`](./configuration.md#key-prefix)（默认 `cosec`），去掉末尾的 `:`：一个部署写入的每个
-key 都在它之下（`SNP-9`）。
+`<s>` 是 [`cosec.key-prefix`](./configuration.md#key-prefix)（默认 `cosec`），其中没有 `:`：一个部署写入的每个
+key 都在它之下，任何部署的前缀都不会嵌套在另一个部署的前缀里（`SNP-9`）。
 `<doc>` 指一个文档：`platform`、`app:<appId>` 或 `tenant:<tenantId>`。应用 id 和租户 id 不含 `:` 和 `/`，所以一个 key
 只对应一个文档。
 
@@ -58,7 +58,8 @@ key 都在它之下（`SNP-9`）。
 | `<s>:control:changes:doc:<doc>`、`<s>:control:changes:state:<STATE>`、`<s>:control:changes:kept` | 控制面、`cosec-migrate` | 未完成的变更，以集合保存：一个文档的未完成变更 id；每个非终态中变更的 `<doc>#<changeId>@<digest>`；以及标记 `kept`。状态集合的成员以记录的摘要指明是哪次写入放进去的，就像反向引用指明它的修订：写入在写记录之前加入所写记录的成员，之后从被替换记录的状态中移除被替换记录的成员，变更到终态时再从文档中移除它的 id。回到某个状态的变更是以另一条记录回去的，所以迟到的移除不会拿走它的成员。集合包含每个未完成的变更，也可能多出几个成员：崩溃、失败的移除或落败的条件写入会留下一个。列出时，变更的记录处于该状态就列出一次，无论有几个成员指向它；保留该记录的成员，其余成员在变更已到终态时立即移除，否则要等本实例看到它们如此持续满一轮回收（1 小时）之后才移除，因为进行中的写入先登记记录，记录之后才写入。在此之前，一个过时成员让所在集合的每次列出多读一条记录。只有 `kept` 存在且 `<s>:control:list:open-changes` 不存在时才信任它们：在此之前控制面不回收任何东西，`GET /changes` 返回 `503`（`CTL-54`） |
 | `<s>:control:list:open-changes`、`<s>:control:list:documents` | 8.0.0-beta.5 之前的控制面 | 8.0.0-beta.5 之前格式的未完成变更和文档，各为一个值。它们只在 `repair-references` 转换存储之前存在，该命令最后才分别删除它们：文档列表存在期间，控制面在启动时记录一条 `ERROR`，`cosecControlStoreFormat` 为 `DOWN`；未完成变更列表存在期间，未完成变更集合不被信任。更早版本的控制面会重新写入它们：升级前先停掉它 |
 | `<s>:control:apps:all` | 控制面、`cosec-migrate` | app 列表：现有的 app 文档，以及列表是否完整；授出分析在每次租户变更时读取它（[见下文](#publishing-through-the-control-plane)） |
-| `<s>:control:change:<changeId>` | 控制面 | 一个变更请求 |
+| `<s>:control:changes:ended:<doc>` | 控制面 | 文档已结束的变更，以 `<结束时刻的纪元毫秒>#<changeId>` 的集合保存（`CTL-83`）：结束变更的写入在写记录之前加入成员，所以落败的写入会多留一个成员，读取时取一个变更最晚的结束时刻。一个文档至多保留 `cosec.control.revisions.max-count` 个：结束变更的写入删除超出该上限的最早那些（记录和成员一起），不论年龄；回收任务删除早于 `min-age`、且其变更发布的修订已不再保留的那些。在 8.0.0-beta.7 或更早版本下结束的变更没有登记，所以两者都不会删除它 |
+| `<s>:control:change:<changeId>` | 控制面 | 一个变更请求；已结束的变更请求只在 `<s>:control:changes:ended:<doc>` 保留它时存在 |
 | `<s>:control:stage:<doc>` | 控制面 | 一个文档的暂存槽：哪个变更占用它 |
 | `<s>:candidate:<doc>` | 控制面 | 影子窗口打开期间一个文档暂存的候选（它的窗口、基准修订和候选文档，文档的头部是它自己的）；由它所属的变更删除，且只在它仍是该变更的候选时删除（`CTL-26`） |
 | `<s>:candidate-staged:all` | 控制面 | 暂存列表（`CTL-46`）：每个暂存的候选一个成员 `<doc>/<window>`，在候选写入之前加入、在它被撤回之后删除，所以它列出每个暂存的候选，也可能列出已经不在的。影子任务会撤回没有影子变更指向的已列出候选（撤回失败留下的），并删除候选已不在的成员，二者都要连续两轮都这样才动手。实例跳过读不懂的成员（更新的格式），最多只是少得样本。此外还有一个标记 `.kept`，表示有控制面维护它。没有标记就没有人维护列表，实例按 key 读取候选。永不过期。降级到不维护列表的控制面时必须删除这个 key：没人维护的列表只会让影子窗口少得样本，绝不会让窗口通过。数据面实例在每个报告间隔（[10 秒](./configuration.md#computed-not-configured)）开始时从 Redis 读取它，并把读到的内容保存在内存中：有列表时，它只读取已列出文档的候选，只对视图读取已列出文档的请求采样，所以没有打开的窗口时请求完全不做影子工作；没有标记，或者列表读不出来时，它按 key 读取每个候选并照旧采样，绝不把读不出来的列表当成空列表（`CTL-47`）。读到的内容最多晚一个周期，这只会少得样本（新窗口从下一次读取起才被采样；已关闭的窗口仍会被询问但什么也得不到），绝不会采样到另一个窗口的候选 |
@@ -114,7 +115,7 @@ CoSec 保存在 Redis 中的每条记录，都说明了读取它的实例比写�
 | 影子报告（`shadow:report:<window>:<instance>`） | `format: 1` | 忽略 | 在报告重新可读或被重新写入之前，无法查看该窗口（`503`） |
 | 窗口的报告者（`shadow:reporters:<window>`） | `format: 1` | 忽略 | 在重新写入之前无法评判该窗口 |
 | 实例状态及其索引（`shadow:status:*`） | `format: 1`，带 `formatLevel` | 忽略 | 无法读取修订的传播情况（`GET .../propagation`）；发布不等待它；在能读取之前，没有影子窗口会通过（`CTL-10`） |
-| 会话（`token:family:<id>`） | `format: 1` | 忽略 | 会话结束：刷新被拒绝，用户重新登录 |
+| 会话（`token:family:<id>`） | `format: 1`；租户切换开始的会话是 `format: 2`，记下它的 `root`（`IDN-36`） | 忽略 | 会话结束：刷新被拒绝，用户重新登录 |
 | API key（`apikey:*`） | `format: 3` | 拒绝 | key 被拒绝 |
 | 吊销、租约、限流计数器 | 无（标量） | 不适用 | 见上文各自的说明 |
 
@@ -332,7 +333,22 @@ sequenceDiagram
 CoSec 不改动这个客户端：它由应用共享。这个 customizer 只作用于这个客户端，即 Redis template 背后的那个（API key、限流器、OAuth state）；
 CoCache 为文档、控制面记录和吊销记录自建客户端（[Redis 客户端](#redis-requirements)），由它自己配置。
 
-**正在进行的加载按时间而不是按数量受限。** 正在加载的文档在加载结束之前，既不计入族的文档上限，也不计入没有文档的 id 的上限：Redis 挂起时，它在存储读取超时（30 秒）之后失败，而等待它的请求在冷加载超时之后回答 `503`。因此在这样的故障期间，以很高速率使用新应用 id 的凭证最多能让该速率 × 30 秒的加载及其待发的 Lettuce 命令留在内存中；`requestQueueSize` 限制这些命令。它们都不会挤出已安装的文档。
+```kotlin
+@Bean
+fun boundedLettuce(): LettuceClientConfigurationBuilderCustomizer = LettuceClientConfigurationBuilderCustomizer {
+    it.clientOptions(
+        ClientOptions.builder()
+            // 一个连接持有的命令数：大约是发出命令的请求速率乘以命令超时。
+            .requestQueueSize(2_000)
+            .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS)
+            .build()
+    )
+}
+```
+
+`requestQueueSize` 的估算方法与本页对吊销的推算相同：该客户端上的命令速率乘以命令超时（每秒 1,000 条命令、超时 2 秒，即 2,000）。超过它，以及设置了 `REJECT_COMMANDS` 后在断开期间，命令立即失败，各功能像应对 Redis 不可用那样应答。没有 meter 统计等待中的命令：发生时能看到的是用到这些功能的请求（API key、Redis 限流、社交登录）延迟变高，以及日志里 Lettuce 自己的重连记录。CoCache 的客户端连着一个挂起的 Redis 时，同样没有按数量的上限；它的命令超时 `cocache.redis.command-timeout` 就是上限，CoSec 不改动它。
+
+**正在进行的加载按时间而不是按数量受限。** 正在加载的文档在加载结束之前，既不计入族的文档上限，也不计入没有文档的 id 的上限：Redis 挂起时，它在存储读取超时（30 秒）之后失败，而等待它的请求在冷加载超时之后回答 `503`。因此在这样的故障期间，以很高速率使用新应用 id 的凭证最多能让该速率 × 30 秒的加载及其待发的 Lettuce 命令留在内存中；`requestQueueSize` 限制这些命令。它们都不会挤出已安装的文档。能看到的是：`cosec.snapshot.loads` 中 `result=timeout` 上升（[指标](./observability.md)），需要这些文档的请求回答 `503`；没有 meter 统计在途的加载。
 
 **没有文档的应用共用 256 个位置。** 实例记住的没有文档的应用 id 是应用族的"不存在"条目（2 GiB 时 256 个，`SNP-7`），由所有租户共用。为大量没有应用文档的应用签发的凭证会挤出那些确实没有应用文档的真实应用，于是这些应用中的请求会再次读取 Redis（不需要编译），直到它们重新被记住。这仍然失败即拒绝，但对 `fail-closed.tenants` 中的租户，这种应用从本地副本加载的条目按 `local-max-age` 的年龄计：当 `fail-closed.max-lag` 小于 `local-max-age` 时，它的请求回答 `503`，直到 Redis 随即确认它。租户 id 来自凭证，因此租户族不能被这样淹没。
 
