@@ -22,7 +22,10 @@ import java.util.concurrent.atomic.AtomicLongArray
  * The stored records this process refused by [StoredFormat]'s rule (`OBS-12`), by [StoredRecord] and [Reason]: the meter
  * `cosec.stored.refused` with `cosec-micrometer`. A record a later version wrote ([Reason.LATER]) tells an older instance
  * apart from a store that is broken ([Reason.MALFORMED]): during a rolling upgrade the first is expected, and ends when
- * every instance runs the later version (RFC 0014 G3). One count per process, whichever store or caller read the record.
+ * every instance runs the later version (RFC 0014 G3).
+ *
+ * A process-wide count, held by this object: whichever store or caller read the record, and shared by every application
+ * context in one JVM (two starters, a test's several contexts). A test asserts how much a count grew, never its value.
  */
 @InternalCoSecApi
 object StoredRefusals {
