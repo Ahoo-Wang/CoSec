@@ -73,7 +73,7 @@ internal object TokenFamilyCodec : Codec<TokenFamily> {
         return TokenFamily(
             id = node.text("id"),
             tenant = TenantId(node.text("tenant")),
-            principal = PrincipalId(node.text("principal")),
+            principal = PrincipalId(node.text("principal").ifBlank { malformed("its principal is blank") }),
             authTime = node.instant("authTime"),
             expiresAt = node.instant("expiresAt"),
             generation = generation.asLong(),

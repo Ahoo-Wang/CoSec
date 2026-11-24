@@ -30,7 +30,8 @@ import java.util.Collections
  * verifies a token (a request, a refresh, a logout). A token that breaks one is invalid, and the constructor throws
  * [TokenVerificationException], the verifier's own way of saying so:
  *
- * - [principal] is not empty and does not begin with `(`, which is CoSec's, as for tenants and spaces (`IDN-12`);
+ * - [principal] is not blank, empty or white space only (`IDN-38`), and does not begin with `(`, which is CoSec's, as for
+ *   tenants and spaces (`IDN-12`);
  * - [tenant], when the token has one, is not empty (`IDN-11`): mapped to the default tenant, it would move the principal;
  *   and it names one tenant document, as [SnapshotKey.Tenant.isValidTenantId] takes it: not blank or `*`, no `:`, `/` or
  *   control character, at most 128 characters;
@@ -79,7 +80,7 @@ class VerifiedToken(
     init {
         when {
             id.isEmpty() -> invalid("has no id")
-            principal.isEmpty() -> invalid("has no subject")
+            principal.isBlank() -> invalid("has no subject")
             Identifiers.isReserved(principal) -> invalid("names a subject reserved for CoSec")
             tenant != null && tenant.isEmpty() -> invalid("names an empty tenant")
             tenant != null && !SnapshotKey.Tenant.isValidTenantId(tenant) -> invalid(

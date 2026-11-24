@@ -540,7 +540,7 @@
               "additionalProperties": false,
               "properties": {
                 "principal": {
-                  "description": "A principal id, never one beginning with `(`: no signed-in principal has a reserved id, and the anonymous principal matches no principal binding (DOC-11).",
+                  "description": "A principal id, never blank (IDN-38) nor one beginning with `(`: no signed-in principal has a reserved id, and the anonymous principal matches no principal binding (DOC-11).",
                   "examples": [
                     "cosec",
                     "svc-batch"

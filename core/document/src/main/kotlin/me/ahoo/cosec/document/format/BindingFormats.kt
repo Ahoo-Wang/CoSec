@@ -88,7 +88,7 @@ internal object BindingFormats {
     )
 
     /** `DOC-11`: what a principal subject never is. */
-    private const val RESERVED_PRINCIPAL = "A principal id, never one beginning with `(`: no signed-in principal has a " +
+    private const val RESERVED_PRINCIPAL = "A principal id, never blank (IDN-38) nor one beginning with `(`: no signed-in principal has a " +
         "reserved id, and the anonymous principal matches no principal binding (DOC-11)."
 
     /** A binding of the platform document: as [bindingSchema], except that a principal always names its tenant. */

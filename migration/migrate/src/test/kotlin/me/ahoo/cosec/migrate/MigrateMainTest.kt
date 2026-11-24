@@ -128,6 +128,14 @@ class MigrateMainTest {
         output.assert().contains("Usage:")
     }
 
+    /** `IDN-38`: the first administrator is someone; a blank id is a usage error before Redis is reached. */
+    @Test
+    fun `a blank platform administrator is a usage error`() {
+        val (code, output) = run("bootstrap --to-redis $REDIS --key-prefix blank --platform-admin=\t")
+        code.assert().describedAs(output).isEqualTo(MigrateMain.USAGE)
+        output.assert().contains("--platform-admin is blank")
+    }
+
     @Test
     fun `a missing value says which option lacks it and how to give a value that starts with two dashes`() {
         val (code, output) = run("convert --from-files a --out --partition platform")

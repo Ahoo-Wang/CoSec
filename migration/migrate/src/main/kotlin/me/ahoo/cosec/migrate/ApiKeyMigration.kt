@@ -112,6 +112,10 @@ class ApiKeyMigration(
             // #1403: first, since everything after it reads the tenant's documents.
             !SnapshotKey.Tenant.isValidTenantId(key.tenant.value) ->
                 "its tenant [${Identifiers.printable(key.tenant.value)}] is no 8.0 tenant id: rename it at its source"
+            // IDN-38: a key of no one is named here, never failed on while the others convert.
+            key.principalId.isBlank() ->
+                "its principal [${Identifiers.printable(key.principalId)}] is blank, which no 8.0 principal id is: " +
+                    "give the key its principal at its source, or remove it"
             key.id.isBlank() || key.id.any { it == '@' || it == '*' || it.isWhitespace() } ->
                 "its id has '@', '*' or a blank, so no principal or role can be named after it"
             key.attributes.isNotEmpty() ->
