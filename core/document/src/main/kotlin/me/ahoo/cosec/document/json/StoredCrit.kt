@@ -30,6 +30,12 @@ import tools.jackson.databind.JsonNode
  * repeated; more than [MAX_ENTRIES] entries; or an entry this version knows that the record does not hold. An empty list
  * is no list. A path through an array names that member of each element; a path into a map whose keys are data is no
  * member: unknown, as a later member is.
+ *
+ * Apart from the identity header's list (`IdentityCrit`) on purpose: a record's member names are camelCase and its
+ * paths go through arrays, a header's names are lower case and its paths through objects only; a header's refusal is a
+ * problem of the request (`400`, `503`), a record's a format error carrying [StoredFormat.Later]; and the header's
+ * check runs on every request a forwarded identity decides, where a shared one would need a JMH comparison for nothing
+ * either reader gains. What they share is the list's shape, held by both tests.
  */
 internal object StoredCrit {
     const val MEMBER = "crit"

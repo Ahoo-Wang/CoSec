@@ -222,7 +222,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 | 指标 | 标签 | 计数 |
 |---|---|---|
 | `cosec.problem.render.failed` | 无 | 因应用的 `ProblemRenderer` 抛出异常或没有返回字节、而用 CoSec 自己的响应体回答的每个拒绝（`PIP-34`）；请求仍被拒绝，状态码是 CoSec 的。任何非零速率都说明渲染器需要修复（[故障排查](./troubleshooting.md#a-refusal-is-answered-with-cosecs-body-though-a-renderer-is-declared)） |
-| `cosec.identity.refused` | `problem`：`invalid-request`、`token-invalid`、`token-expired` | 服务拒绝的每个 `CoSec-Identity` 头，包括日志没有打印的那些；原因以 `WARN` 记录，每种问题最多每分钟一次（[故障排查](./troubleshooting.md#a-service-behind-the-gateway-refuses-requests)），从不出现在响应中 |
+| `cosec.identity.refused` | `problem`：`invalid-request`、`token-invalid`、`token-expired`、`unavailable`（`crit` 点了名而服务不认识的成员：读方比写方旧，`IDN-41`） | 服务拒绝的每个 `CoSec-Identity` 头，包括日志没有打印的那些；原因以 `WARN` 记录，每种问题最多每分钟一次（[故障排查](./troubleshooting.md#a-service-behind-the-gateway-refuses-requests)），从不出现在响应中 |
 | `cosec.stored.refused` | `record`：`session`、`change`、`staging_slot`、`revision_index`、`app_list`、`candidate`、`shadow_report`、`instance_status`、`resident_documents`、`instance_index`、`reporters`；`reason`：`later`、`malformed` | 读取方规则拒绝的每条存储记录（`OBS-12`）：`later` 是更新的版本写的记录（更晚的格式，或其 `crit` 列出而本版本不认识的成员），滚动升级期间出现属于正常，所有实例都运行新版本后就会消失；`malformed` 是不成其为该类记录的记录，要去检查存储（[存储](./storage.md#record-formats)、[故障排查](./troubleshooting.md#a-record-a-later-version-wrote)） |
 
 在网关模式下，任何非零速率都意味着某一跳配置错误，或者有请求没有经过网关；请对它告警。

@@ -1,0 +1,19 @@
+# Rule: IDN-42
+# Mutant: the in-process facade decides for a caller whose identity was forwarded without memberships, on its own space's roles and no attachment, where over HTTP the relay leaves the member out and the host refuses it
+# Tests: :control:test --tests me.ahoo.cosec.control.local.ControlServiceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
+index 001d0489b..d018a7bd2 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
+@@ -82,10 +82,6 @@ class LocalControlService(
+     private fun security(caller: ControlCaller): RequestSecurity {
+         caller.context?.let { context ->
+             val security = requireNotNull(RequestSecurity.of(context)) { ControlCaller.NOT_COSEC_CONTEXT }
+-            val forwarded = security.identity
+-            if (forwarded != null && forwarded.memberships == null) {
+-                throw refusal(http.refused(BAD_REQUEST, security.requestId))
+-            }
+             return security
+         }
+         val requestId = ids.generate()

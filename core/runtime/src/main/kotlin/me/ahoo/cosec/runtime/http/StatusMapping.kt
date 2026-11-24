@@ -150,7 +150,8 @@ internal object StatusMapping {
 
     /**
      * A forwarded identity this service does not accept: 400 `invalid-request` when it cannot be read or is too large,
-     * 401 `token-expired` when it or its credential is too old, 401 `token-invalid` for a version it does not read.
+     * 401 `token-expired` when it or its credential is too old, 401 `token-invalid` for a version it does not read, and
+     * 503 `unavailable` for a member it must understand and does not, which a later version wrote (`IDN-41`).
      */
     fun identityRejected(requestId: String, type: ProblemType, reason: String, traceId: String?): Outcome =
         problem(type, requestId, traceId, Basis.InvalidRequest(reason))
