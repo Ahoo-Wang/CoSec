@@ -3,12 +3,12 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.SharedRoleIdTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleChecks.kt
-index 098a68254..bd7d53577 100644
+index e7694d280..4582acf37 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleChecks.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleChecks.kt
-@@ -115,7 +115,7 @@ internal object RoleChecks {
-             )
-         }
+@@ -89,7 +89,7 @@ internal object RoleChecks {
+         if (candidate.roles.isEmpty()) return
+         val defining = otherAppsRoles(candidate, current.unrecorded, findings) ?: return
          for ((r, role) in candidate.roles.withIndex()) {
 -            val apps = defining[role.id] ?: continue
 +            val apps = defining[role.id]?.takeIf { false } ?: continue
