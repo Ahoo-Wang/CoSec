@@ -1,6 +1,6 @@
 ---
 name: cosec-troubleshoot
-description: Diagnose CoSec 8.0 failures - startup failures (unknown cosec.* keys, pipeline mode, Redis eviction check, missing TokenStore or revocation reader, route maps, actuator endpoints on a gateway), instances that stay not ready, services behind a gateway that refuse the forwarded identity, unexpected 400/401/403/429/503 problem responses, Indeterminate decisions, documents that do not compile or lag, rate limits, and control-plane errors - and explain which statement decided. Do not change behavior unless the user asks for a fix.
+description: Diagnose CoSec 8.0 failures - startup failures (unknown cosec.* keys, pipeline mode, Redis eviction check, missing TokenStore or revocation reader, route maps, actuator endpoints on a gateway), instances that stay not ready, services behind a gateway that refuse the forwarded identity, unexpected 400/401/403/429/503 problem responses, Indeterminate decisions, documents that do not compile or lag, rate limits, control-plane errors, and what a browser client sees (@ahoo-wang/cosec-fetcher, @ahoo-wang/cosec-react: the npm placeholder, refreshes that end the session, refused tenant switches, CORS) - and explain which statement decided. Do not change behavior unless the user asks for a fix.
 ---
 
 # CoSec Troubleshooting
@@ -485,6 +485,80 @@ https://cosec.ahoo.me/operations/troubleshooting#a-refusal-is-answered-with-cose
 - Is the instance on the expected revision? Compare the audit event's snapshot versions with the published head.
 - A break-glass binding permits as `cosec:root` until it expires; audit marks such permits.
 
+### In the browser: `@ahoo-wang/cosec-fetcher` and `@ahoo-wang/cosec-react`
+
+Capture the installed versions (`npm ls @ahoo-wang/cosec-fetcher @ahoo-wang/cosec-react @ahoo-wang/fetcher-cosec`),
+the server's CoSec version, the error's `name` with its `problem` and `status` (never its `exchange`, which holds the
+`Authorization` header), and the order of the calls on the wire (`<path> <status>`). Wiring: `$cosec-client`.
+
+- **The install warns `deprecated ... Placeholder. Install the beta` and the import does not resolve**: installed
+  without a tag before 8.0 GA, which gets `latest`, a `0.0.0` placeholder with no code. Install the server's line:
+  `@beta`, `@rc`, or the exact version.
+- **The client is `8.0.0-beta.n` and the server a release candidate (or the other way)**: a tag stays on its line,
+  so `@beta` still installs the last beta once RCs are out. Install `@rc` or the server's exact version; the client is
+  tested against the `contract/` of its own version.
+- **The old `@ahoo-wang/fetcher-cosec` (or `@ahoo-wang/fetcher-react`'s security hooks) against an 8.0 server**: it
+  speaks CoSec 7's contract. What shows: `403 scope-rejected` on every request of a host with an app though the client
+  sets `appId` (8.0 reads no app header; the app is the token's `aud`); users signed out when the refresh route
+  answers `429` or `503` (the revocations cannot be read, `IDN-14`; a refresh of a switched session that reaches an
+  8.0.0-beta.7 instance mid-upgrade, `IDN-36`), since it ends the session on any failed refresh; a refresh after every
+  `token-revoked` or `token-invalid`. Move to `@ahoo-wang/cosec-fetcher` and `@ahoo-wang/cosec-react`.
+- **Every session ends at its first access-token expiry**, the request failing with `RefreshTokenError` whose
+  `problem` is `token-expired` (or `unauthorized`): the refresh route is closed to anonymous callers (see "Unexpected
+  401"). If the session's lifetime really is over, the same error comes at `cosec.jwt.session.lifetime`.
+- **A refresh is answered `401 token-revoked` and the user is signed out**: one pair was refreshed twice, which ends
+  the session on every tab and device (`IDN-16`). Two holders that refresh on their own: the pair in `sessionStorage` or per-tab memory with
+  several tabs, two processes with one pair, a storage declared `sharedAcrossTabs: true` that the tabs do not share,
+  or a page without `navigator.locks` (not a secure context). Or a retry later than the server's leeway:
+  `rotationLeeway` set above `cosec.jwt.session.rotation-leeway`. The audit records the pair presented again.
+- **A refresh before every request**: the access token is expired by the device's clock as soon as it is stored, so the
+  device clock is ahead of the server's by more than the access token's validity, or `TokenStorage`'s `earlyPeriod`
+  (seconds) is not shorter than that validity. Refresh calls that call themselves: a custom `TokenRefresher` on the
+  configured `Fetcher` that does not set `IGNORE_REFRESH_TOKEN_ATTRIBUTE_KEY`; use `CoSecTokenRefresher`.
+- **Requests fail with `RefreshUnavailableError` and the user stays signed in**: the refresh had no verdict, and the
+  pair is kept. Its `problem`/`status`: `429` (the route is not called again for that pair until its `Retry-After`, at
+  most 60 seconds), `503` (the session or revocation store; retry later), `400 invalid-request` on every request (a
+  custom refresher that sends more than the exact pair, or not as JSON), no status (a network error: see CORS below).
+- **A call to another origin gets no token, and its `401` neither refreshes nor signs out**: `isTrusted` defaults to
+  `sameOriginTrust` (the absolute `baseURL`'s origin and the page's). Name the origin in an `isTrusted` predicate if it
+  must get the token. A `401 unauthorized` from CoSec with a token stored is usually this: the request went bare.
+- **A network error (`TypeError: Failed to fetch`) where a `401`, `403` or `429` was expected**, or
+  `retryAfterSeconds` answering `undefined` on a `429`: a cross-origin refusal without CORS headers, or headers not
+  exposed. The server needs a `CorsConfigurationSource` bean (the starter then puts the CORS filter before CoSec;
+  without it a preflight is decided as an anonymous `http:OPTIONS`) allowing `Authorization`, `CoSec-Device-Id`,
+  `CoSec-Request-Id`, `CoSec-Space-Id` and exposing `CoSec-Request-Id`, `RateLimit-*`, `Retry-After`. The client sends
+  no cookie and reads none: a cookie is never the cause.
+- **`403 scope-rejected` on every spaced request after the user picked a space**: the space kept in `SpaceIdStorage` is
+  one where the principal has no role, and the client keeps sending it by design (`onScopeRejected` is told; it never
+  falls back to another space). The application clears or changes the stored space. On every request: the token is for
+  another app, or none (see the status table).
+- **`NonReplayableRequestError`**: the access token was refreshed after a `401`, and the request's body was a stream
+  that cannot be sent twice. Send it again with a new body.
+- **A tenant switch is refused**: `switchTenant` rejects with `TenantSwitchError`. `sessionEnded: true` (a `401`, the
+  pair removed, `onUnauthorized` called): `token-revoked` when the session was logged out or revoked, or is a session a
+  switch started whose login's session has ended (`IDN-36`), or the pair presented was older than the session's current
+  one, which revokes the session (a switch of the application's own that did not take the lock refreshes take);
+  `token-invalid` when `Authorization` and the body were not one pair (the same cause), or the credential has no session
+  (an API key, a token of a `TokenVerifier` of the application's). An application route that refuses a non-member with
+  `401` ends the session too: it must refuse with another status. A `token-expired` is not on this list: the client
+  refreshes once and switches again (wire: switch `401`, refresh, switch), so a switch that ends in `RefreshTokenError`
+  is a session whose lifetime is over (or ended), and `TenantSwitchError` `token-expired` with `sessionEnded: false`
+  after a refresh that succeeded is a route that refuses the fresh access token: check the server's clock and the
+  route's own answer.
+  `sessionEnded: false` keeps the pair: `503` while the revocation or session store cannot be read (call again), no
+  `status` (network error or timeout: calling again is safe, the switch does not rotate the pair), or the application's
+  own refusal (its `TenantSwitch`). A switch request without the pair in its body fails against an endpoint of
+  8.0.0-beta.8 or later, which reads it (`IDN-22`). `No tenantSwitcher: ...`: the configurer has no
+  `CoSecTenantSwitcher`.
+- **`logout()` rejects with `LogoutUnconfirmedError`**: the pair is gone here, the server did not confirm (`503`,
+  `500`, network error), or the client has no `tokenRevoker` (`No tokenRevoker: ...`) or, in React, the hook has no
+  `tokenManager` (`No tokenManager: ...`).
+- **React: `useSecurityContext must be used within a SecurityProvider`**: the component is outside the provider.
+  **`useSecurity: the tokenManager option manages another TokenStorage than the hook's`**: two `TokenStorage`
+  instances (a second one created, or two copies of `@ahoo-wang/cosec-fetcher` installed); pass
+  `cosec.tokenStorage` and `cosec.tokenManager` of one `CoSecConfigurer`. **`RouteGuard` shows its fallback though a
+  pair is stored**: its access token expired (`authenticated` is false); `RefreshableRouteGuard` refreshes first.
+
 ### Service behind a gateway (`cosec.pipeline.mode=gateway`)
 
 The service reads the caller from `CoSec-Identity`, which only the CoSec gateway sets (it strips the client's own). No
@@ -758,8 +832,8 @@ In this repository, run a focused class first, for example:
 ./gradlew :runtime:test --tests "me.ahoo.cosec.runtime.PipelineTest"
 ```
 
-Use `$cosec-policy-author` to rewrite a confirmed-bad document and `$cosec-integration` to change confirmed-bad Spring
-configuration. For diagnosis-only requests, report the root cause and evidence without modifying files.
+Use `$cosec-policy-author` to rewrite a confirmed-bad document, `$cosec-integration` to change confirmed-bad Spring
+configuration, and `$cosec-client` to change confirmed-bad client wiring. For diagnosis-only requests, report the root cause and evidence without modifying files.
 
 When a control call is `503` with `Retry-After: 1` and `cosec.control.work.refused` counts, it is not the store: the
 control plane's work budget (an eighth of the heap) was full of large documents parsed or compiled at once (`CTL-85`).

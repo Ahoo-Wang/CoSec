@@ -145,6 +145,30 @@ hold the session, until it ends there, at the latest when its refresh token
 expires. It carries no token: `problem` and `status` say what the server
 answered.
 
+## Switching tenant or app
+
+When the application has a tenant or app switch (its own route over CoSec's `SwitchTenantAuthentication`), give the
+configurer a switcher over the configured `Fetcher` and call `switchTenant`:
+
+```ts
+import { CoSecTenantSwitcher } from '@ahoo-wang/cosec-fetcher';
+
+// in the CoSecConfigurer options of the example above:
+//   tenantSwitcher: new CoSecTenantSwitcher({ fetcher: api }),
+
+await cosec.tokenManager!.switchTenant({
+  endpoint: '/auth/select/acme/orders',
+});
+```
+
+It presents the session's current pair (the access token in `Authorization` and the pair in the body), under the lock
+refreshes take, so no refresh replaces it on the way; an expired access token is refreshed first. The pair it answers
+is stored in one write. A `401 token-expired` is refreshed once and the switch sent again, as any request's
+(the access token may have expired at a server whose clock is ahead; a session that is over refuses the refresh, which
+ends it). Any other `401` from the route ends the session (the pair is removed, `onUnauthorized` is called once,
+`TenantSwitchError` with `sessionEnded`); anything else, the application's own refusal, a `503` or no answer, keeps the
+session and is not retried. Calling it again is safe: a switch does not rotate the pair it is presented with.
+
 ## What the CoSec 8.0 application must allow
 
 The starter serves the refresh route when `cosec.authentication.login.refresh.path`

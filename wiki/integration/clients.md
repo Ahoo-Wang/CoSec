@@ -235,6 +235,17 @@ endpoint and stores the pair it answers; it never rewrites a header ([Apps](./au
   one just replaced, within the rotation leeway) and keeps its login time (`IDN-17`, `IDN-22`); it does not sign the
   user in again. Refresh first if another tab refreshed long ago: an older pair presented to switch revokes the session,
   as a refresh of it would. Path parameters a client fills from `tenantId` change with the new token.
+  A switch does not rotate the pair it is presented with, so presenting it again after an answer that never arrived is
+  safe: the lost answer started a session nobody holds, which ends with the login's (`IDN-36`). Read a refused switch as
+  a request and a refresh in one: the route is reached with the access token, so `401 token-expired` may be the pipeline's
+  (the access token expired, which a client whose clock is behind does not see) or the route's (the session's lifetime is
+  over). Refresh once and switch again with the new pair: a session that is over refuses the refresh, and a refresh that
+  succeeds says the session lives. Any other `401` (`token-revoked`, `token-invalid`) means the session is over, `503`
+  keeps the pair, and anything else is the application's own refusal, which leaves the session as it was.
+  `cosec-fetcher`'s `JwtTokenManager.switchTenant({ endpoint })` (with a `CoSecTenantSwitcher` of the configured
+  `Fetcher`) does all of this: it presents the stored pair under the lock refreshes take, refreshing an expired access
+  token first and once more on a `token-expired`, removes the pair on any other `401`, and stores the answer as one
+  write.
 
 ## CORS
 
