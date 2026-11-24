@@ -40,7 +40,8 @@ interface TokenConverter {
     fun toToken(subject: TokenSubject): CompositeToken
 
     /**
-     * Issues a token with custom validity periods.
+     * Issues a token with custom validity periods, as long as the default ones or shorter: a revocation is kept only past
+     * the configured validities, so `JwtTokenConverter` refuses a longer one (`IDN-37`).
      *
      * @param subject What the token says
      * @param accessTokenValidity Duration for which access token is valid
