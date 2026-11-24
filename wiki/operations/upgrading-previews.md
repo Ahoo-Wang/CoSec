@@ -30,6 +30,39 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **Breaking: a web host with CoSec on fails startup without a CoSec gate** (`STA-1`, DR1-G-6). Affected: an
+  application that excluded `CoSecPipelineWebAutoConfiguration`, or replaced the adapter's bean with a filter of another
+  type, while keeping `cosec.enabled`. It served every request undecided, with `web=none` in the startup summary as the
+  only sign. Keep the auto-configuration, register CoSec's filter yourself, or set `cosec.enabled=false`
+  ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-missing-module)).
+- **Breaking: `cosec.control.enabled=true` fails startup in `gateway` mode** (`STA-1`, DR1-G-5). Affected: a service
+  behind a gateway that wrote the key. Its control plane was never wired, while the startup line said its routes were
+  served; that line now appears only where the control plane runs. Remove the key, or run the control plane on an
+  `enforce` host.
+- **Breaking: `cosec.key-prefix` holds no `:`** (`SNP-9`, DR1-D-4). Affected: a deployment whose prefix has a
+  character other than letters, digits, `_`, `.` and `-`, other than one pair of braces around the whole prefix (a hash
+  tag, `{cosec}`, still works).
+  - A prefix like `a` and another like `a:b` nested, so two deployments on one Redis shared keys. Now such a prefix fails
+    startup, naming what it holds.
+  - **A trailing `:`** (`cosec:`) was removed before use, so the keys are already the ones without it: remove the `:`.
+  - **A `:` inside it** (`cosec:prod`): the keys live under it, and must move to a prefix allowed now (`cosec-prod`).
+    1. Stop the writers: the control plane's host (or an IAM that embeds it), `cosec-migrate`, and the gateways, whose
+       logouts write revocations.
+    2. Copy every key under `<old>:` to the same name under `<new>:`, with its TTL (`DUMP` and `RESTORE ... ABSTTL`, or
+       `RENAME` on a single node; on a cluster, keys of one hash slot only).
+    3. Start every process with `cosec.key-prefix=<new>`, then delete the old keys.
+- **Breaking: the revocation tables' `local-max-age` is at most 30 seconds** (`IDN-26`, DR1-D-3). Affected: a
+  deployment that set `cosec.authentication.revocation.cache.local-max-age` above `30s`, or a `cocache.*` property or
+  customizer that set the local max age of `RevokedTokenCache` or `RevokedSubjectCache`.
+  - A revocation held locally used to live that long past a lost invalidation, so a subject's revocation raised since
+    was read as the older one. Now a value above 30 seconds fails startup, naming the property when it is
+    `cosec.authentication.revocation.cache.local-max-age`; a layer may still tighten it.
+  - Migrate by removing the setting, or writing `30s` or less. The default, `30s`, is unchanged.
+- **The control plane's document cache is a share of the heap** (`STA-12`, DR1-F-5). Affected: a control-plane host's
+  memory. `simulate`, `explain`, `analyze` and the lock-out check share one cache per host, a third of the snapshot
+  documents' quarter of the heap (about 170 MB at 2 GiB), where two caches held a fixed 64 MB each. The host's two
+  snapshot sources now hold a third of that quarter each, where they held half: at 2 GiB about 4,800 typical tenants in
+  each, where it was 7,200. Give a control-plane host more heap to hold more; nothing else to change.
 - **A document's revision records are bounded within `min-age` too** (`CTL-84`, DR1-F-6). Affected: a document that
   publishes large documents often. Beyond its `max-count` most recent revisions, a document keeps at most `max-count`
   times the document cap of records (400 MB) and 26,214 index entries; past either, the oldest go, younger than
@@ -37,7 +70,6 @@ Which preview of the library may run behind which preview of the gateway image: 
   `cosec.control.revisions.records`, `.bytes`, `.reclaimed-young` and `cosec.control.changes.open`; sum the gauges
   across instances ([Observability](./observability.md)). Each revision index entry now names its record's size; an
   older control plane reads past it, and an entry it writes without one is sized from its record by the next pass.
-
 - **A document takes no new change once it holds `cosec.control.revisions.max-count` open changes** (50 by default,
   `CTL-83`, DR1-E-2; counted before the write, so changes proposed at the same moment may all pass).
   Affected: a client that leaves many changes open on one document. A proposal, an `:apply` or a rollback past the

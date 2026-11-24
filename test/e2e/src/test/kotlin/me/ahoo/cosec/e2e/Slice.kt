@@ -78,7 +78,7 @@ import java.util.concurrent.ConcurrentHashMap
 class Slice(
     redisUri: String = REDIS,
     options: SnapshotOptions = SnapshotOptions(revalidateInterval = SnapshotOptions.MIN_REVALIDATE_INTERVAL),
-    val keyPrefix: String = "e2e:${UUID.randomUUID()}",
+    val keyPrefix: String = "e2e-${UUID.randomUUID()}",
     /** The external attribute providers: the documents compile against their catalog, the pipeline fetches them. */
     attributes: AttributeProviders = AttributeProviders.NONE,
     /** The decision listeners; the slice closes them. */

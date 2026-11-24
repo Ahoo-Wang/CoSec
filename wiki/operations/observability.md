@@ -73,7 +73,13 @@ A bean that is both is registered once, as the `DecisionListener` it is.
   `REQUIRED`, so the starter logs at startup
   `No REQUIRED decision listener is registered: break-glass bindings cannot permit (RFC 0006 §9.4.3).` Set
   `cosec.audit.kafka.delivery=required`, or register a `REQUIRED` listener of your own, before you rely on break-glass.
+- **One request's events share one `id`.** The event a `REQUIRED` listener receives and the one a `BEST_EFFORT`
+  listener receives for the same request carry the same `id` (the BEST_EFFORT one adds what the REQUIRED listeners'
+  failures were), so an audit store and a metrics pipeline can join them, and either can drop a redelivery.
 - **A `REQUIRED` listener should be idempotent** by the event's `id`: a write that timed out may still have succeeded.
+- **The BEST_EFFORT event never fails a request.** It is made after the outcome exists; if making it throws (a shadow
+  listener's sampler, say), the event is counted as dropped by every BEST_EFFORT listener (`cosec.listener.dropped`)
+  and the request keeps its answer.
 - **On shutdown**, the listeners stop taking events, and the events already queued are still delivered for up to
   a sixth of `spring.lifecycle.timeout-per-shutdown-phase` (5 seconds at the default). Then no listener call starts any
   more: a call in progress is not interrupted, and what is left is dropped and counted in `cosec.listener.dropped`, with

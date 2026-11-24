@@ -138,6 +138,38 @@ class StrictCacheFailureTest {
         }
     }
 
+    /**
+     * DR1-D-3: a revocation held locally lives at most 30 seconds too, so a raised subject revocation is never read as
+     * the older one for longer: a local max age above it fails startup, declared (naming the property) or set by a
+     * per-cache property; a global default leaves CoSec's declared value, and an override may tighten it.
+     */
+    @Test
+    fun aRevocationTablesLocalMaxAgeIsAtMost30Seconds() {
+        revocationTables.withPropertyValues("cosec.authentication.revocation.cache.local-max-age=1m").run { context ->
+            assertThat(context).hasFailed()
+            generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
+                .any { "cosec.authentication.revocation.cache.local-max-age" in it && "IDN-26" in it }
+                .assert().isTrue()
+        }
+        revocationTables.withPropertyValues("cosec.authentication.revocation.cache.local-max-age=10s").run { context ->
+            assertThat(context).hasNotFailed()
+        }
+        revocationTables.withPropertyValues("cocache.defaults.store.local-max-age=1h").run { context ->
+            assertThat(context).hasNotFailed()
+            val runtime = context.getBean(CacheRuntime::class.java)
+            listOf(
+                CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
+                CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME
+            ).forEach { name ->
+                checkNotNull(runtime.policy(name)).localMaxAge.assert().describedAs(name)
+                    .isLessThanOrEqualTo(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
+            }
+        }
+        revocationTables.withPropertyValues(
+            "cocache.caches.${CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME}.local-max-age=1h"
+        ).run { context -> assertThat(context).hasFailed() }
+    }
+
     private companion object {
         const val PLATFORM = """{"schema":2,"revision":1,"publishedAt":"1970-01-01T00:00:00Z"}"""
     }

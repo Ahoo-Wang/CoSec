@@ -58,6 +58,18 @@ class ControlDerivedTest {
         ChangeOptions().maxDocumentBytes.assert().isEqualTo(ChangeOptions.DEFAULT_MAX_DOCUMENT_BYTES)
     }
 
+    /** DR1-F-5: the control plane's document cache is one of three holders of the documents' quarter, not a share of its own. */
+    @Test
+    fun `the document cache is a third of the documents' share, beside the two snapshot sources`() {
+        val budget = me.ahoo.cosec.runtime.HeapBudget.of(2L shl 30)
+        ControlDerived.DOCUMENT_HOLDERS.assert().isEqualTo(3)
+        ControlDerived.documentCacheBytes(budget).assert().isEqualTo(budget.documents / 3)
+        // At the production overlay's 2 GiB heap, more than the two fixed caches of 64 MB it replaces held together.
+        ControlDerived.documentCacheBytes(budget).assert().isGreaterThan(128L shl 20)
+        ControlDerived.describe(Duration.ofMinutes(15)).assert()
+            .contains("document cache=${ControlDerived.documentCacheBytes() shr 20}MB (1/3 of the documents' share)")
+    }
+
     @Test
     fun `what was derived is said in the words of the formulas`() {
         ControlDerived.describe(Duration.ofMinutes(15)).assert()

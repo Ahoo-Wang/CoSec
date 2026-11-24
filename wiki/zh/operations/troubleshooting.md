@@ -546,10 +546,21 @@ starter 只装配类路径上的 CoSec 模块，漏加一个模块会悄无声�
 | `cosec.cosid.generator is set, but CoSec's ids do not come from CosId` | 一个 `CosIdRuntime`（`cosid-spring-boot-starter` 及其 `cosid.*` 配置），或者删除这个键：应用自己有 `IdGenerator` bean 时，CoSec 的 id 来自那个 bean |
 | `cosec.metrics.enabled=true needs cosec-micrometer` | `cosec-micrometer`，或者删除这个键：不设置时指标是可选的 |
 | `cosec.control.enabled=true needs cosec-control`（或 `cosec-cocache`） | 消息中指出的制品，或者删除这个键：不设置时，没有这些模块的实例就是数据面实例 |
+| `cosec.control.enabled=true, but cosec.pipeline.mode=gateway` | 网关后的服务不装配控制面：把它放到 `enforce` 模式（默认）的宿主上运行，或者删除这个键 |
 | `Social sign-in, whose states are kept in Redis ..., needs cosec-cocache` | 添加 `cosec-cocache`（它把一次登录的 OAuth state 存在 Redis 里，每个只能用一次），或声明你自己的 `SocialStateStore` Bean，或用 `cosec.authentication.login.social.enabled=false` 关闭社交登录 |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` 和 Redis 连接（`spring.data.redis.*`）：没有它就读不到快照，限流也会退化为按实例计数 |
 
 Web 相关的检查只在 CoSec 开启时运行（`cosec.enabled`，默认 `true`）；网关宿主不做 WebFlux 检查，它需要的是 `cosec-gateway`。设置 `spring.main.lazy-initialization=true` 时每项检查同样运行（`STA-3`）。
+
+有了模块，Web 宿主仍可能没有门：应用排除了 `CoSecPipelineWebAutoConfiguration`，或者用另一种类型的过滤器替换了适配器的 bean。
+这时每个请求都会不经裁决地到达应用，所以启动失败：
+
+```text
+CoSec is on (cosec.enabled), but this web host registers none of its gates (PipelineServletFilter, PipelineWebFilter, PipelineGatewayFilter), as a bean or a filter registration: every request would reach the application undecided. ...
+```
+
+保留这个自动配置，或者自己注册 CoSec 的过滤器（它类型的 bean，或者过滤器是它的 `FilterRegistrationBean`：检查看的是类型，不是 bean 的名字），
+或者用 `cosec.enabled=false` 关闭 CoSec。
 
 ### 刷新路由的认证导致启动失败 {#startup-fails-on-the-refresh-routes-authentication}
 
@@ -736,6 +747,14 @@ cosec.authorization.snapshot.revalidate-interval (PT0S) must be positive: the pe
 失效消息丢失时，周期确认是文档变化唯一的界（`SNP-6`），因此它既不能关闭，也不能没有上限。消息写明该值违反了哪一条：至少 1 秒（每一轮都从 Redis 读取每个已安装的文档）、不超过
 5 分钟、配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`（[配置](./configuration.md#snapshot)）。文档很多时要节省
 Redis 的 CPU，在这些范围内调大它（[存储](./storage.md#what-revalidation-costs-redis)）。
+
+### key 前缀导致启动失败 {#startup-fails-on-the-key-prefix}
+
+```text
+cosec.key-prefix [cosec:prod] holds ':': a key prefix is letters, digits, '_', '.' and '-' (cosec), or such a string wrapped whole in braces, a Redis Cluster hash tag ({cosec}), so that no deployment's prefix nests inside another's (SNP-9). ...
+```
+
+一个部署的前缀不能嵌套在另一个部署的前缀里：`a` 和 `a:b` 并存时，后者的 key 也都在前者之下。信息里写明了该怎么做。末尾的 `:`（`cosec:`），之前的预览版会忽略，它与去掉 `:` 后指的是同一批 key：删掉它即可。前缀中间的 `:`（`cosec:prod`）指向的 key 不在现在允许的任何前缀之下：按[升级说明](./upgrading-previews.md#from-8-0-0-beta-7)迁移它们。花括号只有在一对花括号包住整个前缀时才算 hash tag。
 
 ### 已移除的 key 前缀导致启动失败 {#startup-fails-on-a-removed-key-prefix}
 

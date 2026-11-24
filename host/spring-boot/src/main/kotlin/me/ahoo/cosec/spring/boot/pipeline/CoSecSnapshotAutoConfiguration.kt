@@ -24,6 +24,7 @@ import me.ahoo.cosec.cocache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.control.lifecycle.ControlDerived.DOCUMENT_HOLDERS
 import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
@@ -336,8 +337,8 @@ class CoSecSnapshotAutoConfiguration {
         environment: Environment,
     ): SnapshotSource<CompiledDocument, CompiledDocument> {
         val snapshot = properties.snapshot
-        // Where the control plane runs, its own source holds the other half of the documents' share (SNP-24).
-        val sources = if (ControlPlaneCondition.wired(resources.classLoader, environment)) 2 else 1
+        // A third each with the control plane's source and cache (DR1-F-5); a const, inlined: cosec-control stays optional.
+        val sources = if (ControlPlaneCondition.wired(resources.classLoader, environment)) DOCUMENT_HOLDERS else 1
         val options = snapshot.toOptions(pipeline.timeout, sources)
         // The data plane's source only: the control plane's own would count its reads under the same names.
         val source = DocumentSnapshots.source(

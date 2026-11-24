@@ -1,0 +1,16 @@
+# Rule: SNP-9
+# Mutant: any key prefix is taken, so a deployment prefixed a:b keeps its keys under another's prefix a
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.KeyPrefixValidationTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecProperties.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecProperties.kt
+index 700ede4f5..2d511c13c 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecProperties.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecProperties.kt
+@@ -42,7 +42,6 @@ class CoSecProperties(
+     @DefaultValue(DEFAULT_KEY_PREFIX) var keyPrefix: String = DEFAULT_KEY_PREFIX,
+ ) : EnabledCapable {
+     init {
+-        requireKeyPrefix(keyPrefix)
+     }
+ 
+     /** The prefix of one family of this deployment's keys: `<keyPrefix>:<family>`. */

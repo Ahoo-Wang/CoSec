@@ -27,8 +27,32 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **破坏性变更：开启了 CoSec 的 Web 宿主没有 CoSec 的门时启动失败**（`STA-1`，DR1-G-6）。受影响的是保留 `cosec.enabled`，
+  却排除了 `CoSecPipelineWebAutoConfiguration`、或用另一种类型的过滤器替换了适配器 bean 的应用。它原来不经裁决地放行每个请求，
+  唯一的迹象是启动摘要里的 `web=none`。保留这个自动配置、自己注册 CoSec 的过滤器，或者设置 `cosec.enabled=false`
+  （[故障排查](./troubleshooting.md#startup-fails-on-a-missing-module)）。
+- **破坏性变更：`gateway` 模式下写了 `cosec.control.enabled=true` 时启动失败**（`STA-1`，DR1-G-5）。受影响的是写了这个键的
+  网关后服务。它的控制面从未装配，启动行却说路由在服务；这行现在只在控制面实际运行的宿主上出现。删除这个键，或者把控制面放到
+  `enforce` 宿主上运行。
+- **破坏性变更：`cosec.key-prefix` 里不能有 `:`**（`SNP-9`，DR1-D-4）。受影响的是前缀里含有字母、数字、`_`、`.`、`-`
+  以外字符的部署，用一对花括号包住整个前缀的除外（hash tag `{cosec}` 仍然可用）。
+  - 像 `a` 和 `a:b` 这样的前缀会嵌套，同一个 Redis 上的两个部署因此共用 key。现在这样的前缀会让启动失败，信息里点名它含有什么。
+  - **末尾的 `:`**（`cosec:`）原来在使用前就被去掉了，所以 key 本来就是不带它的那些：删掉 `:` 即可。
+  - **中间的 `:`**（`cosec:prod`）：key 都在它之下，需要迁到现在允许的前缀（`cosec-prod`）。
+    1. 停止所有写入方：控制面宿主（或内嵌控制面的 IAM）、`cosec-migrate`，以及网关（登出会写吊销记录）。
+    2. 把 `<old>:` 下的每个 key 复制到 `<new>:` 下的同名 key，保留 TTL（`DUMP` 加 `RESTORE ... ABSTTL`，单节点上也可以
+       `RENAME`；集群上只能在同一个 hash slot 内）。
+    3. 所有进程以 `cosec.key-prefix=<new>` 启动，然后删除旧 key。
+- **破坏性变更：吊销表的 `local-max-age` 最多 30 秒**（`IDN-26`，DR1-D-3）。受影响的是把
+  `cosec.authentication.revocation.cache.local-max-age` 设得超过 `30s` 的部署，以及设置了 `RevokedTokenCache` 或
+  `RevokedSubjectCache` 本地最长寿命的 `cocache.*` 配置项或定制器。
+  - 原来本地持有的吊销在失效消息丢失后能活那么久，于是之后被提高的主体吊销会被读成旧的那个。现在超过 30 秒的值会让启动失败，
+    值来自 `cosec.authentication.revocation.cache.local-max-age` 时信息里点名它；任何层仍可以把它调小。
+  - 迁移方式：删掉这个设置，或者写 `30s` 及以下。默认值 `30s` 不变。
+- **控制面的文档缓存是堆的一份**（`STA-12`，DR1-F-5）。受影响的：控制面宿主的内存。`simulate`、`explain`、`analyze`
+  与锁死检查共用每个宿主一个缓存，大小是快照文档那四分之一堆的三分之一（2 GiB 时约 170 MB）；此前是两个各固定 64 MB 的缓存。
+  宿主的两个快照源现在各持有那四分之一的三分之一，此前各一半：2 GiB 时每个约 4,800 个典型租户，此前 7,200。要持有更多就给控制面宿主更多的堆；别无改动。
 - **文档的修订记录在 `min-age` 之内也有上限**（`CTL-84`，DR1-F-6）。受影响的：频繁发布大文档的文档。在最近 `max-count` 个修订之外，一个文档至多保留 `max-count` 乘以文档上限的记录（400 MB）与 26,214 条索引项；超出任一项，从最老的开始删除，不论是否早于 `min-age`，由 `cosec.control.revisions.reclaimed-young` 计数并记 `WARN`。新增四个度量：`cosec.control.revisions.records`、`.bytes`、`.reclaimed-young` 与 `cosec.control.changes.open`；量规请跨实例求和（[可观测性](./observability.md)）。每条修订索引项现在记着它的记录大小；较早的控制面读取时会跳过它，它写入的不带大小的索引项，由下一轮回收读取记录得出大小。
-
 - **一份文档有了 `cosec.control.revisions.max-count` 个未结束变更后不再接受新变更**（默认 50，`CTL-83`，DR1-E-2；在写入之前计数，同一时刻提出的变更可能都会通过）。受影响的：在同一份文档上
   留着很多未结束变更的客户端。超过上限的提议、`:apply` 或回滚，先放弃其作者自己最老的、检查失败的变更，否则以 `409` 拒绝，
   冲突种类为新增的 `OPEN_LIMIT`，`heldBy` 给出最老的未结束变更；类型化客户端看到 `ConflictKind.OPEN_LIMIT`。请放弃不再需要的变更。

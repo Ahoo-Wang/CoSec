@@ -38,12 +38,12 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 - **CoSec 无法解码的值使读取失败，并留在 Redis 中。** 它永远不会被回收（删除），因为回收会删掉唯一的副本。用普通
   Redis 命令写入的值就属于这种值：只通过控制面或 `cosec-migrate` 写入文档（[发布文档](#publishing-documents)）。
 
-**CoCache 定制器还能改变什么。** CoSec 锁定决定缓存内容的部分：key 前缀、命名空间、key 编码、编解码器、数据来源、key 过滤器和按条目的生存期（[优先级](./configuration.md#precedence)）。无法读取的吊销使读取失败。影子缓存保持声明的寿命；吊销表的读取等待存储的整个命令超时（`cocache.redis.command-timeout`）：超时的读取是“无法读取”，流水线校验令牌时会接受它，所以任何 `read-timeout` 都不能缩短它。CoSec 的吊销读取器有自己更短的预算：它的两次读取各自在吊销读取超时（认证超时的 30 %，默认 300 毫秒）内结束，两次都远在认证器的预算（认证超时，即 `cosec.pipeline.timeout` 的 20 %，默认 1 秒）之内，因此挂起的 Redis 被当作拒绝连接的 Redis 处理，令牌被接受，而不是每个已认证请求都回答 `503`。超时的吊销读取留下的命令在 CoCache 的 Redis 客户端上等待，直到 `cocache.redis.command-timeout`（2 秒）。该客户端在断开期间拒绝命令，所以 Redis 宕机时每次读取立即失败；而在连接着一个挂起的 Redis 时，没有什么按数量限制等待中的命令（CoCache 不设置 `requestQueueSize`，CoSec 也不配置 CoCache 的客户端）。堆积量是未命中本地副本的吊销读取速率乘以命令超时。“未吊销”的答案在本地最多保留 30 秒，因此在这段时间内再次检查的令牌不会发出命令。缓存策略的其余部分仍由应用经定制器和 `cocache.*` 配置项决定（[优先级](./configuration.md#precedence)列出 CoSec 锁定的每个字段）：每个缓存的本地缓存大小和 `expireAfterAccess`，以及快照存储以外的 `local-max-age`；除吊销表以外每个缓存的 `read-timeout`，超时后权威存储的读取失败即拒绝；两个吊销表还有 `absent-ttl`。这些都不会替换缓存的内容，但有些会延长实例依据已读内容行事的时间。吊销表上更长的 `local-max-age` 或 `absent-ttl`，会在吊销的失效消息丢失时让被吊销的令牌多被接受这么久（默认的界是 `cosec.authentication.revocation.cache.local-max-age`，30 秒）。成员关系不是 CoCache 缓存：每个实例把它的 `MembershipLoader` 的回答放在自己的内存里，保留 [`cosec.authorization.membership.ttl`](./configuration.md#authorization)，更长的值会让已移除的角色在没收到失效通知的实例上多生效这么久。
+**CoCache 定制器还能改变什么。** CoSec 锁定决定缓存内容的部分：key 前缀、命名空间、key 编码、编解码器、数据来源、key 过滤器和按条目的生存期（[优先级](./configuration.md#precedence)）。无法读取的吊销使读取失败。影子缓存保持声明的寿命；吊销表的读取等待存储的整个命令超时（`cocache.redis.command-timeout`）：超时的读取是“无法读取”，流水线校验令牌时会接受它，所以任何 `read-timeout` 都不能缩短它。CoSec 的吊销读取器有自己更短的预算：它的两次读取各自在吊销读取超时（认证超时的 30 %，默认 300 毫秒）内结束，两次都远在认证器的预算（认证超时，即 `cosec.pipeline.timeout` 的 20 %，默认 1 秒）之内，因此挂起的 Redis 被当作拒绝连接的 Redis 处理，令牌被接受，而不是每个已认证请求都回答 `503`。超时的吊销读取留下的命令在 CoCache 的 Redis 客户端上等待，直到 `cocache.redis.command-timeout`（2 秒）。该客户端在断开期间拒绝命令，所以 Redis 宕机时每次读取立即失败；而在连接着一个挂起的 Redis 时，没有什么按数量限制等待中的命令（CoCache 不设置 `requestQueueSize`，CoSec 也不配置 CoCache 的客户端）。堆积量是未命中本地副本的吊销读取速率乘以命令超时。“未吊销”的答案在本地最多保留 30 秒，因此在这段时间内再次检查的令牌不会发出命令。缓存策略的其余部分仍由应用经定制器和 `cocache.*` 配置项决定（[优先级](./configuration.md#precedence)列出 CoSec 锁定的每个字段）：每个缓存的本地缓存大小和 `expireAfterAccess`，以及快照存储和吊销表以外的 `local-max-age`；除吊销表以外每个缓存的 `read-timeout`，超时后权威存储的读取失败即拒绝。这些都不会替换缓存的内容，但有些会延长实例依据已读内容行事的时间。吊销表不受它们影响：失效消息丢失后，“未吊销”的答案和本地持有的吊销（包括之后被提高的主体吊销）都最多保留 30 秒。它们的 `absent-ttl` 被锁定；`local-max-age` 超过 30 秒时启动失败，无论来自 `cosec.authentication.revocation.cache.local-max-age` 还是任何 `cocache.*` 配置项或定制器；可以把它调小（`IDN-26`）。成员关系不是 CoCache 缓存：每个实例把它的 `MembershipLoader` 的回答放在自己的内存里，保留 [`cosec.authorization.membership.ttl`](./configuration.md#authorization)，更长的值会让已移除的角色在没收到失效通知的实例上多生效这么久。
 
 ### Redis key {#redis-keys}
 
-`<s>` 是 [`cosec.key-prefix`](./configuration.md#key-prefix)（默认 `cosec`），去掉末尾的 `:`：一个部署写入的每个
-key 都在它之下（`SNP-9`）。
+`<s>` 是 [`cosec.key-prefix`](./configuration.md#key-prefix)（默认 `cosec`），其中没有 `:`：一个部署写入的每个
+key 都在它之下，任何部署的前缀都不会嵌套在另一个部署的前缀里（`SNP-9`）。
 `<doc>` 指一个文档：`platform`、`app:<appId>` 或 `tenant:<tenantId>`。应用 id 和租户 id 不含 `:` 和 `/`，所以一个 key
 只对应一个文档。
 

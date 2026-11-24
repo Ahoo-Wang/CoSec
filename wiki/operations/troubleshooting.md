@@ -816,11 +816,23 @@ It refuses to start instead, naming the artifact, when a feature that is on need
 | `cosec.cosid.generator is set, but CoSec's ids do not come from CosId` | A `CosIdRuntime` (`cosid-spring-boot-starter` and its `cosid.*` settings), or remove the key: with an `IdGenerator` bean of your own, that bean gives CoSec its ids |
 | `cosec.metrics.enabled=true needs cosec-micrometer` | `cosec-micrometer`, or remove the key: unset, metrics are optional |
 | `cosec.control.enabled=true needs cosec-control` (or `cosec-cocache`) | the artifact it names, or remove the key: unset, an instance without the modules is a data-plane instance |
+| `cosec.control.enabled=true, but cosec.pipeline.mode=gateway` | A service behind a gateway wires no control plane: run it on a host in `enforce` mode (the default), or remove the key |
 | `Social sign-in, whose states are kept in Redis ..., needs cosec-cocache` | add `cosec-cocache` (it keeps the OAuth states of a sign-in in Redis, once each), declare a `SocialStateStore` bean of your own, or turn social login off with `cosec.authentication.login.social.enabled=false` |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` and a Redis connection (`spring.data.redis.*`): without it no snapshot is read and rate limits would count per instance |
 
 The web checks run only while CoSec is on (`cosec.enabled`, default `true`); a gateway host is exempt from the WebFlux
 check, as it needs `cosec-gateway` instead. Every check runs with `spring.main.lazy-initialization=true` too (`STA-3`).
+
+A web host with the module can still run without its gate: the application excluded `CoSecPipelineWebAutoConfiguration`,
+or replaced the adapter's bean with a filter of another type. Every request would then reach the application
+undecided, so startup fails:
+
+```text
+CoSec is on (cosec.enabled), but this web host registers none of its gates (PipelineServletFilter, PipelineWebFilter, PipelineGatewayFilter), as a bean or a filter registration: every request would reach the application undecided. ...
+```
+
+Keep the auto-configuration, or register CoSec's filter yourself (a bean of its type, or a `FilterRegistrationBean`
+whose filter it is: the check looks for the type, not the bean's name), or turn CoSec off with `cosec.enabled=false`.
 
 ### Startup fails on the refresh route's authentication {#startup-fails-on-the-refresh-routes-authentication}
 
@@ -1055,6 +1067,18 @@ installed document from Redis), at most 5 minutes, and with `fail-closed.tenants
 `fail-closed.max-lag`
 ([Configuration](./configuration.md#snapshot)). To spend less Redis CPU on many documents, raise it within those
 bounds ([Storage](./storage.md#what-revalidation-costs-redis)).
+
+### Startup fails on the key prefix {#startup-fails-on-the-key-prefix}
+
+```text
+cosec.key-prefix [cosec:prod] holds ':': a key prefix is letters, digits, '_', '.' and '-' (cosec), or such a string wrapped whole in braces, a Redis Cluster hash tag ({cosec}), so that no deployment's prefix nests inside another's (SNP-9). ...
+```
+
+A deployment's prefix must not be able to nest inside another's: with `a` and `a:b` the second's keys are also under
+the first. The message says what to do. A trailing `:` (`cosec:`), which earlier previews ignored, names the same keys
+without it: remove it. A `:` inside the prefix (`cosec:prod`) names keys that are not under any prefix allowed now: move
+them as the [upgrade note](./upgrading-previews.md#from-8-0-0-beta-7) says. Braces count as a hash tag only when one
+pair wraps the whole prefix.
 
 ### Startup fails on a removed key prefix
 

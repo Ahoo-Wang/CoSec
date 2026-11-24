@@ -119,6 +119,8 @@ class ControlPlaneSwitchTest {
             context.getBeansOfType(ControlHttp::class.java).assert().hasSize(1)
             // The facade an application's own code calls (CTL-65), wherever the control plane is.
             context.getBeansOfType(ControlService::class.java).assert().hasSize(1)
+            // One document cache per host, which simulate, explain, analyze and the lock-out check share (DR1-F-5).
+            context.getBeansOfType(me.ahoo.cosec.control.api.DocumentCache::class.java).assert().hasSize(1)
             // The guard sees the control plane's beans, its routes among them, when it is on.
             context.controlBeans().assert()
                 .contains("cosecControlStore", "cosecControlHttp", "cosecControlRoutes", "cosecControlService")

@@ -269,6 +269,9 @@ class DecisionListeners(
 
     private fun dropped(queued: Queued, closed: Boolean) = drops.dropped(queued.stats, closed)
 
+    /** A request whose event could not be made: dropped by every BEST_EFFORT listener, and counted so. */
+    internal fun unpublished() = bestEffort.forEach { dropped(it, false) }
+
     /** Removes what is left in [queued] and counts it as dropped: no listener call is started for it. */
     private fun discard(queued: Queued): Long {
         var discarded = 0L

@@ -95,14 +95,27 @@ internal class DocumentNode(val json: JsonNode, val path: String) {
         return json.asDouble()
     }
 
-    fun instant(): Instant =
-        try {
+    /**
+     * An ISO-8601 instant within the years the schema's `date-time` allows, 0000 to 9999 (DR1-B-2): `Instant.parse`
+     * takes years far past them, whose epoch milliseconds overflow a `Long` and would leave the codec as an
+     * `ArithmeticException`, a 500 where a field that does not read is a 400.
+     */
+    fun instant(): Instant {
+        val parsed = try {
             Instant.parse(text())
         } catch (error: DateTimeParseException) {
             throw SnapshotFormatException("$path: expected an ISO-8601 instant such as 2026-01-01T00:00:00Z", error)
         }
+        if (parsed.isBefore(FIRST_INSTANT) || parsed.isAfter(LAST_INSTANT)) {
+            fail("expected an instant from year 0000 to year 9999")
+        }
+        return parsed
+    }
 
     private companion object {
+        val FIRST_INSTANT: Instant = Instant.parse("0000-01-01T00:00:00Z")
+        val LAST_INSTANT: Instant = Instant.parse("9999-12-31T23:59:59.999999999Z")
+
         fun kind(node: JsonNode): String = when {
             node.isObject -> "an object"
             node.isArray -> "an array"
