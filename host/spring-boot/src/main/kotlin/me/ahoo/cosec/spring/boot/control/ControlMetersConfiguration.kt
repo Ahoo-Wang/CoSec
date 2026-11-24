@@ -80,6 +80,9 @@ internal class ControlMetersConfiguration {
             Gauge.builder(OPEN_CHANGES, bound) { it.retained.openChanges.toDouble() }
                 .description("Open changes, as the last reclamation pass this instance led found")
                 .register(meters)
+            FunctionCounter.builder(LOST, bound) { it.lostRevisions.toDouble() }
+                .description("Revisions found listed above their document's head, their head write lost: alert on any")
+                .register(meters)
         }
         revisions.ifAvailable?.let { bound ->
             FunctionCounter.builder(RECLAIMED_YOUNG, bound) { it.reclaimedYoung.toDouble() }
@@ -94,5 +97,6 @@ internal class ControlMetersConfiguration {
         const val BYTES = "cosec.control.revisions.bytes"
         const val RECLAIMED_YOUNG = "cosec.control.revisions.reclaimed-young"
         const val OPEN_CHANGES = "cosec.control.changes.open"
+        const val LOST = "cosec.control.revisions.lost"
     }
 }

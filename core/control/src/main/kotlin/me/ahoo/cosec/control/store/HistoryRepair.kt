@@ -38,6 +38,14 @@ internal class HistoryRepair(
     /** A stored document decoded, as [Revisions.decode] decodes it. */
     private val decode: (SnapshotKey, SnapshotDocument) -> PolicyDocument,
 ) {
+    /**
+     * Told of the index entries a [rebuild] is about to drop, before it drops them: a revision that is not on the head's
+     * chain was published and its head write lost (`CTL-86`, DR1-F-7). Set by the control plane's changes
+     * (`LostHeads`), which log, count and tell of each once; the store's classes know nothing of what it does.
+     */
+    @Volatile
+    var lost: suspend (key: SnapshotKey, head: StoredDocument, dropped: List<RevisionEntry>) -> Unit = { _, _, _ -> }
+
     /** The record a walk of a document found missing, last logged: one digest per document, so a read logs it once. */
     private val reported = ConcurrentHashMap<SnapshotKey, SnapshotDigest>()
 
@@ -78,6 +86,10 @@ internal class HistoryRepair(
         val sound = live.take(soundPrefix(live))
         val compared = live.associateBy { it.revision }
         val walk = walk(key, stored, indexed.floor, compared, sound.mapTo(HashSet()) { it.revision })
+        // What the chain replaces is no longer listed after the write, and with it the evidence of a lost head: told now.
+        walk.found.mapNotNull { found -> compared[found.revision]?.takeIf { it.digest != found.digest } }
+            .takeIf { it.isNotEmpty() }
+            ?.let { lost(key, stored, it) }
         var applied: List<RevisionEntry> = emptyList()
         var dropped: List<RevisionEntry> = emptyList()
         val written = writes.updateIndex(key) { index ->
