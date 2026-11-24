@@ -92,6 +92,17 @@ class RecordBudgetTest {
     }
 
     @Test
+    fun `the byte budget counts the most recent too, so when every record is at the cap none older stays`() {
+        val retention = RetentionPolicy(maxCount = 2, documentCap = 100)
+        val entries = (1L..5L).map { RevisionEntry(it, digestOf(it), Instant.EPOCH, null, size = 100) }
+
+        val over = RecordBudget(clock).over(entries, emptyMap(), retention)
+
+        // 200 bytes in all, and the two most recent fill them. Counted beyond the most recent, two more would stay.
+        over.assert().containsExactlyInAnyOrderElementsOf(entries.take(3).map { it.digest })
+    }
+
+    @Test
     fun `beyond the most recent the index lists at most the cap at the entry's bound`() {
         val retention = RetentionPolicy(maxCount = 2, documentCap = 2 * RetentionPolicy.INDEX_ENTRY_BYTES)
         val entries = (1L..10L).map { RevisionEntry(it, digestOf(it), Instant.EPOCH, null, size = 1) }

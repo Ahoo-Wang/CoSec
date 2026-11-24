@@ -507,9 +507,10 @@ decode: each such instance holds every shadow window until its status reads or e
 `cosec.control.revisions.records` and `cosec.control.revisions.bytes` (gauges, no tags) are the revision records the
 documents retain and their stored bytes, and `cosec.control.changes.open` the open changes (`CTL-84`). The reclamation
 pass sets them, every hour: only the instance that holds the pass's lease reads every document, so only it reports what
-it found, and every other instance reports `0`, as does one whose last pass could not run. **Sum them across
-instances**, or take the largest: either is the store's total as of the last pass. An instance that lost the lease
-drops its old value at its next pass. A document that pass skipped (an open change that does not read) is not counted,
+it found, replacing its values when the pass ends and reporting the last pass's until then (no `0` in between). An
+instance another one led the pass for reports `0`; one whose pass could not start (the documents could not be listed)
+keeps what it last found. **Take the largest across instances**: it is the store's total as of the last pass. A sum
+can count one pass twice, for the pass after the lease changes hands. A document that pass skipped (an open change that does not read) is not counted,
 and `bytes` counts an entry an older version wrote only once a pass sized it. Alert on `bytes` approaching what Redis
 may hold.
 

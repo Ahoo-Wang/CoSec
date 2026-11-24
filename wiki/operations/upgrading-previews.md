@@ -82,11 +82,11 @@ Which preview of the library may run behind which preview of the gateway image: 
   snapshot sources now hold a third of that quarter each, where they held half: at 2 GiB about 4,800 typical tenants in
   each, where it was 7,200. Give a control-plane host more heap to hold more; nothing else to change.
 - **A document's revision records are bounded within `min-age` too** (`CTL-84`, DR1-F-6). Affected: a document that
-  publishes large documents often. Beyond its `max-count` most recent revisions, a document keeps at most `max-count`
-  times the document cap of records (400 MB) and 26,214 index entries; past either, the oldest go, younger than
-  `min-age` or not, counted by `cosec.control.revisions.reclaimed-young`, with a `WARN`. Four meters are new:
-  `cosec.control.revisions.records`, `.bytes`, `.reclaimed-young` and `cosec.control.changes.open`; sum the gauges
-  across instances ([Observability](./observability.md)). Each revision index entry now names its record's size; an
+  publishes large documents often. A document keeps its `max-count` most recent revisions, records of at most
+  `max-count` times the document cap in all, those included (400 MB), and 26,214 index entries beyond them; past
+  either, the oldest go, younger than `min-age` or not, counted by `cosec.control.revisions.reclaimed-young`, with a
+  `WARN`. Four meters are new: `cosec.control.revisions.records`, `.bytes`, `.reclaimed-young` and
+  `cosec.control.changes.open`; take the gauges' largest across instances ([Observability](./observability.md)). Each revision index entry now names its record's size; an
   older control plane reads past it, and an entry it writes without one is sized from its record by the next pass.
 - **A document takes no new change once it holds `cosec.control.revisions.max-count` open changes** (50 by default,
   `CTL-83`, DR1-E-2; counted before the write, so changes proposed at the same moment may all pass).

@@ -701,8 +701,9 @@ Every control-plane instance runs two maintenance passes while it runs, each fir
 
 - **Reclaiming revisions**, every hour ([computed, not configured](./configuration.md#computed-not-configured)). For each document it removes the revision records beyond the `max-count` (50) most recent that are also
   older than `min-age` (7 days), and the records of publishes that never became the head once one reclaim pass (1 hour) old. It never removes the head, nor a revision an open change rests on; when an open change cannot be read, it
-  reclaims nothing that pass. Beyond the `max-count` most recent, a document's records weigh at most `max-count` times
-  the document cap (400 MB by default), and its revision index lists at most the cap at 320 bytes an entry (26,214
+  reclaims nothing that pass. A document's records together, its `max-count` most recent included, weigh at most
+  `max-count` times the document cap (400 MB by default: when every record is at the cap, none older than the most
+  recent stays), and beyond the most recent its revision index lists at most the cap at 320 bytes an entry (26,214
   entries): past either, the oldest go first, **younger than `min-age` or not**, except the head and what an open change
   rests on (`CTL-84`). A loop of large publishes is held to about `max-count` records; a small document that publishes
   often keeps its week. Each record so removed within `min-age` is counted

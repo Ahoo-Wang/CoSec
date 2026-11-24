@@ -656,8 +656,8 @@ When `GET /changes/{id}` is `404` for a change that ended, the bound removed it 
 a revision from `GET /documents/{key}/revisions/{revision}` (`provenance`), and the rest from the audit events.
 
 When `cosec.control.revisions.reclaimed-young` counts, or a `WARN` says records younger than `min-age` were reclaimed,
-a document's records weighed more than it may retain beyond its `max-count` most recent (`max-count` × the document
-cap, or 26,214 index entries, `CTL-84`): find the client publishing large documents in a loop and rate-limit it per
+a document's records weighed more than it may retain (`max-count` × the document cap in all, its `max-count` most
+recent included, or 26,214 index entries beyond them, `CTL-84`): find the client publishing large documents in a loop and rate-limit it per
 tenant. The `max-count` most recent revisions stay, so a rollback to a recent one still works.
 
 When a tenant change waits for approval with `TOO_LARGE`, the grant analysis spent its four million comparisons

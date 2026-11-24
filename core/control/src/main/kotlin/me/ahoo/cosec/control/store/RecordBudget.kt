@@ -25,9 +25,11 @@ import java.util.concurrent.atomic.AtomicLong
 
 /**
  * What a document's records may weigh (`CTL-84`, DR1-F-6): its [RetentionPolicy.maxCount] most recent revisions always
- * stay, so a rollback to any of them works; beyond them, its records weigh at most [RetentionPolicy.byteBudget] and its
- * index lists at most [RetentionPolicy.maxEntries] more. Past either, the oldest go first, younger than `min-age` or not,
- * unless an open change rests on one: a loop of large publishes no longer fills Redis for a week.
+ * stay, so a rollback to any of them works; all its records together, those included, weigh at most
+ * [RetentionPolicy.byteBudget], and its index lists at most [RetentionPolicy.maxEntries] beyond them. Each record is at
+ * most the cap, so the most recent alone never pass the budget; when they are all at the cap, no older record stays.
+ * Past either bound, the oldest go first, younger than `min-age` or not, unless an open change rests on one: a loop of
+ * large publishes no longer fills Redis for a week.
  *
  * Reclaiming a record younger than `min-age` breaks that guarantee for its document, so each one is counted
  * ([reclaimedYoung]) and warned of, at most once a reclaim pass for all documents, naming the last.
@@ -40,8 +42,9 @@ internal class RecordBudget(private val clock: Clock) {
     private var unwarned = 0L
 
     /**
-     * The digests of [entries], oldest first, past [retention]'s budgets counted from the newest, never one of its
-     * [RetentionPolicy.maxCount] most recent. [sizes] holds what an entry without its size weighs.
+     * The digests of [entries], oldest first, past [retention]'s budgets counted from the newest: the bytes of every
+     * entry, the most recent included, and the entries beyond them; never one of its [RetentionPolicy.maxCount] most
+     * recent. [sizes] holds what an entry without its size weighs.
      */
     fun over(
         entries: List<RevisionEntry>,
@@ -78,8 +81,9 @@ internal class RecordBudget(private val clock: Clock) {
         if (warn) {
             log.warn {
                 "[$key]: ${young.size} records younger than ${retention.minAge} reclaimed (${young.sumOf { it.size ?: 0 }} " +
-                    "bytes), past the most a document retains (${retention.byteBudget} bytes or ${retention.maxEntries} " +
-                    "entries beyond the ${retention.maxCount} most recent, CTL-84); $before more since the last warning."
+                    "bytes), past the most a document retains (${retention.byteBudget} bytes of records in all, or " +
+                    "${retention.maxEntries} entries beyond the ${retention.maxCount} most recent, CTL-84); $before more " +
+                    "since the last warning."
             }
         }
     }
