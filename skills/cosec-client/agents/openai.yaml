@@ -1,0 +1,4 @@
+interface:
+  display_name: "CoSec Client"
+  short_description: "Connect a web app to CoSec"
+  default_prompt: "Use $cosec-client to connect my browser or React application to a CoSec 8.0 application with @ahoo-wang/cosec-fetcher and @ahoo-wang/cosec-react."
