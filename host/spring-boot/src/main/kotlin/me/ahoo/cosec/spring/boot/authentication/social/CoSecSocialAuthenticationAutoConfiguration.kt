@@ -143,7 +143,6 @@ internal class CoSecSocialAuthenticationAutoConfiguration(
     }
 }
 
-
 internal fun redirectUriCheckOff(key: String): String =
     "${SocialAuthenticationProperties.PREFIX}.registration.$key.ignore-check-redirect-uri is true: JustAuth does not check " +
         "that this registration's redirect-uri is an http or https URL. It is the operator's value, not a request's, so " +
