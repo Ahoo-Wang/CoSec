@@ -1,0 +1,18 @@
+# Rule: IDN-40
+# Mutant: the session is ended before its login, so a logout that fails at the login has already ended the session the caller asked for, and its retry is no longer from the start
+# Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchedLogoutTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
+index d33c61d70..74766e773 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
+@@ -331,8 +331,8 @@ class TokenFamilies @JvmOverloads constructor(
+     @InternalCoSecApi
+     suspend fun logout(id: String) {
+         val family = sessionStore("read a session") { store.read(id) }?.family ?: return
+-        family.root?.let { endRoot(family, it) }
+         end(id)
++        family.root?.let { endRoot(family, it) }
+     }
+ 
+     /** Revokes [rootId], [family]'s root, unless it is gone, already revoked, or not [family]'s principal's. */

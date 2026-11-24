@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.login.token
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -28,7 +29,8 @@ import java.time.Instant
 
 /**
  * The [TokenRevoker] over a [TokenStore]: [revoke] verifies the token, refuses one already revoked ([revocation]), ends
- * its session in [families] and records its id; [revokeSubject] records the principal's revocation. A revocation store that cannot be read does not
+ * its session in [families], and the login it was switched from with it ([TokenFamilies.logout], `IDN-40`), and records
+ * its id; [revokeSubject] records the principal's revocation. A revocation store that cannot be read does not
  * stop a logout: whether the token was already revoked is then unknown, and revoking it again is harmless.
  *
  * @param tokenVerifier verifies the token and resolves its id before revoking
@@ -53,13 +55,16 @@ class StoreTokenRevoker @JvmOverloads constructor(
 
     override suspend fun revoke(token: CompositeToken): VerifiedToken = revoked(tokenVerifier.refresh(token))
 
+    @OptIn(InternalCoSecApi::class)
     private suspend fun revoked(token: VerifiedToken): VerifiedToken {
         try {
             revocation.check(token)
         } catch (_: RevocationUnavailableException) {
             // Not known to be revoked yet: record it, which the write's own failure would report.
         }
-        token.session?.let { families.end(it.id) }
+        // The login's session first, then this one, then the token's id (IDN-40): a logout that fails at any step has not
+        // revoked the token, so its retry runs again from the start, and a logout answered is one whose login has ended.
+        token.session?.let { families.logout(it.id) }
         sessionStore("revoke a token") { tokenStore.revoke(token.id, revocationTtl) }
         return token
     }

@@ -28,13 +28,16 @@ import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.webflux.ServerWebExchanges.requireSecurityContext
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -42,6 +45,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilter
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
@@ -74,7 +78,7 @@ internal const val REFRESH_PATH = "/auth/refresh"
 internal const val LOGOUT_PATH = "/auth/logout"
 
 /**
- * The application: its sign-in (login stays the application's), one route the document permits, one it permits to an
+ * The application: its sign-in and its tenant switch (both stay the application's), one route the document permits, one it permits to an
  * authenticated caller and one it denies, and the `/test` routes the client's tests ask of the host. Refresh and logout
  * are the starter's own routes (`cosec.authentication.login.refresh.path`, `logout.path`: `IDN-23`, `IDN-24`), the
  * ones every application gets.
@@ -109,6 +113,14 @@ internal class ClientHostApi(
         counters.logins.incrementAndGet()
         return auth.authenticateAsToken(ClientHostLogin(body.getValue("username")))
     }
+
+    /** The application's tenant switch ([answerSwitch]): open to authenticated callers, the pair in the body. */
+    @PostMapping("$SWITCH_PATH/{tenant}")
+    suspend fun switch(
+        @PathVariable tenant: String,
+        @RequestBody body: Map<String, Any?>,
+        exchange: ServerWebExchange,
+    ): ResponseEntity<Any> = answerSwitch(auth, tenant, body, exchange.requireSecurityContext())
 
     /** The headers this request arrived with, lower-cased: what a client put on the wire. */
     @GetMapping("/test/echo")
@@ -201,6 +213,11 @@ internal class ClientHostApplication {
             check(!counters.refreshError) { "a bug in the application's membership lookup" }
             null
         }
+
+    /** The application's tenant switch, which the login finds by its credentials class. */
+    @Bean
+    fun clientHostSwitch(verifier: TokenVerifier, families: TokenFamilies, revocation: TokenRevocation) =
+        clientHostSwitchAuthentication(verifier, families, revocation)
 
     /** The session store, which `/test/sessions/down` takes down: CoCache's in-memory one is not switchable. */
     @Bean
