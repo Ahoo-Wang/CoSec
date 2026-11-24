@@ -298,6 +298,9 @@ class ControlServicePortSettingsTest {
             "me.ahoo.cosec.ip2region",
         )
         val properties = listOf(
+            // One address for the binds and the requests (#1962): bound to every address on a port the system chose, a
+            // server shares that port with any process bound to one address on it, which then takes its connections.
+            "server.address=127.0.0.1",
             "server.port=0",
             "cosec.control.http.service-port=0",
             "cocache.backend=memory",
@@ -327,7 +330,7 @@ class ControlServicePortSettingsTest {
     }
 
     private fun request(scheme: String, port: Int): HttpRequest =
-        HttpRequest.newBuilder(URI.create("$scheme://localhost:$port/cosec/control/v1/documents/tenant:acme"))
+        HttpRequest.newBuilder(URI.create("$scheme://127.0.0.1:$port/cosec/control/v1/documents/tenant:acme"))
             .timeout(Duration.ofSeconds(TIMEOUT_SECONDS)).GET().build()
 
     private fun client(context: SSLContext?): HttpClient =

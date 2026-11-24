@@ -117,6 +117,8 @@ class ControlServiceParityTest {
             ),
         )
         .withPropertyValues(
+            // The service port binds the application's address: the loopback one, where the requests go (#1962).
+            "server.address=127.0.0.1",
             "cosec.key-prefix=parity-${UUID.randomUUID()}",
             "cosec.ip2region.enabled=false",
             "cosec.authorization.snapshot.eviction-check=warn",

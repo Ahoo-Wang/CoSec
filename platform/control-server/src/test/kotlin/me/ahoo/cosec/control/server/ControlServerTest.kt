@@ -59,8 +59,12 @@ class ControlServerTest {
                 }
             )
             .run(
+                // One address for the binds and the requests (#1962): bound to every address on a port the system chose,
+                // a server shares that port with any process bound to one address on it, which then takes its connections.
+                "--server.address=127.0.0.1",
                 "--server.port=0",
                 "--cosec.control.http.service-port=0",
+                "--management.server.address=127.0.0.1",
                 "--management.server.port=0",
                 "--cocache.backend=memory",
                 "--cosec.authorization.snapshot.eviction-check=warn",
@@ -76,7 +80,7 @@ class ControlServerTest {
 
     private fun get(context: ConfigurableApplicationContext, port: String, path: String): HttpResponse<String> {
         val request = HttpRequest.newBuilder(
-            URI("http://localhost:${context.environment.getProperty(port)}$path")
+            URI("http://127.0.0.1:${context.environment.getProperty(port)}$path")
         ).build()
         return http.send(request, HttpResponse.BodyHandlers.ofString())
     }
@@ -106,7 +110,7 @@ class ControlServerTest {
         get(context, "local.server.port", path).statusCode().assert().isEqualTo(401)
         // A bearer token nobody verifies is no more than the missing header: the host believes the identity, not this.
         val request = HttpRequest.newBuilder(
-            URI("http://localhost:${context.environment.getProperty("local.server.port")}$path")
+            URI("http://127.0.0.1:${context.environment.getProperty("local.server.port")}$path")
         )
             .header("Authorization", "Bearer not-a-token").build()
         http.send(request, HttpResponse.BodyHandlers.ofString()).statusCode().assert().isEqualTo(401)
@@ -134,7 +138,7 @@ class ControlServerTest {
         val context = start("--cosec.pipeline.identity.only-trusted-callers-can-reach=true")
         val header = IdentityHeader.forSubject("plato", tenant = "(platform)", app = "cosec-control")
         fun status(port: String, path: String): Int {
-            val request = HttpRequest.newBuilder(URI("http://localhost:${context.environment.getProperty(port)}$path"))
+            val request = HttpRequest.newBuilder(URI("http://127.0.0.1:${context.environment.getProperty(port)}$path"))
                 .header(IdentityHeader.NAME, header).build()
             return http.send(request, HttpResponse.BodyHandlers.ofString()).statusCode()
         }
