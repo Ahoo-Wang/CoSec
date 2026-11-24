@@ -534,6 +534,48 @@ class ApiKeyMigrationTest {
         plan.keys.single().key.principalId.assert().isEqualTo("apikey:k-bob")
     }
 
+    /** `MIG-6` (DR2-M-9): the blacklist names a principal by its id too, so a key whose principal it blocks stays on it. */
+    @Test
+    fun `a key whose principal the blacklist blocks stays on its principal - MIG-6`() {
+        val bob = key("k-bob", "bob", roles = listOf("reader"))
+        val blocked = BlacklistExport.read("""["acme:mallory","acme:bob"]""".encodeToByteArray())
+        val refused = ApiKeyMigration(published, export, emptySet(), now = now, blacklist = blocked).plan(listOf(bob))
+        refused.keys.assert().isEmpty()
+        refused.rejections.single().assert().contains("MIG-6").contains("the blacklist entry [acme:bob]")
+            .contains("--grant-to-principal bob")
+        // Kept on its principal by --grant-to-principal, the key is still blocked as bob.
+        ApiKeyMigration(published, export, setOf("bob"), now = now, blacklist = blocked).plan(listOf(bob)).accepted
+            .assert().isTrue()
+        // The value is the one the blacklist blocks a principal by.
+        BlacklistExport.value(acme, "bob").assert()
+            .isEqualTo(me.ahoo.cosec.runtime.attribute.BlacklistKind.principal("acme", "bob"))
+        listOf("""{"acme":"bob"}""", """["acme:bob",1]""", """[""]""").forEach { json ->
+            assertThrows<IllegalArgumentException> { BlacklistExport.read(json.encodeToByteArray()) }
+        }
+    }
+
+    /**
+     * `MIG-6`, the other way: a blacklist that does not block the principal lets the key move; with no blacklist given the
+     * key moves too, and the report names the value to block for it if its principal is blocked where the tool cannot see.
+     */
+    @Test
+    fun `a key whose principal no given blacklist blocks moves, and without one its report names what to block - MIG-6`() {
+        val bob = key("k-bob", "bob", roles = listOf("reader"))
+        val given = ApiKeyMigration(
+            published,
+            export,
+            emptySet(),
+            now = now,
+            blacklist = setOf("acme:mallory")
+        ).plan(listOf(bob))
+        given.keys.single().mode.assert().isEqualTo(ConvertedApiKey.Mode.OWN_PRINCIPAL)
+        given.keys.single().blockIfBlocked.assert().isNull()
+        val unseen = ApiKeyMigration(published, export, emptySet(), now = now).plan(listOf(bob))
+        unseen.keys.single().blockIfBlocked.assert().isEqualTo("acme:apikey:k-bob")
+        unseen.report(dryRun = true, alreadyConverted = emptyList()).get("keys").get(0).get("blockIfPrincipalBlocked")
+            .asString().assert().isEqualTo("acme:apikey:k-bob")
+    }
+
     /** DR2-M-2: a member of another type is never read as empty; the record is unreadable, by name. */
     @Test
     fun `a stored key with a member of the wrong type is refused, naming the member`() {

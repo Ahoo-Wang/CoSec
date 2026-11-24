@@ -856,10 +856,12 @@ principal's, from the `MembershipProvider`, narrowed to the key's `roles` (RFC 0
 app the converted keys belong to ([Apps](../integration/authentication.md#apps)); 7.x keys declare none, so without it a
 service with an app refuses them. Export what each principal holds now, as a JSON array
 of `{"tenant", "principal", "roles": ["role", "role@space", ...]}`, each with the policies your membership provider
-attaches to it as `"attachments": ["policy", ...]` when it attaches any, and pass it as `--memberships`:
+attaches to it as `"attachments": ["policy", ...]` when it attaches any, and pass it as `--memberships`. Export the
+principals your application's blacklist blocks, as the JSON array of the values its `BlacklistSource` holds for them
+(`["acme:mallory", ...]`, `<tenant>:<principal id>`), and pass it as `--blacklist`:
 
 ```bash
-cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./memberships.json --out ./api-keys --dry-run
+cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./memberships.json --blacklist ./blacklist.json --out ./api-keys --dry-run
 ```
 
 A key goes one of three ways (`keys[].mode`):
@@ -870,19 +872,25 @@ A key goes one of three ways (`keys[].mode`):
 | `own-principal` | otherwise, by default | moves to a workload principal `apikey:<key id>` in its tenant, uncapped; `memberships` lists the key's roles for that principal, `principalBindings` its attached policies bound to it by name |
 | `granted` | only for the principals `--grant-to-principal <ids>` (or `all`) names | stays with its principal, capped to its roles and a role of its own (`--role-prefix`, default `api-key.`, plus the key id), which `roleBindings` binds to its attached policies; the principal is granted the union of its usable keys' caps, and `memberships[].newlyGained` says what it did not hold |
 
-No key gains access, and no principal does unless named in `--grant-to-principal`. A key never moves to a principal of
-its own while a DENY names its principal by its id (`MIG-6`), since `apikey:<key id>` would escape it:
+By the documents, memberships and blacklist given, no key gains access, and no principal does unless named in
+`--grant-to-principal`. A key never moves to a principal of its own while a DENY, or the blacklist, names its principal
+by its id (`MIG-6`), since `apikey:<key id>` would escape it:
 - a condition, in a DENY or under a negation in an ALLOW, that compares `subject.id` with a value holding of the
   principal (`eq`, `in`, `prefix`), or with a value the documents do not settle (another attribute: then every key is
   refused this way);
 - a principal binding of a policy that holds a DENY;
-- a DENY the `--memberships` export lists among the principal's `attachments`.
+- a DENY the `--memberships` export lists among the principal's `attachments`;
+- the principal's entry in the `--blacklist` export.
 
 Such a key is refused, naming each DENY. Keep it on its principal: in place, or with `--grant-to-principal`. What a key
 loses is listed per key: `lost`, its principal's principal and break-glass bindings that grant, which a capped key no
 longer reaches; `stillDenied`, the DENYs bound to its principal, which a capped key stays under; and for
 `own-principal`, `changes`, what depends on the principal's id (the audit subject, rate limit buckets keyed by
 principal, the `sub` of a forwarded `CoSec-Identity`).
+
+Without `--blacklist` the tool cannot see your blacklist, and says so. A key whose principal it blocks moves like any
+other, and is no longer blocked: keep such a key in place, or block the value the report names for each key that moved
+(`blockIfPrincipalBlocked`, `<tenant>:apikey:<key id>`) before the key is used.
 
 A key is rejected, and then the command exits `1` and writes no key, when a DENY names its principal and it would move
 (above), when its stored record has a member of another type than the format says (a `policies` that is no array:

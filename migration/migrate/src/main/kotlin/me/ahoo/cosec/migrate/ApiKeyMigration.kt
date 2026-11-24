@@ -48,7 +48,9 @@ import java.time.Instant
  * A key never moves to a principal of its own while a DENY names its principal by its id (`MIG-6`, DR2-M-1): a condition
  * on `subject.id` in the DENY direction, a DENY bound to the principal, or a DENY the provider attaches to it
  * ([PublishedDocuments.deniesNaming]). The new principal would escape all of it. Such a key is refused, and stays on its
- * principal, capped, either in place or with `--grant-to-principal`.
+ * principal, capped, either in place or with `--grant-to-principal`. So is a key whose principal the application's
+ * blacklist blocks, when `--blacklist` says so (DR2-M-9); without it, each moved key's report names the value
+ * (`<tenant>:apikey:<id>`) to block for it if its principal was blocked.
  *
  * A key is rejected, and nothing is written, when it has attributes (a condition may read them), malformed roles, an id
  * with `@`, `*` or blanks, a role named with the role prefix, an attachment that does not resolve exactly (it made every
@@ -67,6 +69,11 @@ class ApiKeyMigration(
     private val now: Instant = Instant.now(),
     /** Each principal's attached policies, from `--memberships`' `attachments`; null when not given. */
     private val attachments: Map<Pair<TenantId, String>, Set<String>>? = null,
+    /**
+     * The principal values the application's blacklist blocks, from `--blacklist` ([BlacklistExport]); null when not
+     * given, and then each moved key's report names the value to block for it.
+     */
+    private val blacklist: Set<String>? = null,
 ) {
     init {
         require(rolePrefix.isNotEmpty() && '@' !in rolePrefix && rolePrefix.none { it.isWhitespace() }) {
@@ -188,11 +195,14 @@ class ApiKeyMigration(
     private fun moved(key: LegacyApiKey): Planned {
         val principal = OWN_PRINCIPAL_PREFIX + key.id
         val attached = attachments?.get(key.tenant to key.principalId).orEmpty()
-        val denies = documents.deniesNaming(key.tenant, key.principalId, attached)
+        val blocked = BlacklistExport.value(key.tenant, key.principalId)
+        val denies = documents.deniesNaming(key.tenant, key.principalId, attached) +
+            listOfNotNull("the blacklist entry [${Identifiers.printable(blocked)}]".takeIf { blacklist?.contains(blocked) == true })
         if (denies.isNotEmpty()) {
             val name = Identifiers.printable(key.principalId)
             return Planned.Refused(
-                "its principal [$name] is named by a DENY that a principal of its own ($principal) would escape " +
+                "its principal [$name] is named by a DENY or the blacklist, which a principal of its own ($principal) " +
+                    "would escape " +
                     "(MIG-6): ${denies.joinToString("; ")}. Keep the key on its principal, capped: in place " +
                     "(--memberships showing its roles, and no attached policy) or with --grant-to-principal $name"
             )
@@ -222,6 +232,7 @@ class ApiKeyMigration(
                 ConvertedApiKey.Mode.OWN_PRINCIPAL,
                 lost(key),
                 PRINCIPAL_ID_CHANGES,
+                blockIfBlocked = BlacklistExport.value(key.tenant, principal).takeIf { blacklist == null },
             ),
             principalBindings = bindings,
             grant = (key.tenant to principal) to key.roles.toList(),

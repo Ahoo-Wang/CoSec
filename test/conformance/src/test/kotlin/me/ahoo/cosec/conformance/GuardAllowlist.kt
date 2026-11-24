@@ -252,6 +252,8 @@ object GuardAllowlist {
             "migrate:ApiKeyMigrationTest#a key whose principal a DENY names by its id stays on its principal - MIG-6",
             "migrate:ApiKeyMigrationTest#a DENY that names no key's principal lets the key move to a principal of its own - MIG-6",
             "migrate:ApiKeyMigrationTest#a stored key with a member of the wrong type is refused, naming the member",
+            "migrate:ApiKeyMigrationTest#a key whose principal the blacklist blocks stays on its principal - MIG-6",
+            "migrate:ApiKeyMigrationTest#a key whose principal no given blacklist blocks moves, and without one its report names what to block - MIG-6",
             "spring-boot:RouteEscapeReviewTest#a DENY or rate limit rule on every action reading action verb or resource id is warned about",
             "spring-boot:RouteEscapeReviewTest#a statement that is not on every action and resource, an ALLOW, or one reading something else is not",
             "document:SnapshotDocumentsTest#aPolicyDocumentStatesItsOwnHeader",

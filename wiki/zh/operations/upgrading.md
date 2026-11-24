@@ -584,10 +584,10 @@ composite。8.0 中 `*` 还匹配控制面的动作（`cosec:*`）和[代码中�
 - **配置中的 key**（`cosec.api-key.keys[]`）：`tenant-id` 必填，每个 key 恰好设置 `roles`（它的上限；`[]` 表示没有角色）与 `uncapped: true` 之一。`policies` 和 `attributes` 已删除；仍设置它们的 key 会导致启动失败，`roles` 与 `uncapped` 都不设或都设的 key 也一样。7.x 的 key 只拥有它列出的角色和策略；要保留一个什么都没有的 key，给它设置 `roles: []`。
 - **`ApiKey`** 是普通类 `ApiKey(id, principalId, tenantId, roles, expiresAt, enabled)`：`policies`、`attributes` 和 `toPrincipal()` 已删除，`tenantId` 必填，`roles: Set<String>?` 是上限，且没有默认值。
 
-**转换已存储的 key。** `--app <id>` 指明转换后的 key 属于哪个应用（[应用](../integration/authentication.md#apps)）；7.x 的 key 没有声明应用，不指定时配置了应用的服务会拒绝它们。`cosec-migrate api-keys` 读取部署读取 API key 的 `<--key-prefix>:api-key`（默认 `cosec:api-key`）下的每个 key，并把 `api-keys-report.json` 写入 `--out`。导出每个主体当前拥有的角色，格式为 JSON 数组 `{"tenant", "principal", "roles": ["role", "role@space", ...]}`；你的成员关系提供者给它附加了策略时，再加上 `"attachments": ["policy", ...]`。作为 `--memberships` 传入：
+**转换已存储的 key。** `--app <id>` 指明转换后的 key 属于哪个应用（[应用](../integration/authentication.md#apps)）；7.x 的 key 没有声明应用，不指定时配置了应用的服务会拒绝它们。`cosec-migrate api-keys` 读取部署读取 API key 的 `<--key-prefix>:api-key`（默认 `cosec:api-key`）下的每个 key，并把 `api-keys-report.json` 写入 `--out`。导出每个主体当前拥有的角色，格式为 JSON 数组 `{"tenant", "principal", "roles": ["role", "role@space", ...]}`；你的成员关系提供者给它附加了策略时，再加上 `"attachments": ["policy", ...]`。作为 `--memberships` 传入。再导出你的应用黑名单拉黑的主体，格式为其 `BlacklistSource` 为它们保存的值组成的 JSON 数组（`["acme:mallory", ...]`，即 `<tenant>:<principal id>`），作为 `--blacklist` 传入：
 
 ```bash
-cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./memberships.json --out ./api-keys --dry-run
+cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./memberships.json --blacklist ./blacklist.json --out ./api-keys --dry-run
 ```
 
 每个 key 走三条路之一（`keys[].mode`）：
@@ -598,12 +598,15 @@ cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./membership
 | `own-principal` | 其他情况，默认 | 迁到其租户中的工作负载主体 `apikey:<key id>`，没有上限；`memberships` 列出该主体需要拥有的 key 的角色，`principalBindings` 把它附加的策略按名绑定给该主体 |
 | `granted` | 只针对 `--grant-to-principal <ids>`（或 `all`）列出的主体 | 留在其主体上，上限为它的角色加上它自己的一个角色（`--role-prefix`，默认 `api-key.`，加上 key id），`roleBindings` 把这个角色绑定到它附加的策略；主体被授予其各个可用 key 的上限之并，`memberships[].newlyGained` 指出它原来没有的 |
 
-没有 key 会获得更多权限；除非在 `--grant-to-principal` 中列出，也没有主体会获得更多权限。只要有 DENY 按 id 点名了 key 的主体，key 就不会迁到自己的主体（`MIG-6`），因为 `apikey:<key id>` 会逃出这条 DENY：
+按给出的文档、成员关系与黑名单，没有 key 会获得更多权限；除非在 `--grant-to-principal` 中列出，也没有主体会获得更多权限。只要有 DENY 或黑名单按 id 点名了 key 的主体，key 就不会迁到自己的主体（`MIG-6`），因为 `apikey:<key id>` 会逃出它：
 - DENY 中、或 ALLOW 里取反之下的条件，把 `subject.id` 与对该主体成立的值比较（`eq`、`in`、`prefix`），或与文档无法确定的值比较（另一个属性：这时每把 key 都这样被拒绝）；
 - 策略含 DENY 的主体绑定；
-- `--memberships` 导出在该主体的 `attachments` 里列出的 DENY。
+- `--memberships` 导出在该主体的 `attachments` 里列出的 DENY；
+- `--blacklist` 导出里该主体的条目。
 
 这样的 key 被拒绝，并点名每条 DENY。把它留在其主体上：原地，或用 `--grant-to-principal`。key 失去的东西按 key 列出：`lost` 是带上限的 key 不再能用到的、其主体的授予型主体绑定和 break-glass 绑定；`stillDenied` 是绑定到其主体的 DENY，带上限的 key 仍受它约束；对 `own-principal`，`changes` 是依赖主体 id 的东西（审计主体、按主体计数的限流桶、转发的 `CoSec-Identity` 的 `sub`）。
+
+没有 `--blacklist` 时，工具看不到你的黑名单，并在输出里说明这一点。主体被拉黑的 key 会像其他 key 一样迁走，从此不再被拦：这样的 key 请原地保留，或在使用之前把报告为每把迁走的 key 写出的值（`blockIfPrincipalBlocked`，即 `<tenant>:apikey:<key id>`）也拉黑。
 
 以下情况 key 被拒绝，此时命令以 `1` 退出，不写入任何 key：有 DENY 点名其主体而它要迁走（见上）、存储的记录里有成员类型与格式不符（`policies` 不是数组：读成空会丢掉附加的 DENY）、带属性（条件可能读取它们）、角色格式错误、id 含 `@`、`*` 或空白、某个角色以角色前缀开头、某个文档已经绑定了按 key 生成的角色，或附加的策略不能精确解析：不存在、不可附加，或租户和平台都定义了它但内容不同。这样的附加在 8.0 中让该 key 的每个请求都不确定，丢掉它又可能丢掉一个 DENY：先修正文档或 key。7.x 不保证 key id 唯一，所以以下情况 key 也会被拒绝：同一租户中另一个 key 的 id 相同（两者会变成同一个主体，或共用一个按 key 生成的角色）；`own-principal` 的 key 要迁往的主体 `apikey:<key id>` 已经存在，即某个文档按名绑定了它，或 `--memberships` 列出了它，这时 key 会获得该主体拥有的权限。`--memberships` 文件中同一主体出现两次，或 `tenant`、`principal`、`roles` 的类型不对（`roles` 是字符串数组，只有 `[]` 表示没有角色）时被拒绝。没有租户的 key 归入默认租户（`defaultTenant`）。
 

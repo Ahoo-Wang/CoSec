@@ -6,12 +6,12 @@ diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/ApiKeyMigra
 index 0000000..0000000 100644
 --- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/ApiKeyMigration.kt
 +++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/ApiKeyMigration.kt
-@@ -189,7 +189,7 @@ class ApiKeyMigration(
-         val principal = OWN_PRINCIPAL_PREFIX + key.id
-         val attached = attachments?.get(key.tenant to key.principalId).orEmpty()
-         val denies = documents.deniesNaming(key.tenant, key.principalId, attached)
+@@ -198,7 +198,7 @@ class ApiKeyMigration(
+         val blocked = BlacklistExport.value(key.tenant, key.principalId)
+         val denies = documents.deniesNaming(key.tenant, key.principalId, attached) +
+             listOfNotNull("the blacklist entry [${Identifiers.printable(blocked)}]".takeIf { blacklist?.contains(blocked) == true })
 -        if (denies.isNotEmpty()) {
 +        if (denies.isNotEmpty() && false) {
              val name = Identifiers.printable(key.principalId)
              return Planned.Refused(
-                 "its principal [$name] is named by a DENY that a principal of its own ($principal) would escape " +
+                 "its principal [$name] is named by a DENY or the blacklist, which a principal of its own ($principal) " +
