@@ -27,6 +27,7 @@ import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenRevokedException
@@ -81,7 +82,7 @@ class SubjectRevocationJwtTest {
 
     private fun issue(id: String = "alice") =
         converter.toToken(
-            TokenSubject(id, tenant = tenant.value, roles = setOf("admin"))
+            TokenSubject(id, Identity.Credential.Kind.PERSON, tenant = tenant.value, roles = setOf("admin"))
                 .inSession(runBlocking { families.start(tenant, PrincipalId(id)) })
         ) as CompositeToken
 

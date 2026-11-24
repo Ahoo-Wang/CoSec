@@ -255,7 +255,7 @@ class PasswordAuthentication(private val users: UserService) :
 
     override suspend fun authenticate(credentials: PasswordCredentials): TokenSubject {
         val user = users.verify(credentials.username, credentials.password)
-        return TokenSubject(id = user.id, app = "order", roles = user.rolesIn("order"))
+        return TokenSubject(id = user.id, kind = Kind.PERSON, app = "order", roles = user.rolesIn("order"))
     }
 }
 
@@ -267,8 +267,12 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 }
 ```
 
-`TokenSubject("alice", "acme")` is the tenant `acme`: `tenant` comes before `app`, as it does in every other CoSec API
-(`TokenFamilies.start(tenant, principal)`). The samples write every argument after `id` by name, which reads better still.
+`kind` (`Identity.Credential.Kind`, `IDN-45`) is required: whose the token is, a person's or a workload's. Declare a
+user's sign-in a person's and a machine's (client credentials, a service account) a workload's: a workload never
+approves a change, is never the control plane's trust root and has no break-glass. CoSec writes it into the access
+token as `cosec.kind`, and a refresh or a tenant switch keeps it. `TokenSubject("alice", Kind.PERSON, "acme")` is the
+tenant `acme`: `tenant` comes before `app`, as it does in every other CoSec API (`TokenFamilies.start(tenant,
+principal)`). The samples write every argument after `id` by name, which reads better still.
 
 `authenticate` refuses a login by throwing: it has no empty answer, and no token is issued for a login that failed or
 whose caller has gone. It runs on the caller's thread, an event loop in WebFlux, so an implementation over a blocking

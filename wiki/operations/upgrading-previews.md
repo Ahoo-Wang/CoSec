@@ -118,6 +118,14 @@ Which preview of the library may run behind which preview of the gateway image: 
   workload's, so an operator forwarded by a beta.8 gateway cannot approve on an upgraded control host until the gateway
   is upgraded. A header that declares an `api-key` or `service` credential a person's is refused with `400`.
 
+- **Breaking: a login declares whose the token is** (`IDN-45`). Affected: every `Authentication` of your own.
+  `TokenSubject` takes a required `kind` after `id`, `Identity.Credential.Kind.PERSON` or `WORKLOAD`, with no default:
+  a login does not compile until it says which. Declare a user's sign-in a person's and a machine's (client
+  credentials, a service account) a workload's. CoSec's access tokens now carry the claim `cosec.kind`, which a client
+  must not depend on (`contract/token/claims.json`); refresh tokens do not. The claim makes each token about 30
+  characters longer, so the same heap's verified-token cache holds about 0.5 % fewer of them (16,298 of the largest
+  test token at 2 GiB, where 16,384 fitted).
+
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
 **Upgrade in this order.** Three changes of this preview read a header or a request the other side writes, so a

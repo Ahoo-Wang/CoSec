@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.compat.side
 
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.TokenSession
 import java.time.Instant
@@ -27,6 +28,10 @@ internal object Kinds {
 
     fun apiKey(id: String, expiresAt: Instant, capped: Boolean): Identity.Credential =
         Identity.Credential(Identity.Method.API_KEY, id, expiresAt, capped = capped)
+
+    /** A sign-in, which a release before kinds does not declare. */
+    fun person(id: String, tenant: String, app: String, roles: Set<String>, attributes: Map<String, Any>): TokenSubject =
+        TokenSubject(id, tenant = tenant, app = app, roles = roles, attributes = attributes)
 
     /** A release before kinds reads none. */
     @Suppress("UNUSED_PARAMETER")

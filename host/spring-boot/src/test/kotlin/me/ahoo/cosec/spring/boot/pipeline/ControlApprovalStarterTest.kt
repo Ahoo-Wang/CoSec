@@ -45,6 +45,7 @@ import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -127,6 +128,7 @@ class ControlApprovalStarterTest {
             .toToken(
                 TokenSubject(
                     principal,
+                    Identity.Credential.Kind.PERSON,
                     app = "cosec-control",
                     tenant = TenantId.PLATFORM.value,
                     membershipMarker = marker

@@ -15,6 +15,7 @@ package me.ahoo.cosec.jwt
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.token.TokenSubject
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -27,24 +28,43 @@ internal class JwtTokenConverterTest {
     var jwtTokenConverter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.SIGNING)
     private val jwtTokenVerifier = JwtTokenVerifier(JwtFixture.SIGNING)
 
+    /** IDN-45: the access token says whose it is, as the subject declared; the refresh token says nothing of it. */
+    @Test
+    fun `the access token says whose it is, and the refresh token does not - IDN-45`() {
+        listOf(Identity.Credential.Kind.PERSON to "person", Identity.Credential.Kind.WORKLOAD to "workload")
+            .forEach { (kind, claim) ->
+                val token = jwtTokenConverter.toToken(TokenSubject("alice", kind))
+                Jwts.decode(token.accessToken).getClaim(Jwts.KIND_CLAIM).asString().assert().isEqualTo(claim)
+                Jwts.decode(token.refreshToken).getClaim(Jwts.KIND_CLAIM).isMissing.assert().isTrue()
+            }
+    }
+
     /** RFC 0012 §3.5. */
     @Test
     fun theAppIsIssuedAsTheAudience() {
-        val token = jwtTokenConverter.toToken(TokenSubject("alice", app = "order"))
+        val token = jwtTokenConverter.toToken(TokenSubject("alice", Identity.Credential.Kind.PERSON, app = "order"))
         jwtTokenVerifier.verify(token.accessToken).app.assert().isEqualTo("order")
         Jwts.decode(token.accessToken).audience.assert().containsExactly("order")
         jwtTokenConverter.toToken(
-            TokenSubject("alice")
+            TokenSubject("alice", Identity.Credential.Kind.PERSON)
         ).accessToken.let { Jwts.decode(it).audience }.assert().isNull()
         for (app in listOf("", "*", "a:b", "a\nb")) {
-            assertThrownBy<IllegalArgumentException> { jwtTokenConverter.toToken(TokenSubject("alice", app = app)) }
+            assertThrownBy<IllegalArgumentException> {
+                jwtTokenConverter.toToken(
+                    TokenSubject("alice", Identity.Credential.Kind.PERSON, app = app)
+                )
+            }
         }
     }
 
     @Test
     fun aReservedSubjectIsNotIssued() {
         for (id in listOf(CoSecPrincipal.ANONYMOUS_ID, "(platform)", "(")) {
-            assertThrownBy<IllegalArgumentException> { jwtTokenConverter.toToken(TokenSubject(id)) }
+            assertThrownBy<IllegalArgumentException> {
+                jwtTokenConverter.toToken(
+                    TokenSubject(id, kind = Identity.Credential.Kind.PERSON)
+                )
+            }
         }
     }
 
@@ -52,9 +72,15 @@ internal class JwtTokenConverterTest {
     @Test
     fun aBlankSubjectIsNotIssued() {
         for (id in listOf("", " ", "\t\n")) {
-            assertThrownBy<IllegalArgumentException> { jwtTokenConverter.toToken(TokenSubject(id)) }
+            assertThrownBy<IllegalArgumentException> {
+                jwtTokenConverter.toToken(
+                    TokenSubject(id, kind = Identity.Credential.Kind.PERSON)
+                )
+            }
         }
-        Jwts.decode(jwtTokenConverter.toToken(TokenSubject(" a ")).accessToken).subject.assert().isEqualTo(" a ")
+        Jwts.decode(
+            jwtTokenConverter.toToken(TokenSubject(" a ", Identity.Credential.Kind.PERSON)).accessToken
+        ).subject.assert().isEqualTo(" a ")
     }
 
     /**
@@ -70,7 +96,7 @@ internal class JwtTokenConverterTest {
             Duration.ofMinutes(10),
             Duration.ofDays(7)
         )
-        val subject = TokenSubject("alice")
+        val subject = TokenSubject("alice", Identity.Credential.Kind.PERSON)
         assertThrownBy<IllegalArgumentException> {
             converter.toToken(subject, Duration.ofMinutes(10).plusSeconds(1), Duration.ofDays(1))
         }.hasMessageContaining("cosec.jwt.token-validity.access").hasMessageContaining("IDN-37")
@@ -86,6 +112,7 @@ internal class JwtTokenConverterTest {
         val principal =
             TokenSubject(
                 "id",
+                Identity.Credential.Kind.PERSON,
                 roles = setOf("roleId"),
                 policies = setOf("policyId"),
                 attributes = mapOf(
@@ -121,6 +148,7 @@ internal class JwtTokenConverterTest {
     fun verifiedAttributesAreReadOnlyAtEveryLevel() {
         val subject = TokenSubject(
             "id",
+            Identity.Credential.Kind.PERSON,
             attributes = mapOf(
                 "department" to "ops",
                 "groups" to listOf("a", mapOf("b" to listOf("c"))),
@@ -148,14 +176,14 @@ internal class JwtTokenConverterTest {
     /** RC1-25: a token never carries an attribute CoSec sets for another credential, such as `apiKeyId`. */
     @Test
     fun aReservedAttributeIsNotIssued() {
-        val principal = TokenSubject("id", attributes = mapOf("apiKeyId" to "k1"))
+        val principal = TokenSubject("id", Identity.Credential.Kind.PERSON, attributes = mapOf("apiKeyId" to "k1"))
         assertThrownBy<IllegalArgumentException> { jwtTokenConverter.toToken(principal) }
     }
 
     /** `IDN-11`: a token with an empty tenant would be refused when it is presented. */
     @Test
     fun anEmptyTenantIsNotIssued() {
-        val principal = TokenSubject("alice", tenant = "")
+        val principal = TokenSubject("alice", Identity.Credential.Kind.PERSON, tenant = "")
         val error = runCatching { jwtTokenConverter.toToken(principal) }.exceptionOrNull()
         error.assert().isInstanceOf(IllegalArgumentException::class.java)
         error!!.message!!.assert().contains("empty tenant")
@@ -167,7 +195,7 @@ internal class JwtTokenConverterTest {
         for (tenant in listOf(" ", "*", "a:b", "a\nb", "x".repeat(129))) {
             val error = runCatching {
                 jwtTokenConverter.toToken(
-                    TokenSubject("alice", tenant = tenant)
+                    TokenSubject("alice", Identity.Credential.Kind.PERSON, tenant = tenant)
                 )
             }.exceptionOrNull()
             error.assert().isInstanceOf(IllegalArgumentException::class.java)
@@ -181,14 +209,22 @@ internal class JwtTokenConverterTest {
     @Test
     fun anIdWithAnUnpairedSurrogateIsNotIssued() {
         val principals = listOf(
-            TokenSubject("alice\uD800"),
-            TokenSubject("alice", tenant = "beta\uDC00"),
-            TokenSubject("alice", roles = setOf("admin\uD800")),
-            TokenSubject("alice", policies = setOf("p\uD800")),
-            TokenSubject("alice", attributes = mapOf("org" to "x\uD800")),
-            TokenSubject("alice", attributes = mapOf("org\uD800" to "x")),
-            TokenSubject("alice", attributes = mapOf("orgs" to listOf("x", mapOf("y" to "\uDC00")))),
-            TokenSubject("alice", attributes = mapOf("orgs" to arrayOf("x", "\uD800"))),
+            TokenSubject("alice\uD800", Identity.Credential.Kind.PERSON),
+            TokenSubject("alice", Identity.Credential.Kind.PERSON, tenant = "beta\uDC00"),
+            TokenSubject("alice", Identity.Credential.Kind.PERSON, roles = setOf("admin\uD800")),
+            TokenSubject("alice", Identity.Credential.Kind.PERSON, policies = setOf("p\uD800")),
+            TokenSubject("alice", Identity.Credential.Kind.PERSON, attributes = mapOf("org" to "x\uD800")),
+            TokenSubject("alice", Identity.Credential.Kind.PERSON, attributes = mapOf("org\uD800" to "x")),
+            TokenSubject(
+                "alice",
+                Identity.Credential.Kind.PERSON,
+                attributes = mapOf("orgs" to listOf("x", mapOf("y" to "\uDC00")))
+            ),
+            TokenSubject(
+                "alice",
+                Identity.Credential.Kind.PERSON,
+                attributes = mapOf("orgs" to arrayOf("x", "\uD800"))
+            ),
         )
         for (principal in principals) {
             val error = runCatching { jwtTokenConverter.toToken(principal) }.exceptionOrNull()
@@ -196,14 +232,14 @@ internal class JwtTokenConverterTest {
             error!!.message!!.assert().contains("unpaired UTF-16 surrogate").doesNotContain("?")
         }
         val paired = jwtTokenConverter.toToken(
-            TokenSubject("alice\uD83D\uDE00", attributes = mapOf("level" to 3))
+            TokenSubject("alice\uD83D\uDE00", Identity.Credential.Kind.PERSON, attributes = mapOf("level" to 3))
         )
         jwtTokenVerifier.verify(paired.accessToken).principal.assert().isEqualTo("alice\uD83D\uDE00")
     }
 
     @Test
     fun toTokenIfMissing() {
-        val principal = TokenSubject("id")
+        val principal = TokenSubject("id", Identity.Credential.Kind.PERSON)
         val token: CompositeToken = jwtTokenConverter.toToken(principal)
         val verified = jwtTokenVerifier.verify(token.accessToken)
         verified.principal.assert().isEqualTo(principal.id)

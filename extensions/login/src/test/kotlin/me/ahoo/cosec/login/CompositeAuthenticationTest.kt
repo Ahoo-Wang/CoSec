@@ -21,6 +21,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.token.TokenSubject
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -39,11 +40,13 @@ class CompositeAuthenticationTest {
         val credentials = mockk<LoginCredentials>()
         val authentication = mockk<Authentication<LoginCredentials>> {
             every { credentialsType } returns credentials.javaClass
-            coEvery { authenticate(any()) } returns TokenSubject("alice")
+            coEvery { authenticate(any()) } returns TokenSubject("alice", Identity.Credential.Kind.PERSON)
         }
         authenticationProvider.register(credentials.javaClass, authentication)
 
-        compositeAuthentication.authenticate(credentials).assert().isEqualTo(TokenSubject("alice"))
+        compositeAuthentication.authenticate(
+            credentials
+        ).assert().isEqualTo(TokenSubject("alice", Identity.Credential.Kind.PERSON))
     }
 
     @Test

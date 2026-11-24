@@ -16,6 +16,7 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.RegisteredClaims
 import com.auth0.jwt.algorithms.Algorithm
 import com.auth0.jwt.interfaces.DecodedJWT
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.DelegationUnsupportedException
 import me.ahoo.cosec.spi.token.RefreshTokenMismatchException
@@ -53,6 +54,19 @@ internal object Jwts {
      */
     const val TOKEN_USE_CLAIM = "cosec.token"
     const val REFRESH_TOKEN = "refresh"
+
+    /**
+     * Whose the access token is (`IDN-45`): `person`, or `workload`, which every issuer of CoSec writes and a verifier
+     * reads as a workload's when it says anything else or nothing. Not on a refresh token: a refresh keeps the kind of
+     * the access token it is presented with.
+     */
+    const val KIND_CLAIM = "cosec.kind"
+    const val PERSON = "person"
+    const val WORKLOAD = "workload"
+
+    /** [kind] as the [KIND_CLAIM] writes it. */
+    fun kindValue(kind: Identity.Credential.Kind): String =
+        if (kind == Identity.Credential.Kind.PERSON) PERSON else WORKLOAD
 
     /** The session a pair belongs to (RFC 0009): OpenID Connect's `sid` and `auth_time`, and CoSec's generation. */
     const val SESSION_CLAIM = "sid"

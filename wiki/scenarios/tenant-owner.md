@@ -36,13 +36,13 @@ created, and never again: who is an owner is the token's business.
 The identity system issues the owner two tokens. For the app, `policies` lists the attachment:
 
 ```kotlin
-TokenSubject(id = "bob", app = "wms", tenant = "acme", policies = setOf("tenant-owner"))
+TokenSubject(id = "bob", kind = Kind.PERSON, app = "wms", tenant = "acme", policies = setOf("tenant-owner"))
 ```
 
 and for the control plane, issued for its app, the role:
 
 ```kotlin
-TokenSubject(id = "bob", app = "cosec-control", tenant = "acme", roles = setOf("owner"))
+TokenSubject(id = "bob", kind = Kind.PERSON, app = "cosec-control", tenant = "acme", roles = setOf("owner"))
 ```
 
 Issue a token with `tenant-owner` only for a user the identity system says owns the tenant. An attachment is trusted

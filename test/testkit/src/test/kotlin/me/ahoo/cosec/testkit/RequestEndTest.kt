@@ -27,6 +27,7 @@ import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -67,7 +68,7 @@ class RequestEndTest {
         val ids = AtomicLong()
         val algorithm = JwtSigning.hmac256("request-end-test-secret")
         val token = JwtTokenConverter(IdGenerator { "t-${ids.incrementAndGet()}" }, algorithm)
-            .toToken(TokenSubject("alice", tenant = "acme")).accessToken
+            .toToken(TokenSubject("alice", Identity.Credential.Kind.PERSON, tenant = "acme")).accessToken
         val context = PermittedRequest.withToken(token, JwtTokenVerifier(algorithm), RevocationReader.NONE)
         PipelineFixture.of(platform = everything).use { fixture ->
             val checker = AuthorizationChecker(fixture.pipeline)

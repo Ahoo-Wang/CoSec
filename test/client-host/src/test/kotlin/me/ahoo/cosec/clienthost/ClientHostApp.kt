@@ -29,6 +29,7 @@ import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.webflux.ServerWebExchanges.requireSecurityContext
@@ -57,7 +58,7 @@ internal class ClientHostLoginAuthentication : Authentication<ClientHostLogin> {
     override val credentialsType: Class<ClientHostLogin> = ClientHostLogin::class.java
 
     override suspend fun authenticate(credentials: ClientHostLogin): TokenSubject =
-        TokenSubject(id = credentials.username, app = null)
+        TokenSubject(id = credentials.username, kind = Identity.Credential.Kind.PERSON, app = null)
 }
 
 /** What reached the host, so a test can say how many refreshes were on the wire. */
@@ -135,7 +136,7 @@ internal class ClientHostApi(
     @PostMapping("/test/login-expired")
     suspend fun loginExpired(@RequestBody body: Map<String, String>): CompositeToken {
         counters.logins.incrementAndGet()
-        val subject = TokenSubject(id = body.getValue("username"), app = null)
+        val subject = TokenSubject(id = body.getValue("username"), kind = Identity.Credential.Kind.PERSON, app = null)
         val issued = subject.inSession(families.start(TenantId.DEFAULT, PrincipalId(subject.id)))
         return converter.toToken(issued, EXPIRED_AGO.negated(), Duration.ofDays(1))
     }

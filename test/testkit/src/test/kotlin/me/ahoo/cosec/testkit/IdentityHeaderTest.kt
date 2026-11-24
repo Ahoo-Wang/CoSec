@@ -63,6 +63,7 @@ class IdentityHeaderTest {
 
         override suspend fun authenticate(credentials: Password) = TokenSubject(
             credentials.user,
+            Identity.Credential.Kind.PERSON,
             tenant = "acme",
             roles = setOf("clerk"),
             attributes = mapOf("name" to "Alice"),

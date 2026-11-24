@@ -21,6 +21,7 @@ import me.ahoo.cosec.cosid.CosIdIdGenerator
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenFamilyStore
@@ -139,7 +140,9 @@ class CoSecCosIdAutoConfigurationTest {
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             )
             .run { context ->
-                val token = context.getBean(TokenConverter::class.java).toToken(TokenSubject("alice"))
+                val token = context.getBean(
+                    TokenConverter::class.java
+                ).toToken(TokenSubject("alice", Identity.Credential.Kind.PERSON))
                 JWT.decode(token.accessToken).id.assert().startsWith("T")
             }
     }

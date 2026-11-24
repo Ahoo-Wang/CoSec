@@ -63,7 +63,7 @@ The login issues what the user holds, for the app the token is for:
 
 ```kotlin
 TokenSubject(
-    id = user.id, app = "wms", tenant = "acme",
+    id = user.id, kind = Kind.PERSON, app = "wms", tenant = "acme",
     roles = setOf("wms.manager@wh-01", "wms.manager@wh-02", "wms.clerk"),
 )
 ```

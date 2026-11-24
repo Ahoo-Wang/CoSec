@@ -44,6 +44,8 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 - **破坏性：每个凭证都声明它属于谁，人还是工作负载**（`IDN-44`）。受影响的是你自己的 `Authenticator`，以及其他任何构造 `Identity.Credential` 的代码。它的构造器在方法之后多了必需参数 `kind`（`Identity.Credential.Kind.PERSON` 或 `WORKLOAD`），没有默认值：构造它的代码不选就编译不过。决定主体能否审批变更、能否当控制面的信任根、能否用 break-glass 的，现在是这个种类，而不是方法的名字：以前除 `api-key` 和 `service` 之外的任何方法都按人读，所以给机器客户端起了自己方法名的认证器可以审批。没有凭证的主体现在是工作负载：它本来就不能审批，现在也不再是信任根。`CoSec-Identity` 带上 `auth.kind`，本版本的每个写方都写它；没有它的请求头（beta.8 网关写的）按工作负载读，所以经 beta.8 网关转发的运维者在升级后的控制面宿主上不能审批，直到网关升级。把 `api-key` 或 `service` 凭证声明为人的请求头以 `400` 拒绝。
 
+- **破坏性：登录声明令牌属于谁**（`IDN-45`）。受影响的是你自己的每个 `Authentication`。`TokenSubject` 在 `id` 之后多了必需参数 `kind`（`Identity.Credential.Kind.PERSON` 或 `WORKLOAD`），没有默认值：登录不说明就编译不过。用户的登录声明为人的，机器的（client credentials、服务账号）声明为工作负载的。CoSec 的访问令牌现在带 `cosec.kind` 声明，客户端不能依赖它（`contract/token/claims.json`）；刷新令牌不带。这个声明让每个令牌长约 30 个字符，同样的堆上已校验令牌缓存装下的令牌少约 0.5%（2 GiB 时最大的测试令牌装 16,298 个，原先装 16,384 个）。
+
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
 **按这个顺序升级。** 这个预览版有三处改动要读对方写的请求头或请求，所以滚动升级有先后；每一步完成后再做下一步：

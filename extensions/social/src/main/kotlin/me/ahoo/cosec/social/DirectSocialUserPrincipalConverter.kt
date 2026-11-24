@@ -13,6 +13,7 @@
 package me.ahoo.cosec.social
 
 import me.ahoo.cosec.login.token.TokenSubject
+import me.ahoo.cosec.spi.identity.Identity
 
 /**
  * The principal of a social login as it is: the id `<provider user id>@<provider>`, no roles, policies or tenant. Its
@@ -31,6 +32,7 @@ class DirectSocialUserPrincipalConverter(private val app: String?) : SocialUserP
     override suspend fun convert(provider: String, authUser: SocialUser): TokenSubject {
         return TokenSubject(
             id = asProviderUserId(provider, authUser),
+            kind = Identity.Credential.Kind.PERSON,
             app = app,
             attributes = mapOf(
                 SocialUserPrincipalConverter.OAUTH_PROVIDER to provider,
