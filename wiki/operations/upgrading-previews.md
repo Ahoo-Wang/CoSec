@@ -30,6 +30,16 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **Breaking: a tenant switch presents the session's token pair** (`IDN-22`). Affected: every application with a switch
+  endpoint. A switch opened a session that refreshes on an access token alone, so a copied access token became a session
+  until the login ended, and an access token of a generation already refreshed still switched. Now
+  `SwitchTenantCredentials` carries `accessToken` and `refreshToken`, and `SwitchTenantAuthentication` takes CoSec's
+  `TokenVerifier` first: `SwitchTenantAuthentication(tokenVerifier, families, revocation, YourCredentials::class.java)
+  { ... }`. Read the pair from the request body, as the refresh route does (`{"accessToken", "refreshToken"}`), and have
+  clients send it with the switch. The pair must be the one the request was made with, of the session's current
+  generation (the one just replaced is accepted within the rotation leeway); an older pair revokes the session, as a
+  refresh of it would. The switch no longer moves anything of the session it is presented from
+  ([Switching tenant and app](../integration/authentication.md#switching-tenant-and-app)).
 - **Breaking: `JwtTokenConverter.toToken(subject, access, refresh)` refuses a validity longer than the configured one**
   (`IDN-37`). Affected: an application that issues tokens itself with an access or refresh validity longer than
   `cosec.jwt.token-validity.access` or `.refresh`. A revocation is kept only past the configured validities, so such a

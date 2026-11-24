@@ -1,0 +1,17 @@
+# Rule: IDN-22
+# Mutant: a tenant switch issues on an access token alone, so a copied access token becomes a session that refreshes until the login ends
+# Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchLiveSessionTest :jwt:test --tests me.ahoo.cosec.jwt.SwitchFromReplayedPairTest :conformance:test
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt
+index d296a555c..f391906cd 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt
+@@ -68,7 +68,7 @@ class SwitchTenantAuthentication<C : SwitchTenantCredentials>(
+         check(previous.principal.authenticated) { "An anonymous request has no tenant to switch from." }
+         val principal = RequestSecurity.of(previous)?.principal
+             ?: throw TokenVerificationException("A switch is asked in a request the pipeline permitted.")
+-        val token = tokenVerifier.refresh(CompositeToken(credentials.accessToken, credentials.refreshToken))
++        val token = tokenVerifier.verify(credentials.accessToken)
+         if (token.id != principal.credential?.id || token.session == null || token.session != principal.session) {
+             throw TokenVerificationException("The token pair presented is not the one the switch was asked with.")
+         }

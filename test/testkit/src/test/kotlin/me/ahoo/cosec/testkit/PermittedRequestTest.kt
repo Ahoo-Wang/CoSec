@@ -50,8 +50,15 @@ class PermittedRequestTest {
     /** The application's own login: a password check that answers alice of acme. */
     private class Password(val user: String) : LoginCredentials
 
-    private class Select(override val targetTenantId: String, override val context: SecurityContext) :
-        SwitchTenantCredentials
+    /** A switch in [context]'s request, presenting [pair]. */
+    private class Select(
+        override val targetTenantId: String,
+        override val context: SecurityContext,
+        pair: CompositeToken,
+    ) : SwitchTenantCredentials {
+        override val accessToken: String = pair.accessToken
+        override val refreshToken: String = pair.refreshToken
+    }
 
     private val ids = AtomicLong()
     private val algorithm = JwtSigning.hmac256("permitted-request-test-secret")
@@ -60,6 +67,7 @@ class PermittedRequestTest {
     private val store = InMemoryTokenFamilyStore()
     private val families = TokenFamilies(store)
     private val switching = SwitchTenantAuthentication(
+        verifier,
         families,
         TokenRevocation(RevocationReader.NONE),
         Select::class.java,
@@ -75,11 +83,12 @@ class PermittedRequestTest {
 
     @Test
     fun `the context is the token's, and a switch issues from it`() = runBlocking<Unit> {
-        val context = PermittedRequest.withToken(signIn().accessToken, verifier, RevocationReader.NONE)
+        val pair = signIn()
+        val context = PermittedRequest.withToken(pair.accessToken, verifier, RevocationReader.NONE)
         context.principal.id.assert().isEqualTo("alice")
         context.tenantId.assert().isEqualTo("acme")
 
-        val switched = login.authenticateAsToken(Select("globex", context))
+        val switched = login.authenticateAsToken(Select("globex", context, pair))
 
         verifier.verify(switched.accessToken).tenant.assert().isEqualTo("globex")
     }
@@ -91,7 +100,7 @@ class PermittedRequestTest {
         families.end(checkNotNull(verifier.verify(pair.accessToken).session).id)
         val context = PermittedRequest.withToken(pair.accessToken, verifier, RevocationReader.NONE)
 
-        assertThrows<TokenRevokedException> { login.authenticateAsToken(Select("globex", context)) }
+        assertThrows<TokenRevokedException> { login.authenticateAsToken(Select("globex", context, pair)) }
     }
 
     /** A token still unexpired whose session reached its lifetime: the switch issues nothing (IDN-17, IDN-22). */
@@ -101,6 +110,7 @@ class PermittedRequestTest {
         val monthLater = Clock.offset(Clock.systemUTC(), Duration.ofDays(31))
         val later = TokenFamilies(store, clock = monthLater)
         val switchingLater = SwitchTenantAuthentication(
+            verifier,
             later,
             TokenRevocation(RevocationReader.NONE),
             Select::class.java
@@ -111,7 +121,7 @@ class PermittedRequestTest {
 
         assertThrows<TokenExpiredException> {
             TokenCompositeAuthentication.of(listOf(switchingLater), converter, later)
-                .authenticateAsToken(Select("globex", context))
+                .authenticateAsToken(Select("globex", context, pair))
         }
     }
 
@@ -135,7 +145,8 @@ class PermittedRequestTest {
     /** `SecurityContext.deviceId` reads `CoSec-Device-Id`, as a host's does: the switch's hook can compare it. */
     @Test
     fun `a context made with a device header has that device, and the switch reads it`() = runBlocking<Unit> {
-        val token = signIn().accessToken
+        val pair = signIn()
+        val token = pair.accessToken
         PermittedRequest.withToken(token, verifier, RevocationReader.NONE).deviceId.assert().isEqualTo("")
         val context = PermittedRequest.withToken(
             token,
@@ -147,6 +158,7 @@ class PermittedRequestTest {
         context.principal.id.assert().isEqualTo("alice")
         var seen = ""
         val deviceAware = SwitchTenantAuthentication(
+            verifier,
             families,
             TokenRevocation(RevocationReader.NONE),
             Select::class.java,
@@ -156,7 +168,7 @@ class PermittedRequestTest {
         }
 
         TokenCompositeAuthentication.of(listOf(deviceAware), converter, families)
-            .authenticateAsToken(Select("globex", context))
+            .authenticateAsToken(Select("globex", context, pair))
 
         seen.assert().isEqualTo("phone-1")
     }

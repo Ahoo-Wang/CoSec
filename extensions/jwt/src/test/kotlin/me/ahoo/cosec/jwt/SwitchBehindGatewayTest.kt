@@ -69,14 +69,22 @@ import java.util.concurrent.CompletableFuture
  * only while it is live. An identity without a session, an API key's, cannot be switched from.
  */
 class SwitchBehindGatewayTest {
-    private class Select(override val targetTenantId: String, override val context: SecurityContext) :
-        SwitchTenantCredentials
+    /** A switch in [context]'s request, presenting [pair]. */
+    private class Select(
+        override val targetTenantId: String,
+        override val context: SecurityContext,
+        pair: CompositeToken,
+    ) : SwitchTenantCredentials {
+        override val accessToken: String = pair.accessToken
+        override val refreshToken: String = pair.refreshToken
+    }
 
     private val store = InMemoryTokenFamilyStore()
     private val families = TokenFamilies(store)
     private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.SIGNING)
     private val verifier = JwtTokenVerifier(JwtFixture.SIGNING)
     private val switching = SwitchTenantAuthentication(
+        verifier,
         families,
         TokenRevocation(RevocationReader.NONE),
         Select::class.java,
@@ -135,7 +143,7 @@ class SwitchBehindGatewayTest {
     @Test
     fun `a switch behind the gateway issues from the session the gateway forwarded`() = runBlocking<Unit> {
         val pair = login()
-        val switched = tokens.authenticateAsToken(Select("globex", behindTheGateway(pair.accessToken)))
+        val switched = tokens.authenticateAsToken(Select("globex", behindTheGateway(pair.accessToken), pair))
         val token = verifier.verify(switched.accessToken)
         token.tenant.assert().isEqualTo("globex")
         token.session!!.authTime.assert().isEqualTo(verifier.verify(pair.accessToken).session!!.authTime)
@@ -155,7 +163,7 @@ class SwitchBehindGatewayTest {
         val token = verifier.verify(pair.accessToken)
         token.session!!.authTime.isAfter(token.issuedAt!!).assert().describedAs("auth_time after iat").isTrue()
 
-        val switched = tokens.authenticateAsToken(Select("globex", behindTheGateway(pair.accessToken)))
+        val switched = tokens.authenticateAsToken(Select("globex", behindTheGateway(pair.accessToken), pair))
 
         verifier.verify(switched.accessToken).session!!.authTime.assert().isEqualTo(token.session!!.authTime)
     }
@@ -165,7 +173,7 @@ class SwitchBehindGatewayTest {
         val pair = login()
         families.end(verifier.verify(pair.accessToken).session!!.id)
         val context = behindTheGateway(pair.accessToken)
-        assertThrows<TokenRevokedException> { tokens.authenticateAsToken(Select("globex", context)) }
+        assertThrows<TokenRevokedException> { tokens.authenticateAsToken(Select("globex", context, pair)) }
     }
 
     /** An API key has no session: its identity reads as it always did, and cannot be switched from. */
@@ -184,7 +192,9 @@ class SwitchBehindGatewayTest {
         val context = withIdentity(IdentityCodec.encode(apiKey))
         context.principal.id.assert().isEqualTo("svc-billing")
         context.scope.roles.assert().containsExactly("clerk")
-        assertThrows<TokenVerificationException> { tokens.authenticateAsToken(Select("globex", context)) }
+        assertThrows<TokenVerificationException> {
+            tokens.authenticateAsToken(Select("globex", context, CompositeToken("k1", "")))
+        }
     }
 
     private companion object {

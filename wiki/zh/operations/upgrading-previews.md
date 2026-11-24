@@ -27,6 +27,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **破坏性变更：租户切换出示会话的令牌对**（`IDN-22`）。受影响的是所有提供切换端点的应用。以前切换凭一张访问令牌就开出一个能刷新的会话，被复制的访问令牌因此能变成一个活到登录结束的会话，已经刷新过的代际的访问令牌也还能切换。现在 `SwitchTenantCredentials` 携带 `accessToken` 和 `refreshToken`，`SwitchTenantAuthentication` 的第一个参数是 CoSec 的 `TokenVerifier`：`SwitchTenantAuthentication(tokenVerifier, families, revocation, YourCredentials::class.java) { ... }`。像刷新路由一样从请求体读取令牌对（`{"accessToken", "refreshToken"}`），并让客户端在切换时发送它。令牌对必须是该请求所用的那一对，属于会话的当前代际（轮换宽限期内也接受刚被替换的那一代）；更早的令牌对会像刷新那样吊销会话。切换不再推进它所出自的会话（[切换租户和应用](../integration/authentication.md#switching-tenant-and-app)）。
 - **破坏性变更：`JwtTokenConverter.toToken(subject, access, refresh)` 拒绝长于配置值的有效期**（`IDN-37`）。受影响的是自己签发令牌、且指定的 access 或 refresh 有效期长于 `cosec.jwt.token-validity.access` 或 `.refresh` 的应用。吊销记录只保留到配置的有效期之后，这样的令牌在吊销记录过期后会重新有效。现在这个调用会抛出 `IllegalArgumentException` 并点名属性：改为调高属性，保留期随之变长。
 - **控制面把调用的大块工作限定在一个预算内**（`CTL-85`，DR1-F-3、DR1-F-4）。受影响的：同时提议、应用或解释许多大文档的客户端。控制面宿主拿堆的八分之一，给一次调用为自己解析的请求体、解码或编译的文档；放不下的调用按租户轮流等待，至多等 `cosec.pipeline.timeout` 的一半，否则答 `503` 加 `Retry-After: 1`，请重试。`StageBudgets` 的启动行写明等待时间，控制面的启动行写明预算；新增两个度量：`cosec.control.work.held` 与 `cosec.control.work.refused`。无需配置。
 - **破坏性变更：变更不能写入应用之后还含 `/` 的权限策略 id，也不能写入含 `/` 的目录权限 id**（`CTL-8`，DR1-E-5）。受影响的是写入

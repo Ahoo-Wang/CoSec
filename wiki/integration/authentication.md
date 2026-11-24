@@ -717,10 +717,10 @@ isolate between tenants is in [Tenant isolation](../guide/security-model.md#tena
 ### Switching tenant and app
 
 Many identity services sign a user in in two steps. The first proves the user (a password, a code sent by SMS or mail)
-and issues a token for no tenant and no app: nobody has chosen either yet. The second presents that token and names the
-tenant, and the app, to work in; its answer is the token every later request carries. Changing tenant later, or app
-within a tenant, is the same call. `SwitchTenantAuthentication` is that second step. You give it the `TokenFamilies`
-and `TokenRevocation` beans, your credentials class, and a `TenantSwitch`: it checks that the user belongs to the target tenant and has the app
+and issues a token pair for no tenant and no app: nobody has chosen either yet. The second presents that pair and names
+the tenant, and the app, to work in; its answer is the pair every later request carries. Changing tenant later, or app
+within a tenant, is the same call. `SwitchTenantAuthentication` is that second step. You give it CoSec's
+`TokenVerifier`, the `TokenFamilies` and `TokenRevocation` beans, your credentials class, and a `TenantSwitch`: it checks that the user belongs to the target tenant and has the app
 there (throw to refuse), and answers what the user holds there, looked up for that tenant and app. That is a
 `TenantMembership` of the user's roles, policies and attributes, or `TenantMembership.fromProvider()` when your
 `MembershipProvider` answers for the tenant. Your credentials class implements `SwitchTenantCredentials` and carries
@@ -734,15 +734,18 @@ class SelectTenant(
     override val targetTenantId: String,
     override val targetAppId: String?,
     override val context: SecurityContext,
+    override val accessToken: String,
+    override val refreshToken: String,
 ) : SwitchTenantCredentials
 
 @Bean
 fun selectTenantAuthentication(
+    tokenVerifier: TokenVerifier,
     families: TokenFamilies,
     revocation: TokenRevocation,
     members: Members,
     devices: TrustedDevices,
-) = SwitchTenantAuthentication(families, revocation, SelectTenant::class.java) { credentials ->
+) = SwitchTenantAuthentication(tokenVerifier, families, revocation, SelectTenant::class.java) { credentials ->
     val app = requireNotNull(credentials.targetAppId) { "Name the app to work in." }
     val member = requireNotNull(members.find(credentials.context.principal.id, credentials.targetTenantId, app)) {
         "Not a member of this tenant's $app."
@@ -754,9 +757,17 @@ fun selectTenantAuthentication(
 }
 
 @PostMapping("/auth/select/{tenant}/{app}")
-suspend fun select(@PathVariable tenant: String, @PathVariable app: String, security: SecurityContext): CompositeToken =
-    authentication.authenticateAsToken(SelectTenant(tenant, app, security))
+suspend fun select(
+    @PathVariable tenant: String,
+    @PathVariable app: String,
+    @RequestBody pair: CompositeToken,
+    security: SecurityContext,
+): CompositeToken =
+    authentication.authenticateAsToken(SelectTenant(tenant, app, security, pair.accessToken, pair.refreshToken))
 ```
+
+The request carries the current access token in `Authorization`, as every request does, and the pair in its body, as a
+[refresh](#refreshing-tokens) does: `{"accessToken": "...", "refreshToken": "..."}`.
 
 As on [refresh](#refreshing-tokens), the `SecurityContext` parameter is resolved on Spring MVC; on WebFlux, read
 `exchange.requireSecurityContext()`.
@@ -777,20 +788,27 @@ is kept while a session switched from it is in use, and switching back to a sess
 64 sessions a principal keeps ([Sessions](#sessions)). A `TokenFamilyStore` of your own must save `TokenFamily.root`: a
 switch reads the new session back, and is refused when the root was not kept.
 
-**The switch issues from the request's session**, as CoSec's token proved it to the pipeline: the `context` must be the
-one the pipeline made for the request, and nothing in your credentials names the session. The new token starts a
-session of its own, which keeps that session's login time, so it ends when the previous one would: the user did not
-sign in again (`IDN-17`). It issues only while that session is live (`IDN-22`), and checks that before it asks your
-`TenantSwitch`:
+**The switch issues from the request's session, on its token pair** (`IDN-22`), as CoSec's token proved it to the
+pipeline: the `context` must be the one the pipeline made for the request. The switch opens a session that refreshes,
+so it presents what a refresh presents: the request's own access token and its refresh token, checked as a refresh
+checks them. An access token alone does not switch, nor does a pair the request was not made with
+(`TokenVerificationException`: `token-invalid`): a copied access token is good for its few minutes, never for a session
+until the login ends. The new token starts a session of its own, which keeps that session's login time, so it ends when
+the previous one would: the user did not sign in again (`IDN-17`). It issues only while that session is live, and checks
+that before it asks your `TenantSwitch`:
 
 - its token's revocations are read again, strictly: while the revocation store cannot be read, the switch throws
   `RevocationUnavailableException`, which your endpoint answers `503`, even though the request itself was let through
   (PIP-7, [Logout and revocation](#logout-and-revocation)); a session store that cannot be read throws
   `SessionStoreUnavailableException`, also `503`;
 - its session is still the principal's and was not ended: a logout, or a pair presented again after a refresh once the
-  rotation leeway has passed ([Sessions](#sessions)), ends it, and any other access token of it then switches into
-  nothing, though it is still valid until it expires (`TokenRevokedException`: answer `401` `token-revoked`); a session
-  past its lifetime throws `TokenExpiredException` (`token-expired`).
+  rotation leeway has passed ([Sessions](#sessions)), ends it, and any other pair of it then switches into nothing
+  (`TokenRevokedException`: answer `401` `token-revoked`); a session past its lifetime throws `TokenExpiredException`
+  (`token-expired`);
+- the pair is one the session would refresh, by the refresh's own rule: the current generation, or the one just
+  replaced within the rotation leeway (another tab, a request in flight). An older pair presented to switch is a pair
+  presented again, and revokes the session as a refresh of it would (`token-revoked`). The switch moves nothing of the
+  session it was presented from: it refreshes on as before.
 
 A request whose credential is not CoSec's token, an API key say, has no session and cannot switch
 (`TokenVerificationException`: `token-invalid`). Nothing maps these exceptions for you: the switch is your endpoint, so
@@ -818,7 +836,7 @@ class SelectTenantTest {
     private val login = TokenCompositeAuthentication.of(
         listOf(
             passwordAuthentication,
-            SelectTenantConfiguration().selectTenantAuthentication(families, revocation, members, devices),
+            SelectTenantConfiguration().selectTenantAuthentication(verifier, families, revocation, members, devices),
         ),
         JwtTokenConverter(IdGenerator { UUID.randomUUID().toString() }, signing),
         families,
@@ -834,7 +852,9 @@ class SelectTenantTest {
             headers = mapOf("CoSec-Device-Id" to listOf("phone")),
         )
 
-        val switched = login.authenticateAsToken(SelectTenant("globex", "order", request))
+        val switched = login.authenticateAsToken(
+            SelectTenant("globex", "order", request, pair.accessToken, pair.refreshToken),
+        )
 
         val token = verifier.verify(switched.accessToken)
         token.tenant.assert().isEqualTo("globex")

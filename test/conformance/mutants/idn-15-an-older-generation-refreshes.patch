@@ -3,15 +3,15 @@
 # Tests: :login:test --tests me.ahoo.cosec.login.token.TokenFamiliesTest :conformance:test
 
 diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-index 6f03a3ff4..519b122ac 100644
+index 2d51c1047..4d7325e37 100644
 --- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
 +++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-@@ -153,7 +153,7 @@ class TokenFamilies @JvmOverloads constructor(
-                 throw TokenExpiredException("The session that began at ${family.authTime} has ended: sign in again.")
-             }
-             when {
--                session.generation == family.generation -> {
-+                session.generation <= family.generation -> {
-                     requireRootLive(family)
-                     val next = family.rotated(now)
-                     if (sessionStore("rotate a session") { store.replace(read.version, next) }) {
+@@ -219,7 +219,7 @@ class TokenFamilies @JvmOverloads constructor(
+ 
+     /** Where [session]'s pair stands against [family]: the one rule [rotate] and [requireCurrent] read it by. */
+     private fun standing(session: TokenSession, family: TokenFamily, now: Instant): Standing = when {
+-        session.generation == family.generation -> Standing.CURRENT
++        session.generation <= family.generation -> Standing.CURRENT
+         session.generation == family.generation - 1 && family.rotatedAt?.plus(leeway)?.isAfter(now) == true ->
+             Standing.JUST_REPLACED
+         session.generation < family.generation -> Standing.REUSED

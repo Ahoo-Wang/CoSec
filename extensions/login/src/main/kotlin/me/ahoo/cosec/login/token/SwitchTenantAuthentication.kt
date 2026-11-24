@@ -18,6 +18,7 @@ package me.ahoo.cosec.login.token
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -25,6 +26,7 @@ import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.TokenVerificationException
+import me.ahoo.cosec.spi.token.TokenVerifier
 
 /**
  * Switches a signed-in principal to another tenant, and to an app there (`wiki/integration/authentication.md`), to
@@ -38,15 +40,22 @@ import me.ahoo.cosec.spi.token.TokenVerificationException
  * as a token's `aud` is, else the previous token's. [SwitchTenantCredentials.targetAppId] reaches the token only through
  * that answer, so a user cannot pick an app by naming it (`SCP-11`).
  *
- * It issues from the session the request proved, as the pipeline authenticated it with CoSec's own token, and only
- * while that session is live (`IDN-22`): its revocations read strictly, its family neither revoked (a logout, a pair
- * presented again) nor ended. That is checked before [tenantSwitch] is asked, in the one place a refresh checks it too.
- * The new token starts a session of its own, which ends when the previous one would, since the user did not sign in
- * again (`IDN-17`); the previous one is left as it is, so a logout ends only the pair it is given.
+ * It issues from the session the request proved, as the pipeline authenticated it with CoSec's own token, and only from
+ * that session's token pair while the session is live (`IDN-22`). The switch presents the pair a refresh presents: the
+ * request's own access token and its refresh token, checked by [tokenVerifier] as a refresh's are; an access token alone,
+ * or a pair the request was not made with, switches nothing. Its revocations are read strictly, its family neither revoked
+ * (a logout, a pair presented again) nor ended, and the pair one the session would refresh, by the refresh's own rule: the
+ * current generation, or the one just replaced within the rotation leeway, while an older pair presented again revokes
+ * the session, as a refresh would. That is checked before [tenantSwitch] is asked, in the one place a refresh checks it
+ * too. The switch moves nothing of the previous session, which refreshes on as before. The new token starts a session of
+ * its own, which ends when the previous one would, since the user did not sign in again (`IDN-17`); the previous one is
+ * left as it is, so a logout ends only the pair it is given.
  *
+ * @param tokenVerifier CoSec's own verifier, which checks the pair as a refresh's ([TokenVerifier.refresh])
  * @param credentialsType the application's credentials class, by which a login finds this authentication
  */
 class SwitchTenantAuthentication<C : SwitchTenantCredentials>(
+    private val tokenVerifier: TokenVerifier,
     families: TokenFamilies,
     revocation: TokenRevocation,
     override val credentialsType: Class<C>,
@@ -59,7 +68,11 @@ class SwitchTenantAuthentication<C : SwitchTenantCredentials>(
         check(previous.principal.authenticated) { "An anonymous request has no tenant to switch from." }
         val principal = RequestSecurity.of(previous)?.principal
             ?: throw TokenVerificationException("A switch is asked in a request the pipeline permitted.")
-        val live = sessions.of(principal)
+        val token = tokenVerifier.refresh(CompositeToken(credentials.accessToken, credentials.refreshToken))
+        if (token.id != principal.credential?.id || token.session == null || token.session != principal.session) {
+            throw TokenVerificationException("The token pair presented is not the one the switch was asked with.")
+        }
+        val live = sessions.presented(token)
         val subject = inTarget(previous, credentials.targetTenantId, tenantSwitch.switchTenant(credentials))
         return subject.inSession(live.fork(TenantId(credentials.targetTenantId)))
     }
