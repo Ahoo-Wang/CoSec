@@ -282,24 +282,13 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
         val unreadable = HashSet<String>()
         for ((instance, read) in found) {
             if (read !is StatusRead.Unreadable) continue
-            if (writtenWithin(instance, within) ?: current(index[instance], now)) {
+            val written = statusKey?.let { key -> writtenWithin(key(instance), within) }
+            if (written ?: current(index[instance], now)) {
                 warnUnreadable(instance, read.error)
                 unreadable += instance
             }
         }
         return StatusReadings(statuses.filter { !it.at.isBefore(since) }, unreadable)
-    }
-
-    /**
-     * Whether [instance]'s status key was last written within [within], from the life it has left (`CTL-73`): false when
-     * it is gone; null when that cannot be told (no [statusKey], or a key with no life).
-     */
-    private suspend fun writtenWithin(instance: String, within: Duration): Boolean? {
-        val key = statusKey ?: return null
-        return when (val read = key(instance)) {
-            is L1Read.Hit -> read.ttl?.let { left -> left >= ShadowCacheSpecs.STATUS_TTL.minus(within) }
-            is L1Read.Miss, is L1Read.Leased -> false
-        }
     }
 
     private sealed interface StatusRead {
@@ -379,7 +368,9 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
             val statuses = ShadowCacheSpecs.statuses(keyPrefix)
             val statusStore = factory.createLocked(statuses)
             // The keyspace the store was created in, after every layer: where its keys and their lives are.
-            val admin = checkNotNull(factory.runtime.admin(statuses.name)) { "The status store ${statuses.name} was not created." }
+            val admin = checkNotNull(
+                factory.runtime.admin(statuses.name)
+            ) { "The status store ${statuses.name} was not created." }
             val keys = factory.runtime.backend.let { it.readOnlyStore(admin.keyspace) ?: it.store(admin.keyspace) }
             return CoCacheShadowReports(
                 factory.createLocked(ShadowCacheSpecs.reports(keyPrefix)),
@@ -391,4 +382,13 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
             ) { instance -> keys.read(admin.keyspace.storageKey(instance), null, null, null) }
         }
     }
+}
+
+/**
+ * Whether a status key, as [read] answers it, was last written within [within], from the life it has left (`CTL-73`):
+ * false when it is gone; null when that cannot be told (a key with no life).
+ */
+private fun writtenWithin(read: L1Read, within: Duration): Boolean? = when (read) {
+    is L1Read.Hit -> read.ttl?.let { left -> left >= ShadowCacheSpecs.STATUS_TTL.minus(within) }
+    is L1Read.Miss, is L1Read.Leased -> false
 }

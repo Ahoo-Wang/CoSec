@@ -323,7 +323,13 @@ class CoCacheShadowTest {
         sink.write(InstanceStatus("stale", clock.now))
         mapOf("fresh" to ShadowCacheSpecs.STATUS_TTL, "stale" to ShadowCacheSpecs.STATUS_TTL.minusMinutes(2))
             .forEach { (instance, life) ->
-                val raw = rawStore("Raw-$instance", keyPrefix, CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME, KeyEncoder<String> { it }, life)
+                val raw = rawStore(
+                    "Raw-$instance",
+                    keyPrefix,
+                    CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME,
+                    KeyEncoder<String> { it },
+                    life
+                )
                 node().runtime.create(raw).async().put(instance, """{"format":9}""".encodeToByteArray()).await()
             }
         sink.statusReadings().unreadable.assert().containsExactly("fresh")
