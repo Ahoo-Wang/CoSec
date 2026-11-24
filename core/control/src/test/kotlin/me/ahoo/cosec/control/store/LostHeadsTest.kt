@@ -32,6 +32,7 @@ import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.StoreFixtures.ACME
 import me.ahoo.cosec.control.store.StoreFixtures.candidate
 import me.ahoo.cosec.control.store.StoreFixtures.publication
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -40,7 +41,8 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * `CTL-86` (DR1-F-7): a head a failover moved back under its index, one revision ahead, is found by the reclamation
- * pass, logged, counted and told to the change listeners once, naming the change the lost revision's provenance names.
+ * pass, or by the rebuild of the index that would drop it, logged, counted and told to the change listeners once,
+ * naming the change the lost revision's provenance names.
  */
 class LostHeadsTest {
     private val clock = MutableClock()
@@ -106,6 +108,56 @@ class LostHeadsTest {
         maintenance.reclaim()
         maintenance.lostRevisions.assert().isEqualTo(1L)
         events.count { it.kind == ChangeEvent.Kind.HEAD_LOST }.assert().isEqualTo(1)
+    }
+
+    @Test
+    fun `a lost revision whose number a later publish reused is told by the rebuild that drops it, before any pass`() =
+        runBlocking<Unit> {
+            publish("first")
+            publish("second")
+            publish("lost")
+            val lost = store.index(ACME)!!.value.entries.single { it.revision == 3L }
+            headBackTo(2)
+            publish("again")
+            // The new revision 3 is the head, so nothing is listed above it: the pass alone would find nothing now.
+            store.lostRevisions(ACME).assert().isEmpty()
+
+            revisions.history(ACME)
+            val event = withTimeout(EVENT_DELIVERED.toMillis()) { told.await() }
+
+            event.kind.assert().isEqualTo(ChangeEvent.Kind.HEAD_LOST)
+            event.change.value.assert().isEqualTo("lost")
+            event.candidate!!.digest.assert().isEqualTo(lost.digest.toString())
+            event.base!!.revision.assert().isEqualTo(3L)
+            store.index(ACME)!!.value.entries.none { it.digest == lost.digest }.assert().isTrue()
+            maintenance.lostRevisions.assert().isEqualTo(1L)
+
+            maintenance.reclaim()
+            events.count { it.kind == ChangeEvent.Kind.HEAD_LOST }.assert().isEqualTo(1)
+        }
+
+    @Test
+    fun `a publish landing between the index read and the head read is not reported lost`() = runBlocking<Unit> {
+        publish("first")
+        publish("second")
+        // A publish completes right after the first of the two reads, whichever it is: read in the other order, the head
+        // would be the one before it and the index the one after, and its new revision would read as lost.
+        var publishing = true
+        suspend fun <T> thenPublish(read: T): T {
+            if (publishing) {
+                publishing = false
+                publish("between")
+            }
+            return read
+        }
+        val racing = object : ControlStore by store {
+            override suspend fun index(key: SnapshotKey): Versioned<RevisionIndex>? = thenPublish(store.index(key))
+
+            override suspend fun head(key: SnapshotKey): StoredDocument? = thenPublish(store.head(key))
+        }
+
+        racing.lostRevisions(ACME).assert().isEmpty()
+        store.head(ACME)!!.document.revision.assert().isEqualTo(3L)
     }
 
     @Test

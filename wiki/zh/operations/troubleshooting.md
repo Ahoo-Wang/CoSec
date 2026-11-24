@@ -236,7 +236,7 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
 
 ## 已发布的修订不再是头部 {#a-published-revision-is-no-longer-the-head}
 
-变更事件 `HEAD_LOST`、`cosec.control.revisions.lost`，或 `me.ahoo.cosec.control.lifecycle` 的一条 `ERROR`：`[<doc>] revision <n> is listed above the head at revision <m>, and nothing published over it`。它点名的变更已经发布，随后头部写入丢失、索引条目留了下来：异步复制的 Redis Cluster 主节点发生了故障转移（`CTL-86`；单个主节点上索引条目与头部一起丢失，只有下文数据面的回退会告知）。头部回到了修订 `<m>`，该变更做的事没有生效：被撤销的绑定又生效了。重新发布该变更（在当前头部上重新提出），或回滚到你要的修订，然后在 Redis 上设 `min-replicas-to-write`（[存储](./storage.md#redis-requirements)）。装入过丢失修订的数据面实例会记一次回退，并随头部退回。
+变更事件 `HEAD_LOST`、`cosec.control.revisions.lost`，或 `me.ahoo.cosec.control.lifecycle` 的一条 `ERROR`：`[<doc>] revision <n> (<digest>) was published and is not on the head's chain, now at revision <m>`。它点名的变更已经发布，随后头部写入丢失、索引条目留了下来：异步复制的 Redis Cluster 主节点发生了故障转移（`CTL-86`；单个主节点上索引条目与头部一起丢失，只有下文数据面的回退会告知）。头部在修订 `<m>`（回到了原处，或此后又有发布），该变更做的事没有生效：被撤销的绑定又生效了。重新发布该变更（在当前头部上重新提出），或回滚到你要的修订，然后在 Redis 上设 `min-replicas-to-write`（[存储](./storage.md#redis-requirements)）。装入过丢失修订的数据面实例会记一次回退，并随头部退回。
 
 ## 修订在 min-age 之内被回收 {#revisions-reclaimed-within-min-age}
 

@@ -425,10 +425,11 @@ itself.
   break-glass change, which has no window. It is written whether or not the change is ever published; the revision's
   provenance records the skip too, once it publishes. A refused skip writes nothing.
 - **`REBASED` is written when a change is rebased** on its document's current head and checked again.
-- **`HEAD_LOST` is written by the reclamation pass** when a revision a change published is listed above its
-  document's head, nothing published over it: its head write was lost, as a Redis failover loses one (`CTL-86`). The
-  operator is who published it, the base the head now, the candidate the lost revision. Each instance writes it once
-  for a revision it finds, and only the instance holding the pass finds one. The change is not in effect: publish it
+- **`HEAD_LOST` is written when a revision a change published is not on its document's head chain**: its head write
+  was lost, as a Redis failover loses one (`CTL-86`). The reclamation pass finds one listed above the head; a read of
+  the history that rebuilds the index from the head (once a publish reused the number) finds one it is about to drop.
+  The operator is who published it, the base the head now, the candidate the lost revision. Each instance writes it
+  once for a revision it finds. The change is not in effect: publish it
   again or roll back. `cosec.control.revisions.lost` (counter, no tags) counts them: alert on any.
 - **`ABANDONED` names who abandoned a change and, in its note, its author** (`author <tenant>/<principal>: <note>`).
   Abandoning a break-glass change is gated like `PUBLISHING`: it needs a `REQUIRED` change listener (`503` without

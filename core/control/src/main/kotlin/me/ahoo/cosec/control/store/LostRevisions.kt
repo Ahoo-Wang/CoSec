@@ -23,9 +23,15 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * written, and then its head write lost, as a Redis failover with asynchronous replication loses it. The head is back
  * at an older revision, and what that revision's change narrowed (a revoked binding) is in effect again. Empty when the
  * index or the head is missing: a document never published, or one whose history is rebuilt from its head.
+ *
+ * The index is read before the head, and the order bears the weight: a publish writes its head before its index entry,
+ * so an entry the index read lists was written after its head, which the later read of the head then sees. Read the
+ * other way round, a publish landing between the two reads would list its new revision above the head read before it,
+ * and be reported lost when nothing was.
  */
 @InternalCoSecApi
 suspend fun ControlStore.lostRevisions(key: SnapshotKey): List<RevisionEntry> {
+    // The index first, then the head: see above.
     val index = index(key)?.value ?: return emptyList()
     val head = head(key) ?: return emptyList()
     return index.entries.filter { it.revision > head.document.revision }
