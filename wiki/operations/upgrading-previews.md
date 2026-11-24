@@ -32,8 +32,8 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 - **Breaking: a change cannot put a permission policy id with a `/` past its app, nor a catalog permission id with one**
   (`CTL-8`, DR1-E-5). Affected: an app owner whose changes put `perm:<app>/a/b`, or a catalog entry `a/b`. Such an id
-  walked out of a rule ending in `perm:<app>/` and a `*`. A change is refused with `V2` (422); an entry already stored
-  keeps working and can be removed. Rename the permission without the `/`.
+  walked out of a rule ending in `perm:<app>/` and a `*`. A change that adds one is refused with `V2` (422); an entry
+  or a catalog id already stored keeps working, can stay in the catalog a change puts, and can be removed. Rename the permission without the `/`.
 - **Breaking: `cosec.control.changes.expire-after` and `cosec.control.approval.expire-after` are positive** (DR1-E-16).
   Zero fails startup, naming the property; with zero every change expired as it was made, or every approval was stale.
 - **Breaking for images built on top of CoSec's: the application's files are root's** (DR1-G-8). Affected: a

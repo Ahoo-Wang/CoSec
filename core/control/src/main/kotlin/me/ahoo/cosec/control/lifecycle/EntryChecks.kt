@@ -21,6 +21,7 @@ import me.ahoo.cosec.control.change.ControlStatus.BAD_REQUEST
 import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.Operation
+import me.ahoo.cosec.document.Catalog
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.ProvenanceKind
@@ -79,16 +80,18 @@ internal object EntryChecks {
      * already holds is not this change's to rename, and removing it stays possible. A permission policy's id is
      * `perm:<app>/<permission>` by definition: the one `/` after its app is the exception, which a rule reaches with a
      * final `*` after it, and `<permission>` holds none, nor does a catalog permission's id, which names the same policy
-     * (DR1-E-5).
+     * (DR1-E-5). A catalog is put whole, so only the permission ids it adds to [base]'s catalog are checked: one the
+     * stored catalog already holds, carried as it is, stays, as an entry does.
      */
-    fun entryIds(operations: List<Operation>, findings: MutableList<Finding>) {
+    fun entryIds(operations: List<Operation>, base: PolicyDocument?, findings: MutableList<Finding>) {
+        val stored = catalogIds(base?.catalog)
         for ((i, operation) in operations.withIndex()) {
             val ids = when (operation) {
                 is Operation.PutPolicy -> listOf(permissionName(operation.policy.id.value))
                 is Operation.PutBinding -> listOf(operation.binding.id.value)
                 is Operation.PutRole -> listOf(operation.role.id.value)
                 is Operation.PutRateLimit -> listOf(operation.rule.id)
-                is Operation.PutCatalog -> operation.catalog?.groups.orEmpty().flatMap { group -> group.permissions.map { it.id } }
+                is Operation.PutCatalog -> catalogIds(operation.catalog) - stored
                 else -> emptyList()
             }
             ids.filter { '/' in it }.forEach { id ->
@@ -96,6 +99,9 @@ internal object EntryChecks {
             }
         }
     }
+
+    private fun catalogIds(catalog: Catalog?): Set<String> =
+        catalog?.groups.orEmpty().flatMapTo(LinkedHashSet()) { group -> group.permissions.map { it.id } }
 
     /** What of a policy id must hold no `/`: all of it, or a permission policy's `<permission>` after `perm:<app>/`. */
     private fun permissionName(id: String): String =

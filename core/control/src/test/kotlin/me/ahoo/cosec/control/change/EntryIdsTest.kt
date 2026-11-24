@@ -101,6 +101,34 @@ class EntryIdsTest {
         proposed(key, Operation.PutCatalog(plain)).errors.filter { it.check == "V2" }.assert().isEmpty()
     }
 
+    /**
+     * A catalog is put whole: a permission id with a slash the stored catalog already holds is carried, not added, and
+     * stays, as an entry does. Only one the change adds is refused.
+     */
+    @Test
+    fun `a catalog permission with a slash from before stays, and only one the change adds is refused`() = runBlocking<Unit> {
+        val key = SnapshotKey.App("order")
+        val stored = Catalog(listOf(CatalogGroup("g", permissions = listOf(CatalogPermission("read/all")))))
+        harness.revisions.publish(
+            key,
+            null,
+            StoreFixtures.candidate(key).copy(catalog = stored),
+            Publication("seed", ProvenanceKind.MIGRATE, PLATO.actor),
+        )
+        val carried = Catalog(
+            listOf(CatalogGroup("g", permissions = listOf(CatalogPermission("read/all"), CatalogPermission("write")))),
+        )
+        proposed(key, Operation.PutCatalog(carried)).errors.filter { it.check == "V2" }.assert().isEmpty()
+
+        val added = Catalog(
+            listOf(
+                CatalogGroup("g", permissions = listOf(CatalogPermission("read/all"), CatalogPermission("write/all")))
+            ),
+        )
+        proposed(key, Operation.PutCatalog(added)).errors.single { it.check == "V2" }.message.assert()
+            .contains("[write/all]").doesNotContain("read/all")
+    }
+
     @Test
     fun `an entry with a slash from before can still be replaced by nothing`() = runBlocking<Unit> {
         harness.revisions.publish(
