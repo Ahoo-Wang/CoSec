@@ -243,6 +243,16 @@ Which preview of the library may run behind which preview of the gateway image: 
   timeout (30 seconds by default) ended it. A control call has no deadline of its own: yours decides, a `withTimeout`
   around the call or the `timeout` of `HttpControlService`
   ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)).
+- **The control plane's SDK holds its inputs and answers tighter** (`CTL-77`, `CTL-80`, `CTL-76`, DR1-F-15 to F-18).
+  Affected: applications that call the control plane through `cosec-control-sdk` or `cosec-control-http`.
+  - `HttpControlService` refuses, when made, an `HttpClient` that follows redirects: build it with
+    `followRedirects(HttpClient.Redirect.NEVER)`, the JDK's default. An answer over 20 MB fails the call with an
+    `IOException`.
+  - `ControlCaller.service` refuses a principal or role that `CoSec-Identity` would not carry: an empty role, or one
+    with an unpaired surrogate.
+  - The typed reader refuses a document whose `schema` is not 2.
+  - `proposeAndPublishWithoutShadow` no longer abandons a holder of its own author that was approved or shadowed: it
+    waits for it, and gives up after its patience as for any other holder.
 - **Memberships are held by each instance, never in Redis** (`MEM-5`, DR1-D-2). Affected: applications with a
   `MembershipLoader`. Before, every instance read and wrote a shared cache under `<s>:membership:*`, and read whatever
   was there as the loader's answer, so any data-plane Redis credential could grant roles through it. Now each instance

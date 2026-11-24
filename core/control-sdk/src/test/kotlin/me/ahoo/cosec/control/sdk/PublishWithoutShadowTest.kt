@@ -179,13 +179,17 @@ class PublishWithoutShadowTest {
     }
 
     @Test
-    fun `a slot another author holds, one waiting for a person, or a live writer of its own author, is waited for`() {
+    fun `a slot another author holds, one waiting for a person, approved or shadowed, or a live writer of its own, is waited for`() {
         val dayOld = "2026-11-20T00:00:00Z"
         listOf(
             change("READY", id = "c0", author = "service:svc-other", updatedAt = dayOld),
             change("AWAITING_APPROVAL", id = "c0", updatedAt = dayOld),
             // Its own author's, updated within the patience: another replica, still writing.
             change("READY", id = "c0", updatedAt = "2026-11-20T23:59:59.900Z"),
+            // Its own author's and a day old, but approved, or shadowed: a person's work, never thrown away (DR1-F-15).
+            change("READY", id = "c0", updatedAt = dayOld, extra = APPROVED),
+            change("SHADOWING", id = "c0", updatedAt = dayOld, extra = WINDOW_OPEN),
+            change("READY", id = "c0", updatedAt = dayOld, extra = WINDOW_CLOSED),
         ).forEach { holder ->
             val service = Scripted { call, _ ->
                 when (call) {
@@ -302,10 +306,17 @@ class PublishWithoutShadowTest {
             id: String = "c1",
             author: String = "service:svc-iam",
             updatedAt: String = "2026-11-21T00:00:01Z",
+            extra: String = "",
         ) =
             """{"id":"$id","key":"tenant:acme","kind":"PUBLISH","state":"$state",""" +
                 """"base":{"revision":$base},"note":"n","author":{"tenant":"acme","principal":"$author"},""" +
-                """"operations":[],"findings":[],"createdAt":"2026-11-21T00:00:00Z","updatedAt":"$updatedAt"}"""
+                """"operations":[],"findings":[],"createdAt":"2026-11-21T00:00:00Z","updatedAt":"$updatedAt"$extra}"""
+
+        const val APPROVED = ""","candidate":"k1","approval":{"approver":{"tenant":"acme","principal":"walt"},""" +
+            """"at":"2026-11-20T00:00:00Z","candidate":"k1","covers":[]}"""
+        const val WINDOW_OPEN = ""","candidate":"k1","shadow":{"window":"w1","startedAt":"2026-11-20T00:00:00Z"}"""
+        const val WINDOW_CLOSED = ""","candidate":"k1","shadow":{"window":"w1","startedAt":"2026-11-19T00:00:00Z",""" +
+            """"closed":{"closedAt":"2026-11-20T00:00:00Z","counts":{},"vanished":[]}}"""
 
         fun conflict(kind: ConflictKind, heldBy: String? = null) = ControlRefusedException(
             409,

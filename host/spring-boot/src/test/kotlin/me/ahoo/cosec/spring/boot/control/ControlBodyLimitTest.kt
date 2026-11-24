@@ -23,6 +23,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
+import me.ahoo.cosec.control.http.HttpControlService
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.document.PolicyDocument
@@ -107,6 +108,8 @@ class ControlBodyLimitTest {
     fun `the limit is the document cap and 2 MB, 10 MB, and follows the cap`() {
         ControlDerived.MAX_BODY_BYTES.assert().isEqualTo(ChangeOptions.DEFAULT_MAX_DOCUMENT_BYTES + 2L * 1024 * 1024)
         (ControlDerived.MAX_BODY_BYTES / (1024 * 1024)).assert().isEqualTo(10L)
+        // DR1-F-17: the HTTP facade reads an answer up to twice what a route reads, so a change or a document always fits.
+        HttpControlService.MAX_ANSWER_BYTES.assert().isEqualTo(2 * ControlDerived.MAX_BODY_BYTES)
         ControlDerived.MAX_BODY_BYTES.assert().isGreaterThan(ChangeOptions().maxDocumentBytes.toLong())
     }
 
