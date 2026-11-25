@@ -158,11 +158,12 @@ class TypeScriptWorkspaceTest {
                 .assert().describedAs("the peer range of $name").isEqualTo("^6.1.1 || ^8.0.0-rc.1")
         }
         val ci = Projects.root.resolve(".github/workflows/ci.yml").readText()
+        val install = """run: node scripts/fetcher-line.mjs "${'$'}{{ matrix.fetcher }}" && pnpm install --no-frozen-lockfile"""
         for (name in listOf("typescript", "typescript-host")) {
             val job = ci.substringAfter("\n  $name:\n").substringBefore("\n  # ")
             Regex("""fetcher: (\[[^]]*'8'[^]]*]|'8')""").containsMatchIn(job)
                 .assert().describedAs("$name has a fetcher 8 leg").isTrue()
-            job.contains("""run: node scripts/fetcher-line.mjs "${'$'}{{ matrix.fetcher }}" && pnpm install --no-frozen-lockfile""")
+            job.contains(install)
                 .assert().describedAs("$name installs the leg's fetcher").isTrue()
             job.contains("run: pnpm -r ls --depth 0 @ahoo-wang/fetcher")
                 .assert().describedAs("$name shows the fetcher it installed").isTrue()

@@ -62,7 +62,7 @@ export function rangeOf(peer, major) {
   const part = peer
     .split('||')
     .map(it => it.trim())
-    .find(it => new RegExp(`^[\\^~>=]*${major}\\.`).test(it));
+    .find(it => it.replace(/^[\^~>=]*/, '').startsWith(`${major}.`));
   if (!part)
     throw new Error(
       `the peer range ${peer} accepts no version of major ${major}`,
@@ -90,8 +90,7 @@ export function pin(yaml, name, version) {
   const start = lines.findIndex(line => line === 'catalog:');
   const at = lines.findIndex(
     (line, index) =>
-      index > start &&
-      new RegExp(`^  '?${name.replace(/[/@-]/g, '\\$&')}'?:`).test(line),
+      index > start && /^ {2}'?([^':]+)'?:/.exec(line)?.[1] === name,
   );
   if (start < 0 || at < 0)
     throw new Error(`the catalog has no entry for ${name}`);
