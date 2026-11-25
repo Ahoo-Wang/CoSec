@@ -44,6 +44,11 @@ object PreviousRelease {
             to Later(BETA_9, "it states an identity with auth.kind to the control host, whose beta.8 reader answers 400, not 503"),
         "ControlHostScenario#the operators' port, the service port and the management port each serve what they are for"
             to Later(BETA_9, "it states identities with auth.kind to the control host's operators' and service ports, refused 400"),
+        "ControlHostScenario#the management port serves the probes and the scrape endpoint and no control API" to Later(
+            BETA_9,
+            "its stated identity carries auth.kind, and beta.8's management port is under its pipeline (WebFlux), which " +
+                "refuses it 400 before the route can answer 404; without an identity it would be 401, not the 404 it shows",
+        ),
         "ControlHostScenario#an identity the host cannot trust is refused, be it none, doubled, expired or too old"
             to Later(BETA_9, "its stated identities carry auth.kind, refused 400 before the expiry each case is about"),
         "ControlReplicaScenario" to Later(BETA_9, "it proposes through the service port as a stated service, with auth.kind: refused 400"),
