@@ -11,8 +11,6 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class)
-
 package me.ahoo.cosec.spi.shadow
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi

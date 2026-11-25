@@ -12,7 +12,6 @@
  */
 
 package me.ahoo.cosec.runtime.http
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * The only serializer of [Problem] (RFC 0006 §6.2): hand-written, so the three adapters write the same bytes whatever
@@ -22,7 +21,6 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
  * The request id may come from the client, so strings are escaped per RFC 8259: `"`, `\` and every control character,
  * and every non-ASCII character as `\uXXXX`. The body is ASCII, valid JSON, and a value cannot add a member.
  */
-@ExperimentalCoSecApi
 object ProblemEncoder {
     const val MEDIA_TYPE = "application/problem+json"
 

@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class, me.ahoo.cosec.annotations.ExperimentalCoSecApi::class)
+@file:OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.http
 

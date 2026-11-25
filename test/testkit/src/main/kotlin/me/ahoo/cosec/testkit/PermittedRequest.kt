@@ -46,7 +46,6 @@ import me.ahoo.cosec.spi.token.TokenVerifier
  * from them is what the context answers: a `CoSec-Device-Id` is the context's `deviceId`, and two different values are
  * as ambiguous here as on a host.
  */
-@ExperimentalCoSecApi
 object PermittedRequest {
     /**
      * The context of the request [token] makes, verified by [verifier] over [revocations]: name
