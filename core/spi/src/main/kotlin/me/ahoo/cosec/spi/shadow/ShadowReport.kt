@@ -15,12 +15,11 @@
 
 package me.ahoo.cosec.spi.shadow
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.time.Instant
 
 /** How a sampled request came out on the candidate, against the enforced documents (RFC 0007 §6.4). */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 enum class ShadowOutcome {
     /** The same decision, by the same statement. */
     SAME,
@@ -61,7 +60,7 @@ enum class ShadowOutcome {
  * One sampled request (RFC 0007 §6.4): the fields a decision event has (RFC 0006 §9.2), and the statements that decided
  * on each side, never a header, a token or an attribute value.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class ShadowSample(
     val tenant: String,
     val principal: String,
@@ -95,7 +94,7 @@ class ShadowSample(
  * the base revisions it compared against, and the first and last sample times. Cumulative: each write replaces the
  * instance's previous report for the window.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class ShadowReport(
     val window: String,
     val instance: String,
@@ -133,6 +132,7 @@ class ShadowReport(
         last = last
     )
 
+    @InternalCoSecApi
     companion object {
         const val MAX_SAMPLES: Int = 20
 

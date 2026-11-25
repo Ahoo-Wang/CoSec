@@ -15,14 +15,15 @@
 
 package me.ahoo.cosec.spi.shadow
 
-import me.ahoo.cosec.annotations.CoSecSpi
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.time.Duration
 
-/** What the control plane reads back: every instance's report of a window, and the statuses written recently. */
-@CoSecSpi
-@ExperimentalCoSecApi
+/**
+ * What the control plane reads back: every instance's report of a window, and the statuses written recently. Not an
+ * extension point in 8.0 (`@InternalCoSecApi`): `cosec-cocache`'s `CoCacheShadowReports`, which the starter wires, is
+ * the only one.
+ */
+@InternalCoSecApi
 interface ShadowReportReader {
     /** Every instance's report of [window]; throws when one of them cannot be read, or the store does not answer. */
     suspend fun reports(window: String): List<ShadowReport>
@@ -68,6 +69,7 @@ interface ShadowReportReader {
      */
     suspend fun residents(instances: Set<String>): ResidentReadings
 
+    @InternalCoSecApi
     companion object {
         /** An instance that has not written its status for this long is not counted (RFC 0007 §6.5). */
         val STATUS_TTL: Duration = Duration.ofMinutes(1)
@@ -95,7 +97,7 @@ interface ShadowReportReader {
  * What [ShadowReportReader.readings] read of a window: the [reports] that read, and the ids of the instances whose
  * report is listed and [unreadable] (missing, or not decoding), which carry no counts.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class ShadowReadings(val reports: List<ShadowReport>, val unreadable: Set<String>) {
     override fun equals(other: Any?): Boolean =
         this === other || other is ShadowReadings && reports == other.reports && unreadable == other.unreadable
@@ -109,7 +111,7 @@ class ShadowReadings(val reports: List<ShadowReport>, val unreadable: Set<String
  * What [ShadowReportReader.statusReadings] read: the recent [statuses] that read, and the ids of the instances whose
  * listed status does not decode ([unreadable]), which carry no documents and acknowledge no window.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class StatusReadings(val statuses: List<InstanceStatus>, val unreadable: Set<String>) {
     override fun equals(other: Any?): Boolean =
         this === other || other is StatusReadings && statuses == other.statuses && unreadable == other.unreadable
@@ -123,7 +125,7 @@ class StatusReadings(val statuses: List<InstanceStatus>, val unreadable: Set<Str
  * What [ShadowReportReader.residents] read: the [residents] that read, by instance, and the ids of the instances whose
  * record is missing or does not decode ([unreadable]), which `propagation` counts as `unknown`.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class ResidentReadings(val residents: Map<String, ResidentDocuments>, val unreadable: Set<String>) {
     override fun equals(other: Any?): Boolean =
         this === other || other is ResidentReadings && residents == other.residents && unreadable == other.unreadable

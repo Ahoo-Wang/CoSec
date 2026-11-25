@@ -73,7 +73,8 @@ class SourceRulesTest {
          * reach. Nothing of `runtime` (RFC 0013 §3): the shadow ports are `cosec-spi`'s, the formats `cosec-document`'s.
          */
         val BACKEND_REACH: Map<String, List<String>> = mapOf(
-            // The ControlStore port's package, and the change values its signatures carry, with their codec.
+            // The control plane's store and the change records it keeps, with their codec: all @InternalCoSecApi, CoSec's
+            // own storage (no extension point in 8.0), which cocache implements.
             "me.ahoo.cosec.cocache.control" to listOf(
                 "me.ahoo.cosec.control.store.",
                 "me.ahoo.cosec.control.change.ChangeId",

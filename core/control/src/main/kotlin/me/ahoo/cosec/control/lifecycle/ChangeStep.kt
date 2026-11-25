@@ -11,11 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class)
+@file:OptIn(ExperimentalCoSecApi::class, InternalCoSecApi::class)
 
 package me.ahoo.cosec.control.lifecycle
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.ChangeState.ABANDONED
 import me.ahoo.cosec.control.change.ChangeState.AWAITING_APPROVAL

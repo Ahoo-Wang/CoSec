@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.spi.shadow
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.time.Instant
 
@@ -24,7 +23,7 @@ import java.time.Instant
  * Small, and written every report interval: the documents it holds are its [ResidentDocuments], a record of their own
  * that only `propagation` reads (`CTL-74`).
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class InstanceStatus(
     val instance: String,
     val at: Instant,
@@ -65,6 +64,7 @@ class InstanceStatus(
 
     override fun toString(): String = "InstanceStatus(${fields().joinToString()})"
 
+    @InternalCoSecApi
     companion object {
         /**
          * The document format level of this version: 8.0 reads level 1. Not a `const`, so that code compiled against one

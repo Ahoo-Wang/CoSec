@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.spi.shadow
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
@@ -21,7 +21,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * list is a superset of what is staged: a document is listed before its candidate is written and unlisted after it is
  * withdrawn, so a listed document may have no candidate any more, and an unlisted one never has one.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class StagedCandidates(val windows: Map<SnapshotKey, Set<String>>) {
     /** Whether [key] is listed: it may stage a candidate, which is read by its key. */
     fun isStaged(key: SnapshotKey): Boolean = key in windows
@@ -32,7 +32,7 @@ class StagedCandidates(val windows: Map<SnapshotKey, Set<String>>) {
 
     override fun toString(): String = "StagedCandidates($windows)"
 
-    @ExperimentalCoSecApi
+    @InternalCoSecApi
     companion object {
         /** A list that is kept and names nothing: nothing is staged. */
         val NONE: StagedCandidates = StagedCandidates(emptyMap())

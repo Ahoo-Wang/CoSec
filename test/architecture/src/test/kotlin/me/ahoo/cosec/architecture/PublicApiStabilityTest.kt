@@ -103,9 +103,6 @@ class PublicApiStabilityTest {
         val INTERNAL_EXPOSURES: Map<String, String> = run {
             val bridge = "An internal base class shared by the reactive adapters: an application names the filter, built " +
                 "for it by the starter or the kit, and calls none of the base's members, which are internal."
-            // Report P-1, F: the control store and its records become @InternalCoSecApi in this round; remove these then.
-            val store = "Names the internal ChangeId; the control store and its records become @InternalCoSecApi in " +
-                "this round (report P-1, group F)."
             listOf(
                 "webflux.PipelineWebFilter" to bridge,
                 "gateway.PipelineGatewayFilter" to bridge,
@@ -116,15 +113,6 @@ class PublicApiStabilityTest {
                     "source compiles through; its constructor and members are internal, so an application only names it.",
                 "social.justauth.JustAuthProvider" to "Implements the internal SocialAuthenticationProvider; it becomes " +
                     "internal itself in this round (report P-9).",
-                "control.store.ControlStore" to store,
-                "control.store.InMemoryControlStore" to store,
-                "control.store.ListedChange" to store,
-                "control.store.ListedChange\$Readable" to store,
-                "control.store.ListedChange\$Unreadable" to store,
-                "control.store.EndedChange" to store,
-                "control.change.ChangeRequest" to store,
-                "control.change.StageSlot" to store,
-                "cocache.control.CoCacheControlStore" to store,
             ).associate { (name, reason) -> "me.ahoo.cosec.$name" to reason }
         }
 

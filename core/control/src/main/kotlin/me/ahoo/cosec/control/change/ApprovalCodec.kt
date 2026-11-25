@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.change
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeJson.actor
 import me.ahoo.cosec.control.change.ChangeJson.actorTree
 import me.ahoo.cosec.control.change.ChangeJson.factory

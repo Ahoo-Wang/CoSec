@@ -26,7 +26,6 @@ import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.api.spi.L1Read
 import me.ahoo.cocache.core.CoCacheFactory
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
@@ -66,7 +65,7 @@ import java.util.concurrent.ConcurrentHashMap
  * status has expired (it is gone), as one older than a minute. A status or list that cannot be read fails it;
  * [statusReadings] names a status that does not decode instead (`CTL-73`).
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class CoCacheShadowReports @InternalCoSecApi constructor(
     private val reports: Store<String, ShadowReport>,
     private val reporters: Store<String, Set<String>>,
