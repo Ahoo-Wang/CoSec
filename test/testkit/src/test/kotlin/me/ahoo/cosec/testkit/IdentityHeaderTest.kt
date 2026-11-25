@@ -112,6 +112,23 @@ class IdentityHeaderTest {
         credential.session?.generation.assert().isEqualTo(1L)
     }
 
+    /** IDN-44: the kit states whose the token is, a person's or a workload's, each by a function of its own. */
+    @Test
+    fun `a workload's header is read as a workload's, without break-glass, and a subject's as a person's - IDN-44`() {
+        val workload = checkNotNull(behindGateway(IdentityHeader.forWorkload("svc-batch", tenant = "acme")).security)
+        IdentityCodec.decode(IdentityHeader.forWorkload("svc-batch", tenant = "acme")).credential.kind
+            .assert().isEqualTo(Identity.Credential.Kind.WORKLOAD)
+        checkNotNull(workload.principal).let {
+            it.workload.assert().isTrue()
+            it.breakGlass.assert().isFalse()
+        }
+        val person = checkNotNull(behindGateway(IdentityHeader.forSubject("alice", tenant = "acme")).security)
+        checkNotNull(person.principal).let {
+            it.workload.assert().isFalse()
+            it.breakGlass.assert().isTrue()
+        }
+    }
+
     @Test
     fun `the header for a token is the one a gateway forwards, with the token's session and claims`() {
         val token = signIn().accessToken

@@ -81,13 +81,11 @@ class StoredRecordMembersTest {
             "change:base.digest",
             "change:escalations",
             "staging_slot:holder",
-            "instance_status:shadows"
         )
         dropping.assert().containsExactly(
             "change:base.digest",
             "change:escalations",
             "staging_slot:holder",
-            "instance_status:shadows"
         )
     }
 

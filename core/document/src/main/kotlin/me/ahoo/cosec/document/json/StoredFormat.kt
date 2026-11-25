@@ -73,7 +73,7 @@ object StoredFormat {
     private const val CAUSE_DEPTH = 8
 
     /** The format of [node], a stored [what]: 1 without one; refused above [known]. */
-    fun of(node: JsonNode, what: String, known: Int = 1): Int {
+    private fun of(node: JsonNode, what: String, known: Int): Int {
         val format = if (node.isObject) node.get(FIELD) else null
         val read = format?.takeIf { it.isIntegralNumber && it.canConvertToInt() }?.intValue()
         val refused = when {

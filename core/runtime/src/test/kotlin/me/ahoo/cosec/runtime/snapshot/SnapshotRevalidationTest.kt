@@ -68,11 +68,18 @@ class SnapshotRevalidationTest {
             SnapshotMetrics.NOOP
         ).use { source ->
             source.load().join()
-            // The listener runs before the store serves the new value: the reload it starts still reads revision 1.
+            // The listener runs before the store serves the new value: the reload it starts reads revision 1. Its read
+            // is held, its answer fixed when it starts, and revision 2 is put only once it has started: else, on a
+            // loaded machine, the reload could read after the put and install revision 2 with no periodic pass at all.
+            store.hold = true
             store.notifyChanged(SnapshotKey.Platform)
+            await { store.pending.any { it.key == SnapshotKey.Platform } }
             store.dropNotifications = true
             store.put(SnapshotKey.Platform, document(2))
+            store.hold = false
+            store.releaseAll()
 
+            // Only a periodic pass reads the store again: the notification of revision 2 was lost.
             await { (source.peek()?.policies as? DocumentState.Present)?.compiled?.revision == 2L }
         }
     }
@@ -87,8 +94,10 @@ class SnapshotRevalidationTest {
             source.load().join()
             store.dropNotifications = true
             store.hold = true
-            // A load in flight, its read made while the store still holds revision 1.
+            // A load in flight, its read made while the store still holds revision 1: started before the put, or the
+            // case would pass with a read of revision 2 and say nothing.
             val earlier = source.revalidate()
+            await { store.pending.any { it.key == SnapshotKey.Platform } }
             store.put(SnapshotKey.Platform, document(2))
             val revalidated = source.revalidate()
             store.hold = false
@@ -350,6 +359,8 @@ class SnapshotRevalidationTest {
             store.dropNotifications = true
             store.hold = true
             source.revalidate()
+            // The load's read starts before the put, so revision 2 can come only from the reload the reset owes.
+            await { store.pending.any { it.key == SnapshotKey.Platform } }
             store.put(SnapshotKey.Platform, document(2))
             store.reset()
             store.releaseAll()

@@ -41,7 +41,8 @@ class InstanceStatusReleaseTest {
     @Test
     fun `the release is the version of the build`() {
         InstanceStatus.RELEASE.assert().isEqualTo(version)
-        InstanceStatus("i-1", java.time.Instant.EPOCH).release.assert().isEqualTo(version)
+        // Given only by the instance's own reporter: a status built without one names no release (an unknown one).
+        InstanceStatus("i-1", java.time.Instant.EPOCH).release.assert().isNull()
     }
 
     @Test

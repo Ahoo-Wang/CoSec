@@ -1095,7 +1095,10 @@ when the store is down.
 
 `IdentityHeader` writes the `CoSec-Identity` header a gateway forwards, for testing a service that runs behind a
 gateway (`cosec.pipeline.mode=gateway`) without one in front. It covers a subject, any `Identity`, or what a gateway
-forwards for a real token.
+forwards for a real token. `forSubject` states a person's token and `forWorkload`, with the same parameters, a
+workload's (`IDN-44`): a service, a machine, a login declared a workload's. A workload never approves a change, is never
+the control plane's trust root and has no break-glass, whatever its roles grant; test what a service behind the gateway
+refuses it with `forWorkload`.
 
 **Make a header per request.** A header is made at one moment and is good for a short time: a service refuses it once it
 is older than `cosec.pipeline.identity.max-age` (`60s` by default) plus `cosec.authentication.revocation.skew` (`5s`),

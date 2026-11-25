@@ -24,8 +24,10 @@ import org.springframework.boot.health.contributor.HealthIndicator
 /**
  * `cosecInstanceStatus` (`SNP-25`): the status this instance reports, so that the control plane sees it among the readers
  * of the store: its `instance`, its `release`, when the last status was written (`lastWritten`), and `failingSince` with
- * `failedWrites` while writes fail. Always UP: the status is what a publish waits for, never what a request is decided
- * on, so it belongs in no readiness group; a failing write is an alert, read from the details and the log.
+ * `failedWrites` while writes fail. Always UP: the status is what the control plane shows of the readers of the store,
+ * never what a request is decided on, so it belongs in no readiness group; while writes fail, the instance is missing
+ * from `GET /instances` and from the count of a revision's `propagation`. A failing write is an alert, read from the
+ * details and the log.
  */
 @InternalCoSecApi
 class InstanceStatusHealthIndicator(private val reporter: InstanceReporter) : HealthIndicator {

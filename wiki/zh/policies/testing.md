@@ -607,7 +607,7 @@ class OrderPermissionsTest {
 
 `PipelineFixture.unreadable(routes, listeners)` 是一个无法读取文档的宿主：对存储的每次读取都失败，因此每个请求都是 `503 unavailable`，没有请求被允许。让你的路由在它上面运行，证明存储不可用时它们失败关闭。
 
-`IdentityHeader` 写出网关转发的 `CoSec-Identity` 头，用于在前面没有网关的情况下测试运行在网关之后的服务（`cosec.pipeline.mode=gateway`）。它可以为一个主体、任意一个 `Identity`，或网关为一个真实令牌转发的内容写出头。
+`IdentityHeader` 写出网关转发的 `CoSec-Identity` 头，用于在前面没有网关的情况下测试运行在网关之后的服务（`cosec.pipeline.mode=gateway`）。它可以为一个主体、任意一个 `Identity`，或网关为一个真实令牌转发的内容写出头。`forSubject` 说明的是人的令牌，`forWorkload`（参数相同）说明的是工作负载的令牌（`IDN-44`）：服务、机器、声明为工作负载的登录。工作负载不论角色授予什么，都不能审批变更、不是控制面的信任根，也没有 break-glass；用 `forWorkload` 测试网关后面的服务拒绝它什么。
 
 **每个请求生成一个头。**头在某一时刻生成，只在很短的时间内有效：当它比 `cosec.pipeline.identity.max-age`（默认 `60s`）加 `cosec.authentication.revocation.skew`（`5s`）更旧时，服务会以 `401` `token-expired` 拒绝它，不论里面的凭证还能有效多久（`forSubject` 的 `validFor` 默认是一小时；它是凭证的有效期，不是头的）。保存在字段或常量里的头，对几秒内结束的测试能用，对要等待的测试就会失败，而这个 `401` 看起来像是服务的缺陷。生成头很便宜：每个请求生成一个。`forSubject` 接受 `clock`，用来测试头的年龄本身（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）。
 

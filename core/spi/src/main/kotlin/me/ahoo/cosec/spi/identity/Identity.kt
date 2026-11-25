@@ -191,8 +191,9 @@ class Identity(
         )
 
         /**
-         * Whose a credential is (`IDN-44`), a closed set: a reader takes a kind it does not know, or none, as a
-         * [WORKLOAD]'s, the restrictive reading. A later kind is a workload's to every reader that does not know it.
+         * Whose a credential is (`IDN-44`), a closed set that gains no member within 8.x, so an exhaustive `when` over
+         * it keeps compiling. On the wire (`auth.kind`, `cosec.kind`) a reader takes a value it does not know, or none,
+         * as a [WORKLOAD]'s, the restrictive reading.
          */
         enum class Kind {
             /** A person's: who may approve and be the trust root as the policies grant, and use break-glass. */

@@ -34,8 +34,8 @@ object IdentityHeader {
     const val NAME: String = IdentityCodec.HEADER
 
     /**
-     * The header value of [identity]. Throws [IllegalStateException] when the value would be longer than [maxBytes] (8 KiB
-     * by default, the receiver's default limit), a claim is of a kind the header does not carry, or the credential never
+     * The header value of [identity]. Throws [IllegalStateException] when the value would be longer than [maxBytes] (6 KiB
+     * by default, the writer's limit, below the 8 KiB every 8.x receiver reads, `IDN-43`), a claim is of a kind the header does not carry, or the credential never
      * expires; and [IllegalArgumentException] when a receiver would refuse what it wrote (an empty id, a time out of
      * range): a header written is a header read.
      */

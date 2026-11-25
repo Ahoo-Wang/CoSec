@@ -103,7 +103,7 @@ internal enum class FrozenLayout(val what: String, val ifChanged: IfChanged) {
 
     /**
      * `<s>:shadow:status:<instance>`, `<s>:shadow:resident:<instance>` and `<s>:shadow:instances:all`: the instances the
-     * control plane can see read the store (R5). One it cannot see is left out of the readers a publish waits for.
+     * control plane can see read the store (R5). One it cannot see is missing from `GET /instances` and `propagation`.
      * Also the status key's life, exactly an hour with no jitter (`ShadowCacheSpecs.STATUS_TTL`): it bounds the readers
      * of the store (`SNP-25`), and the life a key has left is how a reader of any release ages a status it cannot decode
      * (`CTL-73`). A writer with a shorter life makes an older reader take a live instance's undecodable status for one a

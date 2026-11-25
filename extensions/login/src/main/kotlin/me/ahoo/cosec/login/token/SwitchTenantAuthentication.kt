@@ -49,8 +49,9 @@ import me.ahoo.cosec.spi.token.VerifiedToken
  * current generation, or the one just replaced within the rotation leeway, while an older pair presented again revokes
  * the session, as a refresh would. That is checked before [tenantSwitch] is asked, in the one place a refresh checks it
  * too. The switch moves nothing of the previous session, which refreshes on as before. The new token starts a session of
- * its own, which ends when the previous one would, since the user did not sign in again (`IDN-17`); the previous one is
- * left as it is, so a logout ends only the pair it is given.
+ * its own, which ends when the previous one would, since the user did not sign in again (`IDN-17`). The previous one is
+ * left as it is by the switch; a logout of the switched session ends the login it came from too (`IDN-40`,
+ * [TokenFamilies.logout]).
  *
  * @param tokenVerifier CoSec's own verifier, which checks the pair as a refresh's ([TokenVerifier.refresh])
  * @param credentialsType the application's credentials class, by which a login finds this authentication

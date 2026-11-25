@@ -92,7 +92,7 @@ object ShadowCodec {
                 status.windows?.let { windows -> node.putArray("windows").apply { windows.sorted().forEach(::add) } }
                 // Only when false (CTL-10): absent is an instance that shadows, as an older one does.
                 if (!status.shadows) node.put("shadows", false)
-                // RFC 0014 R5 (SNP-25): absent is an unknown release, which a publish counts as the GA baseline.
+                // RFC 0014 R5 (SNP-25): absent is an unknown release, which nothing in 8.0 counts or waits on.
                 status.release?.let { node.put("release", it) }
             }
         },

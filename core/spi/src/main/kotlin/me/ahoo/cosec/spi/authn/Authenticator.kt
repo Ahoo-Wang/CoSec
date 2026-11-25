@@ -175,6 +175,18 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
     }
 
     /**
+     * RC1-26 (`BRK-8`): [Identity.Method.JWT] is CoSec's own token's, whatever its kind; only CoSec's token
+     * authenticator, through the internal constructor, makes a principal with it. Another authenticator that names it
+     * throws here, so audit and a forwarded identity never label its credential as CoSec's token.
+     */
+    private fun requireNotCoSecToken() {
+        require(credential?.method != Identity.Method.JWT) {
+            "The authentication method [${Identity.Method.JWT}] is CoSec's own token's, whatever the credential's kind: " +
+                "name your authenticator's own method (RC1-26)."
+        }
+    }
+
+    /**
      * RC1-52 (`IDN-10`): an id with an unpaired surrogate would share a Redis key with another id. Another authenticator
      * that gives one throws here, from the public constructors, which the pipeline answers 503, as it answers any
      * authenticator that throws. CoSec's own authenticators check the ids where they read them (a token's claims, an
@@ -229,6 +241,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         session = null,
     ) {
         requireWellFormed()
+        requireNotCoSecToken()
     }
 
     /**
@@ -255,6 +268,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         session = null,
     ) {
         requireWellFormed()
+        requireNotCoSecToken()
     }
 
     /**

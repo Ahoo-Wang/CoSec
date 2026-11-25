@@ -65,6 +65,14 @@ public final class me/ahoo/cosec/testkit/IdentityHeader {
 	public static final fun forSubject (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/time/Duration;)Ljava/lang/String;
 	public static final fun forSubject (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/time/Duration;Ljava/time/Clock;)Ljava/lang/String;
 	public static synthetic fun forSubject$default (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/time/Duration;Ljava/time/Clock;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun forWorkload (Ljava/lang/String;)Ljava/lang/String;
+	public static final fun forWorkload (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public static final fun forWorkload (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public static final fun forWorkload (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public static final fun forWorkload (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;)Ljava/lang/String;
+	public static final fun forWorkload (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/time/Duration;)Ljava/lang/String;
+	public static final fun forWorkload (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/time/Duration;Ljava/time/Clock;)Ljava/lang/String;
+	public static synthetic fun forWorkload$default (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/time/Duration;Ljava/time/Clock;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun of (Lme/ahoo/cosec/spi/identity/Identity;)Ljava/lang/String;
 	public static final fun withToken (Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/RevocationReader;)Ljava/lang/String;
 	public static final fun withToken (Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/RevocationReader;Ljava/util/Set;)Ljava/lang/String;

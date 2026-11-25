@@ -20,7 +20,6 @@ import me.ahoo.cosec.document.json.StoredMembers
 import me.ahoo.cosec.document.json.StoredMembers.Companion.opaque
 import me.ahoo.cosec.document.json.StoredMembers.Companion.optional
 import me.ahoo.cosec.document.json.StoredMembers.Companion.required
-import me.ahoo.cosec.document.json.StoredMembers.Member
 import me.ahoo.cosec.document.json.StoredMembers.WhenAbsent
 import me.ahoo.cosec.document.json.StoredRecord
 
@@ -56,10 +55,10 @@ object ShadowMembers {
             required("formatLevel"),
             // Acknowledges no window: no window passes on it, which narrows.
             optional("windows", WhenAbsent.NONE),
-            // An instance that does not shadow, ignored or dropped, would count as one that evaluated the window.
-            Member("shadows", WhenAbsent.TRUE, ignoringWidens = true, droppingWidens = true),
-            // An unknown release, which a publish counts as the GA baseline: the oldest it may wait for, which narrows
-            // (SNP-25).
+            // An instance that shadows: a window waits for its acknowledgement. A `false` ignored or dropped makes a
+            // window wait for an instance that never acknowledges it, which narrows (the window does not pass).
+            optional("shadows", WhenAbsent.TRUE),
+            // An unknown release, which nothing in 8.0 counts or waits on (SNP-25): shown as unknown, never as another.
             optional("release", WhenAbsent.NONE),
         ),
     )
