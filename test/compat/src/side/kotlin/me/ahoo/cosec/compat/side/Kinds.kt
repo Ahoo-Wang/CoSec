@@ -24,8 +24,8 @@ import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Instant
 
 /**
- * The kinds of credential (`IDN-44`) each version declares and reads: one copy for both sides, since 8.0.0-beta.9, the
- * previous release, has them too.
+ * The kinds of credential (`IDN-44`) each version declares and reads: one copy for both sides, since every release from
+ * 8.0.0-beta.9 on, the previous one among them, has them too.
  */
 internal object Kinds {
     /** CoSec's own token's credential, a person's. */
