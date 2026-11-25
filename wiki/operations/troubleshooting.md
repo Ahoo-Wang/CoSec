@@ -399,7 +399,12 @@ refuses that one record, answers the refresh, logout or switch that read it `503
 rewriting it. A control-plane instance logs `Control API <method> <path> (request <id>) is 503: a later CoSec wrote a
 stored record (the <record> record), members [<path>] in its crit ...` instead: the call that read a change, a staging
 slot, a revision index, the app list or a shadow window's record is answered `503` without detail, and the record is
-never rewritten. Nothing is wrong with the store. Upgrade the instance; an upgraded one reads the record. If
+never rewritten. Nothing is wrong with the store. Upgrade the instance; an upgraded one reads the record. Outside a
+rolling upgrade, the instance is older than the records it meets: a rollback after the newer version wrote them, an
+instance scaled out from an older image, or one cut off from Redis for longer than its status lives. None of these is
+supported, and each refuses rather than permits until it runs the newer version again
+([What is not supported](./upgrading.md#what-is-not-supported)); `GET /instances` names the release each instance runs
+([The readers of the store](../policies/testing.md#instances)). If
 `cosec.stored.refused{reason="malformed"}` rises instead, a record is not one of its kind: look at the store and at
 whatever writes to it besides CoSec ([Storage](./storage.md#record-formats)).
 

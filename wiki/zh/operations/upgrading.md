@@ -1,6 +1,6 @@
 ---
 title: "升级"
-description: "如何升级正在运行的 8.0 部署、按什么顺序、哪些没有承诺，以及如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及如何迁移数据、代码、配置和客户端。"
+description: "两个 8.x 版本混合运行时承诺什么、按什么顺序升级和回滚正在运行的部署、哪些情形不受支持，以及如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及如何迁移数据、代码、配置和客户端。"
 ---
 
 # 升级 {#upgrading}
@@ -13,29 +13,59 @@ description: "如何升级正在运行的 8.0 部署、按什么顺序、哪些�
 
 ## 升级正在运行的部署 {#upgrading-a-running-deployment}
 
-面向把正在运行的 8.0 部署（网关、其后的服务、控制面和 Redis）升级到另一个版本的运维人员。本节说明两个版本相遇时代码会怎么做，由此得出升级和回滚的顺序。它的承诺仅限于此：没有承诺的内容列在最后。从 7.x 升级见下一节。
+面向把正在运行的 8.x 部署（网关、其后的服务、控制面和 Redis）升级到另一个版本的运维人员。本节说明两个版本并存运行时承诺什么、CoSec 怎样守住这个承诺、按什么顺序升级和回滚、哪些情形不受支持以及那时会发生什么，以及怎样看见混合版本的部署。从 7.x 升级见下一节。
 
-有四样东西会跨越进程边界，每一样都被严格读取：
+### 承诺什么 {#what-is-promised}
 
-| 跨越边界的内容 | 谁写，谁读 | 不认识其内容的实例会怎么做 |
+从 8.0.0 GA 起，8.x 的两个相邻次版本（8.n 与 8.n+1）可以混合运行，先升级哪一边都可以：
+
+- 两个版本各自单独运行时都接纳的请求，混合运行时不会被拒绝；
+- 两个版本都拒绝的请求，混合运行时不会被放行；
+- 支持回滚一个次版本，例外见[不支持的情形](#what-is-not-supported)。
+
+相隔更远的两个版本（8.n 与 8.n+2）不在承诺之内：一次升级完成之后再开始下一次。8.0 的预览版（8.0.0 的 alpha、beta 和候选发布版）之间什么都不承诺：每个预览版的升级顺序见[8.0 预览版之间的升级](./upgrading-previews.md)。在预览版之间升级、以及从预览版升级到 GA 时，先升级网关后面的服务，再升级网关：8.0.0-beta.9 之前的预览版对它不认识的每个身份成员都答 `400` `invalid-request`，所以这样的预览版上的服务放在较新的网关之后，会拒绝网关新增的内容。
+
+### 怎样守住这个承诺 {#how-the-promise-is-kept}
+
+| 跨越边界的内容 | 谁写，谁读 | 实例怎样读较新实例写下的内容 |
 |---|---|---|
-| `CoSec-Identity` 头，格式 `v: 1` | 网关写，每个 `gateway` 模式的服务读 | 拒绝它，状态码说明原因：不认识的成员、类型错误、重复的成员、重复的角色、越界的值、超过大小限制或重复发送的头，返回 `400` `invalid-request`；不读取的格式版本、没有过期时间的凭证、签发时间在未来，返回 `401` `token-invalid`；凭证或身份太旧，返回 `401` `token-expired`。成员先于版本检查，所以既提高 `v` 又增加成员的身份是 `400`，只提高 `v` 的是 `401`（[网关后面的服务](../integration/web.md#services-behind-the-gateway)） |
-| 策略文档，`schema: 2` | 控制面和 `cosec-migrate` 写，每个实例读 | 读取时拒绝 `schema` 不同的文档，也不安装它无法编译的文档（不认识的成员、重复的键、类型错误）：需要它的请求失败即拒绝（`503`，决策事件里是 `DocumentInvalid` 或 `SourceUnavailable`，除非有 DENY 先命中，[故障排查](./troubleshooting.md)） |
-| Redis 中的值（吊销记录、会话、API key、成员关系、控制面记录） | 写入它的实例，以及读取它的每个实例 | 无法解码的值让读取失败，并留在 Redis 里：从不删除。无法解码的吊销记录让请求返回 `503`，绝不当作“未吊销”；无法解码的文档记录绝不当作“没有文档”，需要它的请求返回 `503`，除非有 DENY 先命中；控制 API 读取时无法解码的已存文档或记录是 `500`，无法解码的变更记录是 `503`（[Redis 是权威存储](./storage.md#redis-is-the-store-of-record)） |
+| `CoSec-Identity` 头，格式 `v: 1` | 网关（以及 `HttpControlService` 的转写）写，每个 `gateway` 模式的服务读 | 忽略任何层级上它不认识的成员，除非头的 `crit` 列出了它。`crit` 列出、而它不认识的成员使请求被拒绝，答 `503` `unavailable`，绝不缺了它照读（`IDN-41`）：服务升级之后，同样的请求就会通过。畸形的 `crit` 是 `400` `invalid-request`；`v: 1` 以外的格式版本是 `401` `token-invalid`。每个 8.x 服务都读不超过 8 KB 的头，没有 8.x 版本会调低它；CoSec 的写方最多写 6 KB，所以以后的版本新增的内容放得下（`IDN-43`，[网关后面的服务](../integration/web.md#services-behind-the-gateway)） |
+| Redis 中带 `format` 的记录（会话，控制面与影子窗口的记录） | 写入它的实例，以及读取它的每个实例 | 忽略它不认识的成员，除非记录的 `crit` 列出了它。`crit` 列出、而它不认识的成员，或更晚的格式，使这一条记录被拒绝，既不读也不改写：读它的调用答 `503`，其他每条记录照常读取（`SNP-27`）。格式号只随大版本改变（`SNP-29`）（[读取方不认识记录的格式时](./storage.md#record-formats)） |
+| 策略文档，`schema: 2` | 控制面和 `cosec-migrate` 写，每个实例读 | 始终严格读取：它不安装无法编译的文档（不认识的成员、重复的键、类型错误、模式中的保留字符），需要它的请求失败即拒绝：`503`，决策事件里是 `DocumentInvalid`，除非有 DENY 先命中。每个实例报告它读得懂的文档格式级别（`formatLevel`，8.0 为 1，[存储的读方](../policies/testing.md#instances)） |
+| API key 记录，`format: 3` | `RedisApiKeyStore` 写，每个认证 API key 的实例读 | 作为认证的输入严格读取：格式不同或带有它不认识的成员的 key 被拒绝 |
 | 令牌 | 签发方签名，每个校验方读取 | 读取它认识的声明（[客户端可以读取的声明](../integration/clients.md#the-claims-a-client-may-read)），忽略其余；拒绝带 `act` 声明的令牌、本该是访问令牌的位置上的刷新令牌，以及会话声明不完整的令牌 |
+| 两个版本在同一个 Redis 上共用的东西：每个 key 怎样派生，限流、会话索引与社交登录计数三个脚本存什么，失效通道 | 每个实例 | 在 8.x 内冻结（[Redis 的 key](./storage.md#redis-keys)，`SNP-26`）：两个版本的实例对同一个客户端只计一次数，看得见彼此写下的吊销，读同样的文档。以后的 8.x 版本若换一种计数或派生方式，会用新的键空间 |
 
-**升级顺序。**
+前两行背后的规则：较旧的读方可以忽略、或在改写记录时丢掉的成员，是它的缺失从不放宽判定或所存内容的成员。缺失会放宽某样东西的成员，即一条新的限制，会列在 `crit` 里，于是较旧的读方选择拒绝而不是放行。CoSec 8.0 的写方都不写 `crit`。以后的 8.x 版本开始在头、记录或文档里写一条新的限制，要等每个读这个存储的实例都运行读得懂它的版本，依据是各实例报告的发布版本（见下文）。在那之前，它只写每个读方都读得懂的内容，不会有请求因此被拒绝。
 
-1. **在每个实例都运行新版本之前，不要发布使用新内容的文档。** 不认识新成员的实例不安装这份文档，需要它的请求失败即拒绝。含有这种实例的影子窗口会报告 `CANDIDATE_ERROR`，永远不会干净地关闭，所以这份变更无法通过它发布（[策略测试](../policies/testing.md#trying-changes-in-shadow-mode)）。
-2. **先升级网关后面的服务，再升级网关。** 服务严格读取身份，所以比网关旧的服务会以 `400` `invalid-request` 拒绝网关新增的成员；网关提高身份的格式版本 `v` 时，它返回 `401` `token-invalid`，同时还增加成员则是 `400`。
-3. **然后是控制面和 `cosec-migrate`**；当写入这个 Redis 的每个控制面实例和每个 `cosec-migrate` 都运行新版本后，运行一次 `cosec-migrate repair-references`（[修复反向引用索引](#repair-the-back-reference-index)）和 `verify-chain`（[检查修订链](#verify-the-revision-chains)）。
+### 升级与回滚的顺序 {#order-of-an-upgrade-and-a-rollback}
+
+在承诺之内，任何顺序都可以。下面这个顺序让每个实例都读得懂文档，并把控制面的修复留到最后：
+
+1. **数据面：网关后面的服务、网关，以及其他每个实例。** 它们之间的顺序随意。
+2. **然后是控制面和 `cosec-migrate`**；当写入这个 Redis 的每个控制面实例和每个 `cosec-migrate` 都运行新版本后，运行一次 `cosec-migrate repair-references`（[修复反向引用索引](#repair-the-back-reference-index)）和 `verify-chain`（[检查修订链](#verify-the-revision-chains)）。
+3. **使用新版本新增内容的文档，要等每个实例都运行新版本后再发布**，`GET /instances` 会显示这一点（见下文）。无法编译这份文档的实例不安装它，需要它的请求失败即拒绝；含有这种实例的影子窗口会报告 `CANDIDATE_ERROR`，永远不会干净地关闭，所以这份变更无法通过它发布（[策略测试](../policies/testing.md#trying-changes-in-shadow-mode)）。
 4. **Redis 按 Redis 自己的方式升级**，不由 CoSec 负责：CoSec 的键在 `cosec.key-prefix` 之下，重启或故障转移见 [Redis 要求](./storage.md#redis-requirements)。
 
-**回滚顺序**相反：先网关，再其后的服务。回滚文档不需要任何实例变化：`POST /documents/<doc>:rollback` 把文档恢复成较早的修订，它是一次与其他变更一样要经过检查的变更（[修订、历史与回滚](./storage.md#revisions-history-and-rollback)）。降级控制面或 `cosec-migrate` 之后，再次运行 `repair-references` 和 `verify-chain`。
+**回滚**一个次版本按相反的顺序：先文档，再控制面和 `cosec-migrate`，最后数据面。使用了只有较新版本读得懂的内容的文档，要先回滚：`POST /documents/<doc>:rollback` 把文档恢复成较早的修订，它是一次与其他变更一样要经过检查的变更（[修订、历史与回滚](./storage.md#revisions-history-and-rollback)）。降级控制面或 `cosec-migrate` 之后，再次运行 `repair-references` 和 `verify-chain`。
 
-**混合版本的表现**：需要某份旧实例无法编译的文档的请求返回 `503`（`DocumentInvalid`）；拒绝新网关新增成员的服务返回 `400` `invalid-request`，只遇到更高身份格式版本的服务返回 `401` `token-invalid`；持有另一个签名密钥的实例返回 `401` `token-invalid`。最后一个实例运行同一版本时，这些就结束了。
+### 不支持的情形 {#what-is-not-supported}
 
-**没有承诺的内容。** 上述四种格式在两个版本之间能否互通：8.0 预发布版是最新版本期间，版本之间完全没有承诺（[8.0 预览版之间的升级](./upgrading-previews.md)），之后由每个版本的发布说明写明它改了什么。新的服务读得懂每个旧网关的身份，或旧的服务读得懂新网关的身份。新版本写入 Redis 的值能被旧版本读取。新签发方签名的、带有旧校验方不读取的声明的令牌，对旧校验方意味着同样的东西。请缩短混合版本的时间，并在升级承载流量之前，用新版本的 `simulate` 和 `explain` 在文档副本上测试。
+下面每一种都失败即拒绝：实例拒绝它必须读懂却读不懂的内容，绝不因为缺了它而放行。
+
+- **在较新的记录写下之后才出现的较旧实例**：回滚、用较旧的镜像扩容，或与 Redis 断开超过其状态寿命（一小时，见下文）的实例。较新的一侧开始写入时，没有把它算进读方。这样的实例拒绝 `crit` 列出了它不认识的成员的每个头或记录，以及每条更晚格式的记录：请求或调用答 `503` `unavailable`，存储的记录由 `cosec.stored.refused{record, reason="later"}` 计数，头由 `cosec.identity.refused{problem="unavailable"}` 计数（[可观测性](./observability.md#metrics)），它的日志会说明是更晚的版本写的（[较晚版本写下的记录](./troubleshooting.md#a-record-a-later-version-wrote)）。这个实例再次升级之后就会通过。
+- **把数据面回滚到低于某份已发布文档的文档格式级别。** 无法编译某份文档的实例，让需要它的请求失败（`503`，`DocumentInvalid`）。先回滚文档，再回滚实例。
+- **不报告状态的客户端**：`cosec-control-sdk`、`cosec-fetcher`、Kafka 决策事件与变更事件的消费方，以及自己写 `CoSec-Identity` 的应用。以后的版本在写入新内容之前看不见它们，所以它们只能依靠宽松读取：客户端忽略应答里它不认识的成员（[客户端](../integration/clients.md)）。`cosec-control-sdk` 严格读取文档的条目，这样写回读到的内容时不会丢掉成员：较旧的 SDK 会拒绝带有较新控制面新增成员的条目。
+- **没有 `cosec-cocache` 的进程**不写状态：以后的版本看不见它，把它算作 8.0.0，即承诺起始的版本。
+
+### 看见混合版本的部署 {#seeing-a-mixed-deployment}
+
+每个带 `cosec-cocache` 的 CoSec 进程都写一个带有它所运行的 CoSec 发布版本的状态：启动时写一次，之后每 10 秒写一次，开着影子时每个影子报告间隔写一次（`SNP-25`）；它的启动摘要写着 `status=<instance> (release <v>)`。状态在最后一次写入一小时后过期；对影子窗口和 `propagation` 而言，实例只在拥有最近一分钟内的状态时才算存活。
+
+- 控制 API 上的 `GET /instances` 列出最近一小时内报告过的每个进程及其发布版本，并按发布版本计数（[存储的读方](../policies/testing.md#instances)）。
+- 控制面主机上的仪表 `cosec.control.instances.releases` 是这些读方运行的发布版本个数：在超过一次滚动升级所需的时间后仍大于 1，说明还有旧版本的实例在读这个存储（[可观测性](./observability.md#metrics)）。
+
+两个版本并存期间，预期会看到：较旧实例无法编译的文档导致的 `503`（`DocumentInvalid`）；较旧实例必须读懂却读不懂的内容导致的 `503` `unavailable`（见上文）；以及持有另一个签名密钥的实例返回的 `401` `token-invalid`。最后一个实例运行同一版本时，这些就结束了。请缩短混合版本的时间，并在升级承载流量之前，用新版本的 `simulate` 和 `explain` 在文档副本上测试。
 
 ## 7.x 到 8.0 {#_7-x-to-8-0}
 
