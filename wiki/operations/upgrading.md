@@ -98,7 +98,10 @@ Each of these fails closed: an instance refuses what it must understand and does
   and change events, and an application that writes `CoSec-Identity` itself. No later release can see them before it
   writes something new, so they rely only on reading leniently: a client ignores the members of an answer it does not
   know ([Clients](../integration/clients.md)). `cosec-control-sdk` reads a document's entries strictly, so that writing
-  back what it read never drops a member: an older SDK refuses an entry with a member a later control plane added.
+  back what it read never drops a member: an older SDK refuses an entry with a member a later control plane added. The
+  control API reads a request strictly too, so a newer `cosec-control-sdk` that sends an operation, or a member of one,
+  that an older control plane does not know is answered `400` `invalid-request`: use what a release added to the
+  control API only once the control plane runs it.
 
 ### Seeing a mixed deployment {#seeing-a-mixed-deployment}
 

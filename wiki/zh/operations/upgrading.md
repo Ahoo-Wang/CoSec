@@ -56,7 +56,7 @@ description: "两个 8.x 版本混合运行时承诺什么、按什么顺序升�
 - **在较新的记录写下之后才出现的较旧实例**：回滚、用较旧的镜像扩容，或与 Redis 断开超过其状态寿命（一小时，见下文）的实例。较新的一侧开始写入时，没有把它算进读方。这样的实例拒绝 `crit` 列出了它不认识的成员的每个头或记录，以及每条更晚格式的记录：请求或调用答 `503` `unavailable`，存储的记录由 `cosec.stored.refused{record, reason="later"}` 计数，头由 `cosec.identity.refused{problem="unavailable"}` 计数（[可观测性](./observability.md#metrics)），它的日志会说明是更晚的版本写的（[较晚版本写下的记录](./troubleshooting.md#a-record-a-later-version-wrote)）。这个实例再次升级之后就会通过。没有 `cosec-cocache` 的进程不写状态，所以同样没有谁看得见它：在用到任何新内容之前升级它，否则它会以同样的方式拒绝。
 - **用到较新版本新增内容的 API key**，会被读不懂它的实例以 `503` 拒绝。只在每个实例都运行那个版本之后再签发这样的 key，回滚之前先停用或重新签发它们。
 - **把数据面回滚到低于某份已发布文档的文档格式级别。** 无法编译某份文档的实例，让需要它的请求失败（`503`，`DocumentInvalid`）。先回滚文档，再回滚实例。
-- **不报告状态的客户端**：`cosec-control-sdk`、`cosec-fetcher`、Kafka 决策事件与变更事件的消费方，以及自己写 `CoSec-Identity` 的应用。以后的版本在写入新内容之前看不见它们，所以它们只能依靠宽松读取：客户端忽略应答里它不认识的成员（[客户端](../integration/clients.md)）。`cosec-control-sdk` 严格读取文档的条目，这样写回读到的内容时不会丢掉成员：较旧的 SDK 会拒绝带有较新控制面新增成员的条目。
+- **不报告状态的客户端**：`cosec-control-sdk`、`cosec-fetcher`、Kafka 决策事件与变更事件的消费方，以及自己写 `CoSec-Identity` 的应用。以后的版本在写入新内容之前看不见它们，所以它们只能依靠宽松读取：客户端忽略应答里它不认识的成员（[客户端](../integration/clients.md)）。`cosec-control-sdk` 严格读取文档的条目，这样写回读到的内容时不会丢掉成员：较旧的 SDK 会拒绝带有较新控制面新增成员的条目。控制 API 也严格读取请求，所以较新的 `cosec-control-sdk` 发送较旧控制面不认识的操作或操作成员时，会得到 `400` `invalid-request`：某个版本为控制 API 新增的内容，要等控制面运行这个版本之后再用。
 
 ### 看见混合版本的部署 {#seeing-a-mixed-deployment}
 
