@@ -31,7 +31,12 @@ class IdentityHeaderTest {
         app = "cosec-control",
         space = "",
         roles = setOf("onboarding"),
-        credential = Identity.Credential(Identity.Method.API_KEY, "service:iam", now.plusSeconds(30)),
+        credential = Identity.Credential(
+            Identity.Method.API_KEY,
+            Identity.Credential.Kind.WORKLOAD,
+            "service:iam",
+            now.plusSeconds(30)
+        ),
         issuedAt = now,
         requestId = "r1",
     )
@@ -44,7 +49,9 @@ class IdentityHeaderTest {
 
     @Test
     fun `a header a receiver would refuse is never written`() {
-        val forever = identity.copy(credential = Identity.Credential(Identity.Method.API_KEY, "k", null))
+        val forever = identity.copy(
+            credential = Identity.Credential(Identity.Method.API_KEY, Identity.Credential.Kind.WORKLOAD, "k", null)
+        )
         assertThrownBy<IllegalStateException> { IdentityHeader.write(forever) }
         assertThrownBy<IllegalStateException> { IdentityHeader.write(identity, maxBytes = 16) }
         assertThrownBy<IllegalArgumentException> { IdentityHeader.write(identity.copy(subject = "")) }

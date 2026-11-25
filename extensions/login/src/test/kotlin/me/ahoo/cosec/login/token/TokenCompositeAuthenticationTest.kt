@@ -32,6 +32,7 @@ import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.DefaultAuthenticationProvider
 import me.ahoo.cosec.login.LoginCredentials
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -51,7 +52,11 @@ class TokenCompositeAuthenticationTest {
     fun `a login starts a session`() = runTest {
         val issued = slot<TokenSubject>()
         every { tokenConverter.toToken(capture(issued)) } returns compositeToken
-        tokensBy(mockk { coEvery { authenticate(any()) } returns TokenSubject("alice", tenant = "acme") })
+        tokensBy(
+            mockk {
+                coEvery { authenticate(any()) } returns TokenSubject("alice", Identity.Credential.Kind.PERSON, tenant = "acme")
+            }
+        )
             .authenticateAsToken(credentials)
         val session = checkNotNull(issued.captured.session)
         session.generation.assert().isEqualTo(1L)
@@ -84,6 +89,7 @@ class TokenCompositeAuthenticationTest {
 
             override suspend fun authenticate(credentials: LoginCredentials) = TokenSubject(
                 "alice",
+                Identity.Credential.Kind.PERSON,
                 tenant = tenant
             )
         }
@@ -106,7 +112,7 @@ class TokenCompositeAuthenticationTest {
     fun authenticateAsToken() = runTest {
         val tokens = tokensBy(
             mockk {
-                coEvery { authenticate(any()) } returns TokenSubject("alice")
+                coEvery { authenticate(any()) } returns TokenSubject("alice", Identity.Credential.Kind.PERSON)
             }
         )
         tokens.credentialsType.assert().isEqualTo(LoginCredentials::class.java)
@@ -167,7 +173,7 @@ class TokenCompositeAuthenticationTest {
             started.complete(Unit)
             awaitCancellation()
         } catch (_: CancellationException) {
-            TokenSubject("alice")
+            TokenSubject("alice", Identity.Credential.Kind.PERSON)
         }
     }
 }

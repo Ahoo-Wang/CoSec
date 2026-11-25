@@ -34,6 +34,14 @@
           "minLength": 1,
           "type": "string"
         },
+        "kind": {
+          "description": "Whose credential it is (IDN-44): `person`, or a workload's for any other value or none, which never approves, is never the trust root and has no break-glass. `api-key` and `service` are a workload's: declared a person's, the header is refused. CoSec's writers always write it.",
+          "examples": [
+            "workload"
+          ],
+          "minLength": 1,
+          "type": "string"
+        },
         "method": {
           "description": "How the principal authenticated: `jwt`, `api-key` and `service` are CoSec's own, `api-key` and `service` a workload's credential, and an authenticator of another credential names its own.",
           "examples": [

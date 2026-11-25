@@ -85,7 +85,7 @@ object GuardAllowlist {
             "spring-boot:ControlServicePortTest#a service port with no WebFlux server to serve it fails startup naming what to do",
             "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it",
             // IDN-34: a service's own identity names its credential `service`, a workload's, read from workload alone.
-            "spi:AuthenticatedPrincipalTest#a workload is an API key or a service, by provenance or by name - IDN-34",
+            "spi:AuthenticatedPrincipalTest#a workload is what its credential declares, an API key by provenance, or a principal with no credential - IDN-44",
             "spi:AuthenticatedPrincipalTest#a service's credential has no break-glass and no session - IDN-34",
             "runtime:ServiceIdentityTest#a service's identity names its credential service - IDN-34",
             "runtime:ServiceIdentityTest#admitted, a service's identity is a workload's, without break-glass - IDN-34",
@@ -93,6 +93,17 @@ object GuardAllowlist {
             "control:ApprovalB2Test#a service's own identity never approves - IDN-34",
             "control:ApprovalB2Test#a service's own identity is never the trust root - IDN-34",
             "architecture:WorkloadCredentialTest#whether a principal is a workload is read from workload, never from apiKey alone - IDN-34",
+            // IDN-45: a login declares whose the token is, and CoSec's issuer writes it as cosec.kind.
+            "jwt:JwtTokenConverterTest#the access token says whose it is, and the refresh token does not - IDN-45",
+            "login:TokenSubjectTest#a subject's kind is part of it, and its session keeps it - IDN-45",
+            // IDN-44: every credential declares whose it is, and that kind, never the method's name, decides.
+            "spi:AuthenticatedPrincipalTest#a credential named api-key or service cannot be declared a person's - IDN-44",
+            "document:IdentityKindTest#every writer of CoSec writes the kind, and it reads back - IDN-44",
+            "document:IdentityKindTest#no kind, or one this version does not know, is a workload's - IDN-44",
+            "document:IdentityKindTest#a kind that is not a string, or an api-key or service declared a person's, does not read - IDN-44",
+            "runtime:IdentityGateTest#a forwarded identity's kind decides whether it is a workload and may use break-glass - IDN-44",
+            "control:ApprovalB2Test#a credential declared a workload's never approves, whatever its method - IDN-44",
+            "control:ApprovalB2Test#a credential declared a workload's is never the trust root, whatever its method - IDN-44",
             // IDN-41: a reader ignores what it does not know, unless crit names it, which it refuses with 503.
             "document:IdentityCritTest#a member this version does not know is ignored at every level, and the identity reads as without it - IDN-41",
             "document:IdentityCritTest#an unknown member must still be JSON, and a duplicate is refused - IDN-41",
@@ -271,7 +282,7 @@ object GuardAllowlist {
             "jwt:VerifiedTokenCachePropertyTest#a cached verification is what verifying again answers, at every instant",
             "jwt:VerifiedTokenCachePropertyTest#a token that differs from a cached one only in its signature is refused",
             "jwt:VerifiedTokenCachePropertyTest#the cache keeps within its bound and counts what it does",
-            "jwt:VerifiedTokenCacheSizeTest#an entry weighs what it retains, and the share of a 2 GiB heap holds the large tokens the old bound did",
+            "jwt:VerifiedTokenCacheSizeTest#an entry weighs what it retains, and the share of a 2 GiB heap holds the bytes the old bound did",
             "spring-boot:OneVerifierTest#CoSec's own verifier answers a request's token from the cache, and a logout still refuses it next",
             "spring-boot:OneVerifierTest#an application's own verifier is never given the cache",
             // PIP-32: nothing reads the server's request after the response.

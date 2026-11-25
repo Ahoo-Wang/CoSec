@@ -1,0 +1,16 @@
+# Rule: IDN-45
+# Mutant: CoSec's issuer writes no cosec.kind, so a verifier reads every token as a workload's, or an older one as it likes
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenConverterTest
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
+index 495cc689f..0383d5316 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
+@@ -107,7 +107,6 @@ class JwtTokenConverter @InternalCoSecApi constructor(
+                 .withIssuedAt(now)
+                 .withExpiresAt(accessTokenExp)
+                 // Whose the token is (IDN-45), always: a verifier reads none as a workload's.
+-                .withClaim(Jwts.KIND_CLAIM, Jwts.kindValue(subject.kind))
+         subject.app?.let { accessTokenBuilder.withAudience(it) }
+         writeMemberships(accessTokenBuilder, subject)
+         writeSession(accessTokenBuilder, subject)

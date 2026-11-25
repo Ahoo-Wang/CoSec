@@ -24,9 +24,16 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 | `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面八节 |
 | `8.0.0-alpha.3`、`alpha.2`、`alpha.1` | [从 alpha.3](#from-8-0-0-alpha-3)、[alpha.2](#from-8-0-0-alpha-2) 或 [alpha.1](#from-8-0-0-alpha-1) 升级，然后是它上面的每一节 |
 
-库的哪个预览版可以运行在网关镜像的哪个预览版之后：见[升级运行中的部署](./upgrading.md#upgrading-a-running-deployment)。
+库的哪个预览版可以运行在网关镜像的哪个预览版之后：同一个头或记录的读方与写方必须按顺序升级的预览版，在它的一节里写明，见 **按这个顺序升级**（[从 beta.8](#from-8-0-0-beta-8)、[从 beta.7](#from-8-0-0-beta-7)、[从 beta.5](#from-8-0-0-beta-5)）。
 
 ## 从 8.0.0-beta.8 升级 {#from-8-0-0-beta-8}
+
+**按这个顺序升级。** 这个预览版的 `CoSec-Identity` 头说明凭证属于谁，即 `auth.kind`（`IDN-44`），beta.8 的读方会拒绝这个成员，所以滚动升级有顺序；每一步完成后再做下一步：
+
+1. **这个头的每个读方**：`gateway` 模式的服务、控制面主机，以及内嵌控制面的 IAM 服务。升级后的读方读带或不带 `auth.kind` 的头；beta.8 的读方像拒绝任何它不认识的成员一样，以 `400` `invalid-request` 拒绝带它的头。先升级网关的话，发往 beta.8 服务的每个带身份的请求都会被拒绝。
+2. **然后是网关，以及每个调用主机服务端口的应用（`HttpControlService`），后者在它调用的主机之后。** 两者都写 `auth.kind`。
+
+两步之间不会有请求被拒绝，但升级后的读方把 beta.8 网关或应用的头（不说明种类）读作工作负载的：请求照旧判定，只是 beta.8 网关转发的人，或 beta.8 应用转给已升级主机的人（`HttpControlService`），在那个网关或应用升级之前不能审批变更、不是控制面的信任根，也得不到 break-glass。签发 CoSec 令牌的服务可以在任何一步升级，因为 beta.8 的网关忽略新的 `cosec.kind` 声明；但在这个预览版之前登录的会话，经过刷新和租户切换仍是工作负载的，直到用户重新登录（`IDN-46`，见下文）。
 
 - **每个带 `cosec-cocache` 的 CoSec 进程都写自己的状态，并带上发布版本**（`SNP-25`，RFC 0014 R5）。受影响的是：控制面主机（`cosec-control` 镜像）、网关后面的 IAM 服务（`cosec.pipeline.mode=gateway` 且开着 JWT），以及设了 `cosec.authorization.shadow.enabled=false` 且 Redis 用户被裁掉了影子键的数据面实例，它们的 Redis 用户。它们现在都写 `<s>:shadow:status:<instance>`、`<s>:shadow:resident:<instance>` 和 `<s>:shadow:instances:*`（关闭影子时为 `shadows: false`：没有窗口等待它）。给这些用户以上键的写权限（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。没有这个权限的进程照常启动和服务：它以 `ERROR` 记一次缺的权限，计入 `cosec.instance.status.failed`，控制面看不见它。状态现在保留一小时（原为两分钟）；实例仍然只在拥有最近一分钟内的状态时才算存活，无法解码的状态也一样：它的键剩下的寿命说明它是何时写入的（`CTL-73`）。`GET /instances` 列出读方及其版本（[测试策略](../policies/testing.md#instances)）；`propagation` 现在也计入控制面主机和它持有的文档。
 - **存储记录的 `crit` 列出读取方必须理解的成员**（`SNP-27`、`SNP-28`、`SNP-29`、`OBS-12`）。受影响的：8.0.0-beta.8 存下的东西都不受影响，它不写 `crit`，这个预览版也不写。会话记录的 `crit` 列出本版本不认识的成员时（以后的版本可能这样写），这条记录被拒绝：读它的刷新、登出或切换答 `503`，会话保留，绝不改写，直到升级后的实例读它。更晚的格式也一样；`IDN-31` 以前说那会结束会话，实际上一直是 `503`，会话保留。控制面的记录（变更、暂存槽、修订索引、app 列表）与影子窗口的记录按同样的规则读取：更新的版本写的记录使控制 API 答不带详情的 `503`（更晚的格式以前答 `500`），记录绝不被改写。format 号只随大版本改变：8.x 内会话最多是 format 2，其余记录都是 format 1。新增计量：`cosec.stored.refused{record, reason}`（[存储](./storage.md#record-formats)、[可观测性](./observability.md)）。
@@ -41,6 +48,11 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   只有不带 `memberships` 的请求头会走到这里：beta.7 网关写的，或应用自己写的。先升级网关（beta.8 的网关都写这个成员），再依赖为它们的调用方发出的控制调用。
 - **服务读取带有它不认识的成员的身份头**（`IDN-41`）。`CoSec-Identity` 的读方以前不忽略任何未知成员：遇到就答 `400`，这正是 beta.8 的 `memberships` 需要在网关与其后的服务之间排顺序的原因。现在它忽略不认识的成员，不论在哪一层，除非请求头新增的 `crit` 点了它的名：那是更新的版本要求每个读方都理解的成员。`crit` 点了名而服务不认识的成员以 `503` `unavailable` 拒绝，计入 `cosec.identity.refused{problem=unavailable}`，日志写出该成员。8.0 的写方都不写 `crit`。应用自己写的请求头若拼错了成员名，现在会被忽略而不是被拒绝。
 - **破坏性：身份头有读方的上限和更小的写方上限**（`IDN-43`）。网关现在默认最多写 6 KB（`cosec.gateway.identity.max-size`，原为 8 KB），`HttpControlService` 的转述也是；服务仍读 8 KB（`cosec.pipeline.identity.max-size`），8.x 的任何版本都不调低它。身份在 6 到 8 KB 之间的主体，现在在网关上答 `500`，除非你把 `cosec.gateway.identity.max-size` 调高（最多 8 KB）；在服务器默认的请求头上限下，这样的头本来也到不了服务。读取身份的宿主（`gateway` 模式，或 `cosec.pipeline.caller=forwarded-identity`）在你没有设置 `server.max-http-request-header-size` 时会得到推出的值，默认时 16 KB；你设置的值保留不变，比它小时启动时以 `WARN` 写出。
+
+- **破坏性：每个凭证都声明它属于谁，人还是工作负载**（`IDN-44`）。受影响的是你自己的 `Authenticator`，以及其他任何构造 `Identity.Credential` 的代码。它的构造器在方法之后多了必需参数 `kind`（`Identity.Credential.Kind.PERSON` 或 `WORKLOAD`），没有默认值：构造它的代码不选就编译不过。决定主体能否审批变更、能否当控制面的信任根、能否用 break-glass 的，现在是这个种类，而不是方法的名字：以前除 `api-key` 和 `service` 之外的任何方法都按人读，所以给机器客户端起了自己方法名的认证器可以审批。没有凭证的主体现在是工作负载：它本来就不能审批，现在也不再是信任根。`CoSec-Identity` 带上 `auth.kind`，本版本的每个写方都写它；没有它的请求头（beta.8 网关写的）按工作负载读，所以经 beta.8 网关转发的运维者在升级后的控制面宿主上不能审批，直到网关升级。把 `api-key` 或 `service` 凭证声明为人的请求头以 `400` 拒绝。
+
+- **破坏性：登录声明令牌属于谁**（`IDN-45`）。受影响的是你自己的每个 `Authentication`。`TokenSubject` 在 `id` 之后多了必需参数 `kind`（`Identity.Credential.Kind.PERSON` 或 `WORKLOAD`），没有默认值：登录不说明就编译不过。用户的登录声明为人的，机器的（client credentials、服务账号）声明为工作负载的。CoSec 的访问令牌现在带 `cosec.kind` 声明，客户端不能依赖它（`contract/token/claims.json`）；刷新令牌不带。这个声明让每个令牌长约 30 个字符，同样的堆上已校验令牌缓存装下的令牌少约 0.5%（2 GiB 时最大的测试令牌装 16,298 个，原先装 16,384 个）。
+- **破坏性：校验过的令牌说明它属于谁**（`IDN-46`）。受影响的是你自己的每个 `TokenVerifier`，以及在这个预览版之前登录的每个会话。`VerifiedToken` 在 `app` 之后多了必需参数 `kind`，没有默认值：校验器不按令牌的声明说明种类（client credentials 令牌是工作负载的）就编译不过，令牌没有说明时声明 `WORKLOAD`。`TokenAuthenticator` 造出的凭证就是这个种类，只有读作人的 CoSec 自己的令牌才得到 break-glass。CoSec 的校验器读 `cosec.kind`：没有它的令牌（更早的预览版签发的）是工作负载的，刷新与租户切换保留出示的令牌的种类。这样的会话在用户重新登录之前不能审批变更，也不能使用 break-glass。
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
@@ -522,7 +534,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 
 - **策略测试工具拒绝可能因错误原因通过的运行**（`PolicyTestKit`，实验性 API；UC-7）。没有 `platform.json` 时 `load` 失败（要在没有它的情况下测试，就在那里写一份空文档），目录里有工具不会读取的文件或目录时也失败。场景要写明 `credential`（`tenant` 与 `id`，或 `"anonymous": true`）以及请求的 `action` 与 `resource`：示例默认值（`acme`、`alice`、`order:read`、`order/1`）不再存在。目录里有租户文档时，在没有文档的租户中判定的场景会失败；有应用文档时，在没有文档的应用中判定的场景也会失败，除非写明 `"withoutDocument": ["tenant"]` 或 `["app"]`（[测试决策](../policies/testing.md#testing-decisions)）。受影响的是依赖默认值或放错位置的文档的场景；`PipelineFixture.load` 按同样的规则读取目录。写明这些字段，把文件移到正确的位置。
-- **`cosec-gateway-server` 镜像：没有 JMX agent，actuator 在管理端口，镜像默认值在挂载文件之下依然保留**（`UB-2`、`UB-21`）。受影响的是运行该镜像的人。库的一个预览版上的服务放在另一个预览版的网关镜像之后：见[升级运行中的部署](./upgrading.md#upgrading-a-running-deployment)。
+- **`cosec-gateway-server` 镜像：没有 JMX agent，actuator 在管理端口，镜像默认值在挂载文件之下依然保留**（`UB-2`、`UB-21`）。受影响的是运行该镜像的人。库的一个预览版上的服务放在另一个预览版的网关镜像之后：见之后每个预览版的 **按这个顺序升级**（[从哪里开始](#start-here)）。
   - 直到 beta.3，启动脚本会在 5555 端口、所有网卡上启动一个不需要认证的 JMX agent。现在不再启动。要附加，在 `JAVA_OPTS` 里设置并绑定到回环地址（[镜像](./deployment.md#the-image)）；Kubernetes base 设置的 `-Dcom.sun.management.jmxremote.host=127.0.0.1` 随之取消。
   - actuator 现在由管理端口 `8081`（`management.server.port`）提供，不再在 `8080` 上：8080 上的 `/actuator/health/*` 是 `404`。探针现在是 8080 上的 `/livez` 和 `/readyz`（同样的分组，由网关自己的端口提供，不经 CoSec 决策）；`/actuator/health` 和 `/actuator/prometheus` 在 8081 上。把你自己的探针或健康检查改为 `/livez` 和 `/readyz`（镜像的 `HEALTHCHECK` 和 `k8s/` 清单已经改了），如果要抓取 8081，只把它发布给监控网络。
   - 镜像带有 `cosec-micrometer` 和 Prometheus 注册表（Micrometer 1.17.2，来自 Spring Boot 的依赖管理）：`cosec.authorization`、`cosec.snapshot.*` 等在 `/actuator/prometheus` 上。

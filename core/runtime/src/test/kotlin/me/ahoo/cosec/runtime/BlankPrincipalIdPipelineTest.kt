@@ -30,6 +30,7 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spi.token.VerifiedToken
@@ -43,7 +44,7 @@ import org.junit.jupiter.api.Test
  */
 class BlankPrincipalIdPipelineTest {
     private class Verifier(private val subject: String) : TokenVerifier {
-        override fun verify(accessToken: String): VerifiedToken = VerifiedToken("jti", subject, "acme", null)
+        override fun verify(accessToken: String): VerifiedToken = VerifiedToken("jti", subject, "acme", null, PERSON)
 
         override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
     }

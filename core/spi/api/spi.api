@@ -215,17 +215,26 @@ public final class me/ahoo/cosec/spi/identity/Identity {
 }
 
 public final class me/ahoo/cosec/spi/identity/Identity$Credential {
-	public fun <init> (Lme/ahoo/cosec/spi/identity/Identity$Method;Ljava/lang/String;Ljava/time/Instant;ZLjava/time/Instant;Lme/ahoo/cosec/spi/token/TokenSession;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spi/identity/Identity$Method;Ljava/lang/String;Ljava/time/Instant;ZLjava/time/Instant;Lme/ahoo/cosec/spi/token/TokenSession;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/spi/identity/Identity$Method;Lme/ahoo/cosec/spi/identity/Identity$Credential$Kind;Ljava/lang/String;Ljava/time/Instant;ZLjava/time/Instant;Lme/ahoo/cosec/spi/token/TokenSession;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/identity/Identity$Method;Lme/ahoo/cosec/spi/identity/Identity$Credential$Kind;Ljava/lang/String;Ljava/time/Instant;ZLjava/time/Instant;Lme/ahoo/cosec/spi/token/TokenSession;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getCapped ()Z
 	public final fun getExpiresAt ()Ljava/time/Instant;
 	public final fun getId ()Ljava/lang/String;
 	public final fun getIssuedAt ()Ljava/time/Instant;
+	public final fun getKind ()Lme/ahoo/cosec/spi/identity/Identity$Credential$Kind;
 	public final fun getMethod ()Lme/ahoo/cosec/spi/identity/Identity$Method;
 	public final fun getSession ()Lme/ahoo/cosec/spi/token/TokenSession;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/identity/Identity$Credential$Kind : java/lang/Enum {
+	public static final field PERSON Lme/ahoo/cosec/spi/identity/Identity$Credential$Kind;
+	public static final field WORKLOAD Lme/ahoo/cosec/spi/identity/Identity$Credential$Kind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/spi/identity/Identity$Credential$Kind;
+	public static fun values ()[Lme/ahoo/cosec/spi/identity/Identity$Credential$Kind;
 }
 
 public final class me/ahoo/cosec/spi/identity/Identity$Memberships {
@@ -809,13 +818,14 @@ public abstract interface class me/ahoo/cosec/spi/token/TokenVerifier {
 }
 
 public final class me/ahoo/cosec/spi/token/VerifiedToken {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/spi/identity/Identity$Credential$Kind;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/spi/identity/Identity$Credential$Kind;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getApp ()Ljava/lang/String;
 	public final fun getAttributes ()Ljava/util/Map;
 	public final fun getExpiresAt ()Ljava/time/Instant;
 	public final fun getId ()Ljava/lang/String;
 	public final fun getIssuedAt ()Ljava/time/Instant;
+	public final fun getKind ()Lme/ahoo/cosec/spi/identity/Identity$Credential$Kind;
 	public final fun getMembershipMarker ()Ljava/lang/String;
 	public final fun getPolicies ()Ljava/util/Set;
 	public final fun getPrincipal ()Ljava/lang/String;

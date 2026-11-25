@@ -40,7 +40,12 @@ class IdentityCodecSymmetryTest {
         app = "order",
         space = "team-a",
         roles = setOf("clerk"),
-        credential = Identity.Credential(Identity.Method.JWT, "t1", now.plusSeconds(3600)),
+        credential = Identity.Credential(
+            Identity.Method.JWT,
+            Identity.Credential.Kind.PERSON,
+            "t1",
+            now.plusSeconds(3600)
+        ),
         issuedAt = now,
         requestId = "r1",
     )
@@ -72,7 +77,7 @@ class IdentityCodecSymmetryTest {
     @Test
     fun `what decode refuses, encode refuses first, in the same words`() {
         val surrogate = "beta\uD800"
-        val noJti = Identity.Credential(Identity.Method.JWT, "", now.plusSeconds(3600))
+        val noJti = Identity.Credential(Identity.Method.JWT, Identity.Credential.Kind.PERSON, "", now.plusSeconds(3600))
         val cases = listOf(
             valid.copy(requestId = "") to json(rid = ""),
             valid.copy(tenant = "") to json(tenant = ""),
@@ -100,6 +105,7 @@ class IdentityCodecSymmetryTest {
         repeat(iterations) {
             val generation = 1L + random.nextInt(3)
             val session = TokenSession("s1", now.minusSeconds(60), generation).takeIf { random.nextInt(4) == 0 }
+            val jwt = random.nextBoolean()
             val identity = try {
                 Identity(
                     tenant = word(),
@@ -108,7 +114,13 @@ class IdentityCodecSymmetryTest {
                     space = word(),
                     roles = List(random.nextInt(3)) { word() }.toSet(),
                     credential = Identity.Credential(
-                        if (session != null || random.nextBoolean()) Identity.Method.JWT else Identity.Method.API_KEY,
+                        if (session != null || jwt) Identity.Method.JWT else Identity.Method.API_KEY,
+                        // A workload's for an API key, by construction; either for CoSec's token (IDN-44).
+                        if ((session != null || jwt) && random.nextBoolean()) {
+                            Identity.Credential.Kind.PERSON
+                        } else {
+                            Identity.Credential.Kind.WORKLOAD
+                        },
                         word(),
                         now.plusSeconds(random.nextLong(-10, 3600)),
                         issuedAt = now.takeIf { session != null || random.nextBoolean() },

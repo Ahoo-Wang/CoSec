@@ -19,6 +19,8 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.runtime.http.RequestSecurity
+import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.token.TokenSession
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -44,16 +46,18 @@ object TestPairs : TokenVerifier {
             tenant = principal.tenant.value,
             issuedAt = principal.issuedAt,
             session = principal.session,
+            kind = checkNotNull(principal.credential).kind,
         )
     }
 
-    /** A pair whose access token is [accessToken], of [principal] in [tenant], issued at [issuedAt] in [session]. */
+    /** A pair whose access token is [accessToken], of [principal] in [tenant], issued at [issuedAt] in [session], of [kind]. */
     fun of(
         accessToken: String,
         principal: String = "alice",
         tenant: String = "acme",
         issuedAt: Instant? = null,
         session: TokenSession? = null,
+        kind: Identity.Credential.Kind = PERSON,
     ): CompositeToken = CompositeToken(
         accessToken,
         listOf(
@@ -64,6 +68,7 @@ object TestPairs : TokenVerifier {
             session?.id ?: NONE,
             session?.authTime?.epochSecond?.toString() ?: NONE,
             session?.generation?.toString() ?: NONE,
+            kind.name,
         ).joinToString(SEPARATOR),
     )
 
@@ -73,7 +78,7 @@ object TestPairs : TokenVerifier {
 
     override fun refresh(token: CompositeToken): VerifiedToken {
         val parts = token.refreshToken.split(SEPARATOR)
-        if (parts.size != 7 || parts[0] != token.accessToken) {
+        if (parts.size != 8 || parts[0] != token.accessToken) {
             throw TokenVerificationException("The refresh token does not belong to the access token.")
         }
         val session = parts[4].takeIf { it != NONE }?.let {
@@ -88,6 +93,7 @@ object TestPairs : TokenVerifier {
             principal = parts[1],
             tenant = parts[2],
             app = null,
+            kind = Identity.Credential.Kind.valueOf(parts[7]),
             issuedAt = parts[3].takeIf { it != NONE }?.toLong()?.let(Instant::ofEpochMilli),
             session = session,
         )

@@ -88,7 +88,7 @@ When the client can log in, as an agent acting for a user can, a token does the 
 app with only the roles of that space,
 
 ```kotlin
-TokenSubject(id = "svc-scanner", app = "wms", tenant = "acme", roles = setOf("wms.scanner@wh-01"))
+TokenSubject(id = "svc-scanner", kind = Kind.WORKLOAD, app = "wms", tenant = "acme", roles = setOf("wms.scanner@wh-01"))
 ```
 
 The space is then the only one the token lists, so the client cannot work in another. The choice between the two is how

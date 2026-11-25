@@ -59,11 +59,18 @@ internal class ScenarioJwt(node: JsonNode) {
     val token: String
 
     init {
-        node.only("jti", "sub", "tenantId", "aud", "claims", "iat")
+        node.only("jti", "sub", "tenantId", "aud", "kind", "claims", "iat")
         val builder = JWT.create()
             .withJWTId(node.get("jti")?.text() ?: "t1")
             .withSubject(node.get("sub")?.text() ?: "alice")
             .withExpiresAt(Instant.now().plusSeconds(3600))
+        // A scenario's token is one CoSec issued, which always says whose it is (IDN-45): a person's unless the scenario
+        // says `workload`, or `none` for a token an earlier preview issued; `claims` can still write any other value.
+        when (val kind = node.get("kind")?.text() ?: "person") {
+            "person", "workload" -> builder.withClaim("cosec.kind", kind)
+            "none" -> Unit
+            else -> throw ScenarioFormatException("Unknown token kind $kind")
+        }
         node.get("iat")?.let { builder.withIssuedAt(Instant.ofEpochSecond(it.asLong())) }
         node.get("tenantId")?.let { builder.withClaim(MembershipClaims.TENANT_KEY, it.text()) }
         node.get("aud")?.let { aud ->

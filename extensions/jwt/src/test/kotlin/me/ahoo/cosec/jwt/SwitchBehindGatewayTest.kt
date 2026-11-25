@@ -102,6 +102,7 @@ class SwitchBehindGatewayTest {
         converter.toToken(
             TokenSubject(
                 "alice",
+                Identity.Credential.Kind.PERSON,
                 tenant = "acme"
             ).inSession(families.start(TenantId("acme"), PrincipalId("alice")))
         )
@@ -158,7 +159,11 @@ class SwitchBehindGatewayTest {
     fun `a token whose login is after its issue, by two clocks, is forwarded and switched from`() = runBlocking<Unit> {
         val ahead = TokenFamilies(store, clock = Clock.offset(Clock.systemUTC(), Duration.ofSeconds(2)))
         val pair = converter.toToken(
-            TokenSubject("alice", tenant = "acme").inSession(ahead.start(TenantId("acme"), PrincipalId("alice")))
+            TokenSubject(
+                "alice",
+                Identity.Credential.Kind.PERSON,
+                tenant = "acme"
+            ).inSession(ahead.start(TenantId("acme"), PrincipalId("alice")))
         )
         val token = verifier.verify(pair.accessToken)
         token.session!!.authTime.isAfter(token.issuedAt!!).assert().describedAs("auth_time after iat").isTrue()
@@ -185,7 +190,12 @@ class SwitchBehindGatewayTest {
             app = "",
             space = "",
             roles = setOf("clerk"),
-            credential = Identity.Credential(Identity.Method.API_KEY, "k1", Instant.now().plusSeconds(3600)),
+            credential = Identity.Credential(
+                Identity.Method.API_KEY,
+                Identity.Credential.Kind.WORKLOAD,
+                "k1",
+                Instant.now().plusSeconds(3600)
+            ),
             issuedAt = Instant.now(),
             requestId = "r1",
         )

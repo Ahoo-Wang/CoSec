@@ -164,9 +164,10 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
     val attributes: Map<String, Any> = Collections.unmodifiableMap(attributes)
 
     init {
-        require(breakGlass == (credential?.method == Identity.Method.JWT)) {
-            "The authentication method [${Identity.Method.JWT}] is CoSec's own token's, and only it may use " +
-                "break-glass: name another authenticator's method otherwise (RFC 0010 C3)."
+        val personsToken = credential?.method == Identity.Method.JWT && credential.kind == Identity.Credential.Kind.PERSON
+        require(breakGlass == personsToken) {
+            "The authentication method [${Identity.Method.JWT}] is CoSec's own token's, and only a person's may use " +
+                "break-glass: name another authenticator's method otherwise (RFC 0010 C3, IDN-44)."
         }
         require(session == null || credential?.method == Identity.Method.JWT) {
             "Only CoSec's own token has a session (RFC 0009)."
@@ -264,13 +265,13 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
     val apiKey: Boolean get() = apiKeyCredential || credential?.method == Identity.Method.API_KEY
 
     /**
-     * Whether a workload's credential proved the principal (`IDN-34`): an API key ([apiKey], by provenance or by name), or
-     * a credential named [Identity.Method.SERVICE], the identity a service states for itself when it calls the control
-     * plane, a gateway's forwarded identity among them (fail closed). A workload never approves a change and is never the
-     * control plane's trust root (RC1-11); a host's own authenticator for workloads should not be given `cosec:approve`
-     * either, or should name its credential `service`.
+     * Whether a workload's credential proved the principal (`IDN-34`, `IDN-44`): one whose [Identity.Credential.kind] is
+     * not a person's, which every credential declares (an API key's and a service's own identity are workloads' by
+     * construction, a gateway's forwarded identity says which), or none at all, or an API key by CoSec's authenticator's
+     * provenance. A workload never approves a change, is never the control plane's trust root (RC1-11) and never uses
+     * break-glass. What the credential is named, its method, decides nothing: it is a label.
      */
-    val workload: Boolean get() = apiKey || credential?.method == Identity.Method.SERVICE
+    val workload: Boolean get() = apiKeyCredential || credential?.kind != Identity.Credential.Kind.PERSON
 
     /** The claimed memberships; null when they come from the provider or cannot be used. */
     val memberships: Memberships? get() = (membershipSource as? MembershipSource.Claims)?.memberships

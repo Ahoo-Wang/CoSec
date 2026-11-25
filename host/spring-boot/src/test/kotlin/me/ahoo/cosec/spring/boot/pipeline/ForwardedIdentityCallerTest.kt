@@ -41,6 +41,7 @@ import me.ahoo.cosec.runtime.http.RequestGate
 import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
@@ -301,6 +302,7 @@ class ForwardedIdentityCallerTest {
                     "plato",
                     TenantId.PLATFORM.value,
                     "cosec-control",
+                    PERSON,
                     emptySet(),
                     policies,
                     issuedAt = now,
@@ -340,6 +342,7 @@ class ForwardedIdentityCallerTest {
             roles = emptySet(),
             credential = Identity.Credential(
                 Identity.Method.JWT,
+                PERSON,
                 "jti-$principal",
                 now.plusSeconds(600),
                 issuedAt = now

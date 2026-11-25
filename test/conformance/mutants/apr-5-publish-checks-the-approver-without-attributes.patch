@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
-index f162ed6b2..93bbff604 100644
+index ae03477f9..1b7a88238 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
-@@ -190,7 +190,7 @@ internal class ApprovalRules(
+@@ -203,7 +203,7 @@ internal class ApprovalRules(
              approval.approver.principal,
              approval.approver.tenant,
              source,
@@ -14,4 +14,4 @@ index f162ed6b2..93bbff604 100644
 +            emptyMap(),
              Identity.Credential(
                  if (approval.breakGlass) Identity.Method.JWT else RECORDED_METHOD,
-                 RECORDED_APPROVAL,
+                 // An approval is a person's: a workload never made one (approvalRefusal).

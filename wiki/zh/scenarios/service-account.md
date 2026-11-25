@@ -76,7 +76,7 @@ curl -X POST https://api.example.com/inbound/42/ship \
 客户端能登录时，例如代表用户行动的 agent，令牌不需要 key 也能做到同样的事：为应用签发令牌，只带该空间的角色，
 
 ```kotlin
-TokenSubject(id = "svc-scanner", app = "wms", tenant = "acme", roles = setOf("wms.scanner@wh-01"))
+TokenSubject(id = "svc-scanner", kind = Kind.WORKLOAD, app = "wms", tenant = "acme", roles = setOf("wms.scanner@wh-01"))
 ```
 
 这样令牌列出的就只有这一个空间，客户端无法在别的空间工作。两者的选择取决于客户端如何认证；限制是一样的，都来自凭证列出的角色。

@@ -142,7 +142,12 @@ class PipelineGatewayFilterTest {
                 TenantId("acme"),
                 MembershipSource.Claims(Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())),
                 emptyMap(),
-                Identity.Credential(Identity.Method.JWT, "t1", java.time.Instant.now().plusSeconds(3600)),
+                Identity.Credential(
+                    Identity.Method.JWT,
+                    Identity.Credential.Kind.PERSON,
+                    "t1",
+                    java.time.Instant.now().plusSeconds(3600)
+                ),
                 breakGlass = true,
                 issuedAt = null,
                 apiKeyCredential = false,

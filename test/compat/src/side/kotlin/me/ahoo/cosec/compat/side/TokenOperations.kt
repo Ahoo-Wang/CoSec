@@ -41,14 +41,16 @@ internal object TokenOperations {
         "token.verify" to { arguments ->
             describe(JwtTokenVerifier(JwtSigning.hmac256(arguments.getValue("secret"))).verify(arguments.getValue("token")))
         },
+        // Whose the token is, as this version's verifier reads it (`IDN-46`): apart from `token.verify`, which both
+        // versions describe in the same words.
+        "token.kind" to { arguments ->
+            Kinds.of(JwtTokenVerifier(JwtSigning.hmac256(arguments.getValue("secret"))).verify(arguments.getValue("token")))
+        },
     )
 
     private fun subject(name: String): TokenSubject = when (name) {
-        "person" -> TokenSubject(
-            "alice", tenant = "acme", app = "order", roles = setOf("clerk", "viewer@team-a"),
-            attributes = mapOf("dept" to "sales"),
-        )
-        "platform" -> TokenSubject("plato", tenant = "(platform)", app = "cosec-control", roles = setOf("admin"))
+        "person" -> Kinds.person("alice", "acme", "order", setOf("clerk", "viewer@team-a"), mapOf("dept" to "sales"))
+        "platform" -> Kinds.person("plato", "(platform)", "cosec-control", setOf("admin"), emptyMap())
         else -> throw IllegalArgumentException("no sample $name")
     }
 

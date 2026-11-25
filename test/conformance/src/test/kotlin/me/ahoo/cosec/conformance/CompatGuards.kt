@@ -28,6 +28,7 @@ internal object CompatGuards {
         "compat:IdentityHeaderCompatTest#a later member crit names is refused as an outage by a reader that does not know it",
         "compat:IdentityHeaderCompatTest#a member a later version adds is ignored by every reader, which reads the header it knows",
         "compat:IdentityHeaderCompatTest#each version reads what the other writes as the current reader does",
+        "compat:IdentityHeaderCompatTest#the current reader reads the kind the current writer states, and a header without one as a workload's",
         "compat:RecordCompatTest#a later member without crit is dropped by a rewrite, which leaves the same record",
         "compat:RecordCompatTest#a record whose crit names a member a version does not know is refused by it",
         "compat:RecordCompatTest#each version reads and writes back the record the other wrote, unchanged",
@@ -51,5 +52,6 @@ internal object CompatGuards {
         "compat:LocalStateCompatTest#one route map is resolved alike by both versions",
         "compat:LocalStateCompatTest#no module of CoSec consumes Kafka",
         "compat:EdgeCompatTest#the CoSec parameters are read alike, and an ambiguous one refused, by both versions",
+        "compat:TokenCompatTest#the current verifier reads the kind the current issuer declared, and a token without one as a workload's",
     )
 }

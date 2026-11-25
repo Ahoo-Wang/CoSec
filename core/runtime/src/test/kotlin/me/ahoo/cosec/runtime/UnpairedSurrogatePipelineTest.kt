@@ -39,6 +39,7 @@ import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -75,7 +76,7 @@ class UnpairedSurrogatePipelineTest {
     private val withToken = facts(headers = mapOf("Authorization" to listOf("Bearer token")))
 
     private fun token(tenant: String, principal: String = "alice") =
-        VerifiedToken("jti", principal, tenant, null)
+        VerifiedToken("jti", principal, tenant, null, PERSON)
 
     @Test
     fun `a token of tenant beta with an unpaired surrogate is token-invalid and reads no tenant's documents`() = runTest {
@@ -117,7 +118,12 @@ class UnpairedSurrogatePipelineTest {
                 AuthenticatedPrincipal(PrincipalId("alice"), TenantId("acme"), claims)
             },
             {
-                val credential = Identity.Credential(Identity.Method("custom"), "key\uD800", null)
+                val credential = Identity.Credential(
+                    Identity.Method("custom"),
+                    PERSON,
+                    "key\uD800",
+                    null
+                )
                 AuthenticatedPrincipal(
                     PrincipalId("alice"),
                     TenantId("acme"),

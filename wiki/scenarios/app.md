@@ -77,7 +77,7 @@ cosec-migrate publish --to-redis redis://localhost:6379 --file documents/apps/wm
 The login says which app the token is for, and the roles the user holds in it:
 
 ```kotlin
-TokenSubject(id = user.id, app = "wms", tenant = user.tenant, roles = setOf("clerk"))
+TokenSubject(id = user.id, kind = Kind.PERSON, app = "wms", tenant = user.tenant, roles = setOf("clerk"))
 ```
 
 A token issued for another app, or for none, is refused by this service

@@ -37,6 +37,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.startCoroutine
+import me.ahoo.cosec.spi.identity.Identity
 
 /**
  * What it costs to accept a CoSec access token on a request: [verify] checks the signature and `exp` and reads the
@@ -94,9 +95,10 @@ open class JwtVerificationBenchmark {
             else -> error("Unknown algorithm $algorithm")
         }
         val subject = when (claims) {
-            "bare" -> TokenSubject("alice", app = "order")
+            "bare" -> TokenSubject("alice", Identity.Credential.Kind.PERSON, app = "order")
             "rich" -> TokenSubject(
                 id = "alice",
+                kind = Identity.Credential.Kind.PERSON,
                 app = "order",
                 tenant = "acme",
                 roles = setOf("reader", "writer", "picker@north", "picker@south"),
@@ -108,6 +110,7 @@ open class JwtVerificationBenchmark {
             )
             "large" -> TokenSubject(
                 id = "alice",
+                kind = Identity.Credential.Kind.PERSON,
                 app = "order",
                 tenant = "acme",
                 roles = (1..LARGE_SPACES).flatMapTo(LinkedHashSet()) { space -> (1..LARGE_ROLES).map { "role-$it@space-$space" } },

@@ -113,11 +113,11 @@ class DemoController(private val tokenConverter: TokenConverter) {
     // 仅用于演示：为任意用户 id 签发令牌，不校验密码。
     @GetMapping("/token")
     fun token(@RequestParam user: String): CompositeToken =
-        tokenConverter.toToken(TokenSubject(id = user, app = null))
+        tokenConverter.toToken(TokenSubject(id = user, kind = Kind.PERSON, app = null))
 }
 ```
 
-starter 根据 `cosec.jwt` 配置 `TokenConverter`（`me.ahoo.cosec.login.token`）。`TokenSubject` 位于同一个包，`CompositeToken` 位于 `me.ahoo.cosec.api.token`；响应中包含 `accessToken` 和 `refreshToken`。真实的登录端点会先校验凭证再签发令牌，见[登录](../integration/authentication.md#logging-in)。
+starter 根据 `cosec.jwt` 配置 `TokenConverter`（`me.ahoo.cosec.login.token`）。`TokenSubject` 位于同一个包，`CompositeToken` 位于 `me.ahoo.cosec.api.token`；响应中包含 `accessToken` 和 `refreshToken`。`Kind` 是 `Identity.Credential.Kind`（`me.ahoo.cosec.spi.identity`）：用户的令牌是人的，机器的令牌是工作负载的，工作负载从不审批变更、也没有 break-glass（`IDN-45`）。真实的登录端点会先校验凭证再签发令牌，见[登录](../integration/authentication.md#logging-in)。
 
 ## 发送请求 {#send-requests}
 
@@ -190,7 +190,7 @@ curl -i -H "Authorization: Bearer not-a-token" localhost:8080/orders/1
    @Bean
    fun platformToken(tokenConverter: TokenConverter) = ApplicationRunner {
        // 仅用于演示：任何能运行它的人都能管理整个部署。
-       val token = tokenConverter.toToken(TokenSubject(id = "alice", app = "cosec-control", tenant = "(platform)"))
+       val token = tokenConverter.toToken(TokenSubject(id = "alice", kind = Kind.PERSON, app = "cosec-control", tenant = "(platform)"))
        println("platform token: ${token.accessToken}")
    }
    ```

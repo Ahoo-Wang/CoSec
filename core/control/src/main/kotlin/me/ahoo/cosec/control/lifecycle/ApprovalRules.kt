@@ -206,6 +206,8 @@ internal class ApprovalRules(
             approval.attributes,
             Identity.Credential(
                 if (approval.breakGlass) Identity.Method.JWT else RECORDED_METHOD,
+                // An approval is a person's: a workload never made one (approvalRefusal).
+                Identity.Credential.Kind.PERSON,
                 RECORDED_APPROVAL,
                 null,
                 capped = !approval.principalBindings,

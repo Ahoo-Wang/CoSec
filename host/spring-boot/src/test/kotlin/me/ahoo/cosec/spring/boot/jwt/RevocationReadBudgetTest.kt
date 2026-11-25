@@ -30,6 +30,7 @@ import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.authn.UncheckedRevocations
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spi.token.VerifiedToken
@@ -45,7 +46,7 @@ import java.util.concurrent.CompletableFuture
  */
 class RevocationReadBudgetTest {
     private object Verifier : TokenVerifier {
-        override fun verify(accessToken: String): VerifiedToken = VerifiedToken("jti-1", "alice", "acme", null)
+        override fun verify(accessToken: String): VerifiedToken = VerifiedToken("jti-1", "alice", "acme", null, PERSON)
 
         override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
     }

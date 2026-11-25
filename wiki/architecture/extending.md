@@ -215,18 +215,27 @@ An `AuthenticatedPrincipal` names its id, tenant, app (the app its credential de
 [membership provider](#memberships)), attributes and `credential`. Conditions read the attributes as
 `subject.attributes.<name>`. The principal keeps a read-only view of the map you hand over, with no copy, and every
 further check of the request decides on it: do not change the map afterwards, and put only immutable values in it
-(strings, booleans, numbers, and immutable lists and maps of them). `credential` (`Identity.Credential`: method `JWT` or `API_KEY`, the credential's id and
+(strings, booleans, numbers, and immutable lists and maps of them). `credential` (`Identity.Credential`: its method, its kind, the credential's id and
 its expiry, never its value) is what a gateway forwards with the identity: on a gateway, a principal without one is
 permitted but forwarded to no backend as authenticated, and one whose credential has no expiry fails the request with
 `500`.
 
-Whether [break-glass](../guide/security-model.md#break-glass) bindings apply is decided by provenance: only a token
-CoSec's own `JwtTokenVerifier` verified gets them, through `TokenAuthenticator`. A principal your authenticator
+**Every credential declares whose it is** (`IDN-44`): `Identity.Credential.Kind.PERSON` or `WORKLOAD`, a required
+parameter with no default, so your authenticator chooses for each credential it makes. A workload's never approves a
+change, is never the control plane's trust root and has no break-glass; a person's may, as the policies grant. Declare
+a machine client's credential (client credentials, mTLS, a service account) a workload's, and a person's sign-in (SSO,
+SAML, LDAP) a person's. The method, `Identity.Method("ldap")` or any name, is a label for audit and decides nothing. A
+credential named `API_KEY` or `SERVICE` is a workload's by construction: declaring it a person's is refused
+(`IllegalArgumentException`). A principal with no credential is a workload.
+
+Whether [break-glass](../guide/security-model.md#break-glass) bindings apply is decided by provenance and kind: only a
+token CoSec's own `JwtTokenVerifier` verified, and read as a person's (`cosec.kind`, `IDN-46`), gets them, through
+`TokenAuthenticator`. A principal your authenticator
 returns, with a credential of its own method (such as `Identity.Method("ldap")`) or none, never gets break-glass, and
 nor does a token a `TokenVerifier` of your own accepts, even through `TokenAuthenticator` (its credential is then named
-after the authenticator's `method`, `token` by default). The method `JWT` is reserved for CoSec's token: an
-`AuthenticatedPrincipal` you construct with it is refused (`IllegalArgumentException`, a `503`), so no authenticator
-can pass for CoSec's token by its name (`BRK-8`).
+after the authenticator's `method`, `token` by default). The method `JWT` is reserved for CoSec's token, and break-glass
+for a person's: an `AuthenticatedPrincipal` you construct with it is refused (`IllegalArgumentException`, a `503`), so
+no authenticator can pass for CoSec's token by its name (`BRK-8`).
 
 The control plane reads two more facts of the principal for approvals ([Testing policies](../policies/testing.md#approval)).
 `workload` (`IDN-34`): true for an API key (`apiKey`: CoSec's API key authenticator sets it, and a credential of the
@@ -290,8 +299,12 @@ the line that reads it, and nothing logs it: keep the three settings, or the rev
 ([the exception](../guide/security-model.md#the-two-documented-exceptions)).
 
 A `TokenVerifier` of your own returns a `VerifiedToken` (`me.ahoo.cosec.spi.token`), an immutable value built from the
-claims it verified: `id`, `principal`, `tenant`, `app` (the token's `aud`), `roles`, `policies`, `attributes`, its times and
-membership marker. Its constructor throws `TokenVerificationException` for claims that no token may carry (an id
+claims it verified: `id`, `principal`, `tenant`, `app` (the token's `aud`), `kind`, `roles`, `policies`, `attributes`, its
+times and membership marker. `kind` is required, with no default (`IDN-46`): whose the token is, as your verifier reads
+it from the token's claims, a client-credentials token a workload's, say. The credential `TokenAuthenticator` makes of
+it is of that kind, so a workload's token never approves a change and is never the trust root; where the token does not
+say, declare `WORKLOAD`, the kind that can do less. CoSec's own verifier reads `cosec.kind`: `person` is a person's,
+and a token without the claim or with any other value a workload's, never refused. Its constructor throws `TokenVerificationException` for claims that no token may carry (an id
 beginning with `(`, a blank subject, an empty tenant, an unpaired surrogate, an impossible app), so `verify` refuses them whichever
 verifier read them.
 

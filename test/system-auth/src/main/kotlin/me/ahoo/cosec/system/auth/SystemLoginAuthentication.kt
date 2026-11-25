@@ -15,6 +15,7 @@ package me.ahoo.cosec.system.auth
 
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.token.TokenSubject
+import me.ahoo.cosec.spi.identity.Identity
 
 /** Signs in whoever a [SystemLogin] names, as it names itself; the token pair and its session are CoSec's. */
 class SystemLoginAuthentication : Authentication<SystemLogin> {
@@ -23,6 +24,7 @@ class SystemLoginAuthentication : Authentication<SystemLogin> {
     override suspend fun authenticate(credentials: SystemLogin): TokenSubject =
         TokenSubject(
             id = credentials.username,
+            kind = Identity.Credential.Kind.PERSON,
             app = credentials.app,
             tenant = credentials.tenant,
             roles = credentials.roles

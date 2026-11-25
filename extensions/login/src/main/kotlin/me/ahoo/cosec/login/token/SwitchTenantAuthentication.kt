@@ -27,6 +27,7 @@ import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 
 /**
  * Switches a signed-in principal to another tenant, and to an app there (`wiki/integration/authentication.md`), to
@@ -73,13 +74,20 @@ class SwitchTenantAuthentication<C : SwitchTenantCredentials>(
             throw TokenVerificationException("The token pair presented is not the one the switch was asked with.")
         }
         val live = sessions.presented(token)
-        val subject = inTarget(previous, credentials.targetTenantId, tenantSwitch.switchTenant(credentials))
+        val subject = inTarget(previous, token, credentials.targetTenantId, tenantSwitch.switchTenant(credentials))
         return subject.inSession(live.fork(TenantId(credentials.targetTenantId)))
     }
 
-    private fun inTarget(previous: SecurityContext, target: String, membership: TenantMembership): TokenSubject =
+    private fun inTarget(
+        previous: SecurityContext,
+        token: VerifiedToken,
+        target: String,
+        membership: TenantMembership,
+    ): TokenSubject =
         TokenSubject(
             id = previous.principal.id,
+            // The presented token's kind: the switch's hook answers memberships, never whose the token is (IDN-46).
+            kind = token.kind,
             app = membership.app?.also(::requireAppId) ?: previous.scope.appId.ifEmpty { null },
             tenant = target,
             roles = membership.roles,

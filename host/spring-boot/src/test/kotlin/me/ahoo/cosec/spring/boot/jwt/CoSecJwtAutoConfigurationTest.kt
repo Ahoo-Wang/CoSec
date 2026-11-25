@@ -26,6 +26,7 @@ import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenFamilyStore
@@ -65,7 +66,9 @@ class CoSecJwtAutoConfigurationTest {
                     .hasSingleBean(TokenConverter::class.java)
                     .hasSingleBean(TokenCompositeAuthentication::class.java)
                     .hasSingleBean(TokenVerifier::class.java)
-                val token = context.getBean(TokenConverter::class.java).toToken(TokenSubject("alice"))
+                val token = context.getBean(
+                    TokenConverter::class.java
+                ).toToken(TokenSubject("alice", Identity.Credential.Kind.PERSON))
                 JWT.decode(token.accessToken).id.assert().isEqualTo("app-token-id")
             }
     }
@@ -112,7 +115,9 @@ class CoSecJwtAutoConfigurationTest {
                     .hasSingleBean(TokenConverter::class.java)
                     .hasSingleBean(TokenVerifier::class.java)
                 // Without an IdGenerator bean (no cosec-cosid, none of the application's): RandomIdGenerator's UUIDs.
-                val token = context.getBean(TokenConverter::class.java).toToken(TokenSubject("alice"))
+                val token = context.getBean(
+                    TokenConverter::class.java
+                ).toToken(TokenSubject("alice", Identity.Credential.Kind.PERSON))
                 UUID.fromString(JWT.decode(token.accessToken).id).version().assert().isEqualTo(4)
             }
     }
@@ -229,7 +234,9 @@ class CoSecJwtAutoConfigurationTest {
             .withUserConfiguration(CoSecJwtAutoConfiguration::class.java)
             .run { context: AssertableApplicationContext ->
                 val token = context.getBean(TokenConverter::class.java)
-                    .toToken(TokenSubject("alice", tenant = "acme", roles = emptySet()))
+                    .toToken(
+                        TokenSubject("alice", Identity.Credential.Kind.PERSON, tenant = "acme", roles = emptySet())
+                    )
                 val revoked = kotlinx.coroutines.runBlocking {
                     context.getBean(TokenRevoker::class.java).revoke(token.accessToken)
                 }

@@ -25,6 +25,7 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
@@ -44,7 +45,7 @@ import kotlin.time.Duration.Companion.milliseconds
  */
 class MembershipResolverTest {
     private val tenant = TenantId("tenant")
-    private val alice = VerifiedToken("jti", "alice", null, null)
+    private val alice = VerifiedToken("jti", "alice", null, null, PERSON)
     private val provider = InMemoryMembershipProvider()
     private val providerMemberships = Memberships(
         Memberships.Source.PROVIDER,
@@ -61,6 +62,7 @@ class MembershipResolverTest {
         principal.principal,
         principal.tenant,
         principal.app,
+        principal.kind,
         principal.roles,
         principal.policies,
         principal.attributes,
@@ -83,7 +85,9 @@ class MembershipResolverTest {
     @Test
     fun claimsWithoutMarker() = runTest {
         val memberships = MembershipResolver(null)
-            .resolve(VerifiedToken("jti", "alice", null, null, roles = setOf("admin"), policies = setOf("p1")))!!
+            .resolve(
+                VerifiedToken("jti", "alice", null, null, PERSON, roles = setOf("admin"), policies = setOf("p1"))
+            )!!
 
         memberships.source.assert().isEqualTo(Memberships.Source.CLAIMS)
         memberships.roles[SpaceId.DEFAULT]!!.toList().assert().containsExactly(RoleId("admin"))
@@ -100,7 +104,7 @@ class MembershipResolverTest {
     fun anUnknownPrincipalIsRefused() = runTest {
         MembershipResolver(
             provider
-        ).resolve(marked(principal = VerifiedToken("jti", "bob", null, null))).assert().isNull()
+        ).resolve(marked(principal = VerifiedToken("jti", "bob", null, null, PERSON))).assert().isNull()
     }
 
     @Test
@@ -200,7 +204,7 @@ class MembershipResolverTest {
     fun markerWithClaimedRolesIsAmbiguous() = runTest {
         MembershipResolver(
             provider
-        ).failure(marked(principal = VerifiedToken("jti", "alice", null, null, roles = setOf("admin"))))
+        ).failure(marked(principal = VerifiedToken("jti", "alice", null, null, PERSON, roles = setOf("admin"))))
             .message.assert().contains("also claims roles or policies")
     }
 
@@ -208,7 +212,7 @@ class MembershipResolverTest {
     fun markerWithClaimedPoliciesIsAmbiguous() = runTest {
         MembershipResolver(
             provider
-        ).failure(marked(principal = VerifiedToken("jti", "alice", null, null, policies = setOf("p"))))
+        ).failure(marked(principal = VerifiedToken("jti", "alice", null, null, PERSON, policies = setOf("p"))))
             .message.assert().contains("also claims roles or policies")
     }
 

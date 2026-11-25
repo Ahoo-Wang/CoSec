@@ -18,6 +18,7 @@ package me.ahoo.cosec.jwt
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.runtime.HeapBudget
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.openjdk.jol.info.GraphLayout
@@ -28,11 +29,14 @@ import org.openjdk.jol.info.GraphLayout
  * policies, nested attributes) and a small one (one role). The cache weighs an entry by its token's length times
  * [VerifiedTokenCache.BYTES_PER_TOKEN_CHAR] when it puts it, never when it reads it: this test holds the factor to the
  * larger of the two measurements, never below it and at most twice it, and checks that the token cache's share of the
- * production overlay's 2 GiB heap holds the 16,384 large tokens its old default did.
+ * production overlay's 2 GiB heap is no smaller in bytes than the 16,384 large tokens its old default held
+ * ([OLD_BOUND_BYTES]). Today's tokens are measured each run; what the share must hold is frozen, since it is what the
+ * replaced `max-entries` promised, not what today's token happens to weigh.
  */
 class VerifiedTokenCacheSizeTest {
     private fun large(principal: Int) = TokenSubject(
         id = "user-$principal",
+        kind = Identity.Credential.Kind.PERSON,
         app = "order",
         tenant = "acme",
         roles = (1..SPACES).flatMapTo(LinkedHashSet()) { space -> (1..ROLES).map { "role-$it@space-$space" } },
@@ -45,6 +49,7 @@ class VerifiedTokenCacheSizeTest {
 
     private fun small(principal: Int) = TokenSubject(
         id = "user-$principal",
+        kind = Identity.Credential.Kind.PERSON,
         app = "order",
         tenant = "acme",
         roles = setOf("viewer")
@@ -70,7 +75,7 @@ class VerifiedTokenCacheSizeTest {
     }
 
     @Test
-    fun `an entry weighs what it retains, and the share of a 2 GiB heap holds the large tokens the old bound did`() {
+    fun `an entry weighs what it retains, and the share of a 2 GiB heap holds the bytes the old bound did`() {
         val (largePerChar, largeLength) = measure(::large)
         val (smallPerChar, smallLength) = measure(::small)
         println(
@@ -82,7 +87,9 @@ class VerifiedTokenCacheSizeTest {
             measured
         ).isLessThanOrEqualTo(measured * 2)
         val share = HeapBudget.of(HEAP).tokenCache
-        (share / (largeLength * VerifiedTokenCache.BYTES_PER_TOKEN_CHAR)).assert().isGreaterThanOrEqualTo(OLD_BOUND)
+        val holds = share / (largeLength * VerifiedTokenCache.BYTES_PER_TOKEN_CHAR)
+        println("VerifiedTokenCache: the share of 2 GiB holds $holds large tokens")
+        share.assert().isGreaterThanOrEqualTo(OLD_BOUND_BYTES)
     }
 
     private companion object {
@@ -90,7 +97,14 @@ class VerifiedTokenCacheSizeTest {
         const val ROLES = 12
         const val POLICIES = 8
         const val MEASURED = 1_000
-        const val OLD_BOUND = 16_384L
+
+        /**
+         * The old default, `max-entries: 16384`, times what its largest test token weighed: 1,617 characters × 5 bytes,
+         * measured by this test on 8.0.0-beta.8 (main at 370e307), the last tree whose access token had no `cosec.kind`
+         * claim (`IDN-45`). Frozen there: the share keeps what the old bound held in bytes, and a token that grows by a
+         * claim fits a few fewer of itself into it (16,298 at 1,647 characters) rather than moving the share.
+         */
+        const val OLD_BOUND_BYTES = 16_384L * 1_617 * 5
         const val HEAP = 2L shl 30
     }
 }

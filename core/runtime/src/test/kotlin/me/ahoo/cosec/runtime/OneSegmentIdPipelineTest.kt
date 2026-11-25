@@ -30,6 +30,7 @@ import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spi.token.VerifiedToken
@@ -63,8 +64,8 @@ class OneSegmentIdPipelineTest {
     @Test
     fun `a token of a tenant or an app with a slash is token-invalid and reads no tenant's documents`() = runTest {
         val tokens = listOf(
-            { VerifiedToken("jti", "alice", "acme/west", null) },
-            { VerifiedToken("jti", "alice", "acme", "order/v2") },
+            { VerifiedToken("jti", "alice", "acme/west", null, PERSON) },
+            { VerifiedToken("jti", "alice", "acme", "order/v2", PERSON) },
         )
         for (token in tokens) {
             val views = RecordingViews()

@@ -359,7 +359,7 @@ in app `cosec-control`. On WebFlux, raise `spring.codec.max-in-memory-size` for 
 10MB (the document cap and 2MB). Workflow: https://cosec.ahoo.me/policies/testing.
 
 The control plane's token is issued for tenant `(platform)` (an administrator) or the tenant's own, and for the app
-`cosec.control.app-id`: `TokenSubject(id = "alice", app = "cosec-control", tenant = "(platform)")`. A change is
+`cosec.control.app-id`: `TokenSubject(id = "alice", kind = Kind.PERSON, app = "cosec-control", tenant = "(platform)")`. A change is
 `POST /changes` (document, base revision, operations), then `:skip-shadow` with a `reason` (the trust root, and a
 tenant's administrator on its own document) or `:shadow`, then `:publish`. A console that edits roles sends one `putRole`
 per save. A service that mirrors an identity system's roles calls `ControlClient.proposeAndPublishWithoutShadow` per

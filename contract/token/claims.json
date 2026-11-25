@@ -20,6 +20,11 @@
       "client" : "do-not-depend",
       "presence" : "optional"
     },
+    "cosec.kind" : {
+      "type" : "string",
+      "client" : "do-not-depend",
+      "presence" : "always"
+    },
     "cosec.membership" : {
       "type" : "string",
       "client" : "do-not-depend",

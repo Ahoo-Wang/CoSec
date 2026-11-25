@@ -1,0 +1,17 @@
+# Rule: IDN-44
+# Mutant: a forwarded identity without auth.kind is read as a person's, so a header from a writer that did not state it approves and is the trust root
+# Tests: :document:test --tests me.ahoo.cosec.document.identity.IdentityKindTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt
+index fd10c981d..e022dfb8f 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt
+@@ -210,7 +210,7 @@ object IdentityCodec {
+      * a credential named `api-key` or `service` declared a person's is malformed, since no writer of CoSec writes one.
+      */
+     private fun kind(node: JsonNode?, method: String): Identity.Credential.Kind {
+-        node ?: return Identity.Credential.Kind.WORKLOAD
++        node ?: return Identity.Credential.Kind.PERSON
+         if (!node.isString) throw malformed("$.auth.kind is not a string")
+         if (node.asString() != PERSON) return Identity.Credential.Kind.WORKLOAD
+         if (method == Identity.Method.API_KEY.value || method == Identity.Method.SERVICE.value) {

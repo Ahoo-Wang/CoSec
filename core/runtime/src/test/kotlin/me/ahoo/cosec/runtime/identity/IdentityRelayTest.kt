@@ -62,6 +62,7 @@ class IdentityRelayTest {
 
     private fun jwt() = Identity.Credential(
         Identity.Method.JWT,
+        Identity.Credential.Kind.PERSON,
         "t1",
         now.plusSeconds(600),
         issuedAt = now.minusSeconds(60),
@@ -124,7 +125,13 @@ class IdentityRelayTest {
 
     @Test
     fun `every other member the service was forwarded is relayed as it was - IDN-42`() {
-        val capped = Identity.Credential(Identity.Method.API_KEY, "k1", now.plusSeconds(600), capped = true)
+        val capped = Identity.Credential(
+            Identity.Method.API_KEY,
+            Identity.Credential.Kind.WORKLOAD,
+            "k1",
+            now.plusSeconds(600),
+            capped = true
+        )
         listOf(forwarded(Identity.Memberships.NONE), forwarded(null, capped)).forEach { identity ->
             val relayed = IdentityCodec.decode(relayed(identity))
 

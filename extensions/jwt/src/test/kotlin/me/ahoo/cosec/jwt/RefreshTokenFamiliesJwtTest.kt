@@ -31,6 +31,7 @@ import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RefreshTokenMismatchException
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -78,7 +79,13 @@ class RefreshTokenFamiliesJwtTest {
         families,
     )
 
-    private fun login(subject: TokenSubject = TokenSubject("alice", tenant = "acme")): CompositeToken =
+    private fun login(
+        subject: TokenSubject = TokenSubject(
+            "alice",
+            Identity.Credential.Kind.PERSON,
+            tenant = "acme"
+        )
+    ): CompositeToken =
         converter.toToken(subject.inSession(runBlocking { families.start(TenantId("acme"), PrincipalId(subject.id)) }))
 
     private fun refreshed(token: CompositeToken): CompositeToken = runBlocking {
@@ -120,7 +127,7 @@ class RefreshTokenFamiliesJwtTest {
     /** IDN-17: no token of a pair outlives its session. */
     @Test
     fun `a pair never outlives its session`() {
-        val subject = TokenSubject("alice", tenant = "acme")
+        val subject = TokenSubject("alice", Identity.Credential.Kind.PERSON, tenant = "acme")
         val signedIn = Instant.now().minus(Duration.ofDays(30)).plus(Duration.ofHours(1))
         // A tenant switch's session, from a login that signed in near the end of its lifetime.
         val root = TokenFamily(
@@ -155,7 +162,7 @@ class RefreshTokenFamiliesJwtTest {
             Duration.ofDays(7)
         )
         val old = expiring.toToken(
-            TokenSubject("alice", tenant = "acme")
+            TokenSubject("alice", Identity.Credential.Kind.PERSON, tenant = "acme")
                 .inSession(families.start(TenantId("acme"), PrincipalId("alice")))
         )
         assertThrows<TokenVerificationException> { revoker.revoke(old.accessToken) }
@@ -169,7 +176,7 @@ class RefreshTokenFamiliesJwtTest {
 
     @Test
     fun `a pair without a session, or a refresh token of another session, does not refresh`() {
-        val bare = converter.toToken(TokenSubject("alice", tenant = "acme"))
+        val bare = converter.toToken(TokenSubject("alice", Identity.Credential.Kind.PERSON, tenant = "acme"))
         assertThrows<TokenVerificationException> { refreshed(bare) }
         val one = login()
         val other = login()

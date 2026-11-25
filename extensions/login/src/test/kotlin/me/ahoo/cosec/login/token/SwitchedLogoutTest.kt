@@ -27,6 +27,7 @@ import me.ahoo.cosec.login.route.LogoutRoute
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.TokenFamily
 import me.ahoo.cosec.spi.token.TokenFamilyStore
@@ -109,7 +110,14 @@ class SwitchedLogoutTest {
     private val beta = TenantId("beta")
 
     private fun token(session: TokenSession, tenant: TenantId, principal: PrincipalId = alice) =
-        VerifiedToken("jti-${session.id}-${session.generation}", principal.value, tenant.value, null, session = session)
+        VerifiedToken(
+            "jti-${session.id}-${session.generation}",
+            principal.value,
+            tenant.value,
+            null,
+            PERSON,
+            session = session
+        )
 
     private suspend fun switched(from: TokenSession, fromTenant: TenantId, to: TenantId): TokenSession =
         live.of(token(from, fromTenant)).fork(to).session

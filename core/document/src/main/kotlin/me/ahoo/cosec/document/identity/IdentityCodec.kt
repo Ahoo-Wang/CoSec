@@ -94,6 +94,11 @@ object IdentityCodec {
      */
     internal const val MAX_SECONDS = 253_402_300_799L
 
+    /** `auth.kind` and its values (`IDN-44`): what [Identity.Credential.Kind] is on the wire. */
+    internal const val KIND = "kind"
+    internal const val PERSON = "person"
+    internal const val WORKLOAD = "workload"
+
     private val reader: ObjectReader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -188,6 +193,7 @@ object IdentityCodec {
         if (issuedAt != null && issuedAt.isAfter(expiresAt)) throw malformed("$.auth.iat is after $.auth.exp")
         return Identity.Credential(
             method = method.takeIf { it.isNotEmpty() }?.let(Identity::Method) ?: throw malformed("$.auth.method is empty"),
+            kind = kind(auth.get(KIND), method),
             id = auth.need("jti").id("$.auth.jti"),
             expiresAt = expiresAt,
             capped = auth.get("capped")?.let {
@@ -197,6 +203,20 @@ object IdentityCodec {
             issuedAt = issuedAt,
             session = auth.get("session")?.let { session(it, method, issuedAt) },
         )
+    }
+
+    /**
+     * `auth.kind` (`IDN-44`): `person`, or a workload's when it says anything else or nothing, the restrictive reading;
+     * a credential named `api-key` or `service` declared a person's is malformed, since no writer of CoSec writes one.
+     */
+    private fun kind(node: JsonNode?, method: String): Identity.Credential.Kind {
+        node ?: return Identity.Credential.Kind.WORKLOAD
+        if (!node.isString) throw malformed("$.auth.kind is not a string")
+        if (node.asString() != PERSON) return Identity.Credential.Kind.WORKLOAD
+        if (method == Identity.Method.API_KEY.value || method == Identity.Method.SERVICE.value) {
+            throw malformed("$.auth.kind is a person's for a workload's credential")
+        }
+        return Identity.Credential.Kind.PERSON
     }
 
     /** `auth.session`: CoSec's own token's only, all three members, never read as no session when one is wrong. */

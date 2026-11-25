@@ -185,7 +185,12 @@ class HttpControlServiceTest {
             app = "cosec-control",
             space = "",
             roles = setOf("admin"),
-            credential = Identity.Credential(Identity.Method.JWT, "token-1", now.plusSeconds(300)),
+            credential = Identity.Credential(
+                Identity.Method.JWT,
+                Identity.Credential.Kind.PERSON,
+                "token-1",
+                now.plusSeconds(300)
+            ),
             issuedAt = now,
             requestId = "r1",
         )
@@ -211,7 +216,12 @@ class HttpControlServiceTest {
             app = "cosec-control",
             space = "",
             roles = setOf("admin"),
-            credential = Identity.Credential(Identity.Method.JWT, "token-1", now.plusSeconds(300)),
+            credential = Identity.Credential(
+                Identity.Method.JWT,
+                Identity.Credential.Kind.PERSON,
+                "token-1",
+                now.plusSeconds(300)
+            ),
             issuedAt = now,
             requestId = "r1",
             memberships = stated,
@@ -253,7 +263,12 @@ class HttpControlServiceTest {
             app = "cosec-control",
             space = "",
             roles = setOf("admin"),
-            credential = Identity.Credential(Identity.Method.JWT, "token-1", now.plusSeconds(300)),
+            credential = Identity.Credential(
+                Identity.Method.JWT,
+                Identity.Credential.Kind.PERSON,
+                "token-1",
+                now.plusSeconds(300)
+            ),
             issuedAt = now,
             requestId = "r1",
         )
@@ -281,7 +296,12 @@ class HttpControlServiceTest {
             app = "cosec-control",
             space = "",
             roles = setOf("admin"),
-            credential = Identity.Credential(Identity.Method.JWT, "token-1", now.plusSeconds(300)),
+            credential = Identity.Credential(
+                Identity.Method.JWT,
+                Identity.Credential.Kind.PERSON,
+                "token-1",
+                now.plusSeconds(300)
+            ),
             issuedAt = now,
             requestId = "r1",
         )

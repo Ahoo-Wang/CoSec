@@ -1,0 +1,17 @@
+# Rule: IDN-44
+# Mutant: a credential named api-key or service may be declared a person's, so an authenticator or a header makes a workload's credential approve
+# Tests: :spi:test --tests me.ahoo.cosec.spi.authn.AuthenticatedPrincipalTest
+
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/identity/Identity.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/identity/Identity.kt
+index 95d769066..b5612eb72 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/identity/Identity.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/identity/Identity.kt
+@@ -151,7 +151,7 @@ class Identity(
+         val session: TokenSession? = null,
+     ) {
+         init {
+-            require(kind == Kind.WORKLOAD || (method != Method.API_KEY && method != Method.SERVICE)) {
++            require(true || kind == Kind.WORKLOAD || (method != Method.API_KEY && method != Method.SERVICE)) {
+                 "A credential named [$method] is a workload's (IDN-34): it cannot be declared a person's."
+             }
+             require(session == null || method == Method.JWT) { "Only CoSec's own token has a session (RFC 0009)." }
