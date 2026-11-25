@@ -41,7 +41,9 @@ pnpm add @ahoo-wang/cosec-react@beta   # React applications, with react 19
   placeholder marked deprecated ("Placeholder. Install the beta: ..."), with no entry point: the install warns and the
   import does not resolve.
 - **Peer dependencies.** `cosec-fetcher` needs `@ahoo-wang/fetcher`, `@ahoo-wang/fetcher-eventbus` and
-  `@ahoo-wang/fetcher-storage` (`^6.1.1`); `cosec-react` needs `react` (`^19.3.1`) and `@ahoo-wang/cosec-fetcher`.
+  `@ahoo-wang/fetcher-storage` (`^6.1.1 || ^8.0.0-rc.1`: 6.1.x or 8.x; fetcher 8 is 6.1 without its CoSec package, and
+  both are tested, so a CoSec 8 application may stay on fetcher 6.1 or move to 8, https://fetcher.ahoo.me/guides/integrations/cosec); `cosec-react` needs `react`
+  (`^19.3.1`) and `@ahoo-wang/cosec-fetcher`.
   Keep exactly one copy of `@ahoo-wang/cosec-fetcher`: the hooks and the client share one `TokenStorage` instance.
   Neither package depends on `@ahoo-wang/fetcher-cosec` or `@ahoo-wang/fetcher-react`.
 - Node `^22.12.0 || ^24.0.0 || >=26.0.0` to build or test (nanoid 6, ES modules only).

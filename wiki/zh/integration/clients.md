@@ -185,7 +185,7 @@ CoSec 不提供登录和租户切换：它们属于应用，用 CoSec 的类编�
 
 ## 从 `@ahoo-wang/fetcher-cosec` 迁移 {#coming-from-ahoo-wang-fetcher-cosec}
 
-CoSec 8 应用的客户端是 `@ahoo-wang/cosec-fetcher`，它的 React hooks 是 `@ahoo-wang/cosec-react`。它们取代 `@ahoo-wang/fetcher-cosec` 和 `@ahoo-wang/fetcher-react` 中的 CoSec hooks，随 CoSec 发布并使用 CoSec 的版本号，遵循本页的约定。旧包遵循的是 CoSec 7 的约定，不能用于 8.0 服务器。连同它们的对等依赖（fetcher 的各个包）一起安装：
+CoSec 8 应用的客户端是 `@ahoo-wang/cosec-fetcher`，它的 React hooks 是 `@ahoo-wang/cosec-react`。它们取代 `@ahoo-wang/fetcher-cosec` 和 `@ahoo-wang/fetcher-react` 中的 CoSec hooks，随 CoSec 发布并使用 CoSec 的版本号，遵循本页的约定。旧包遵循的是 CoSec 7 的约定，不能用于 8.0 服务器。连同它们的对等依赖一起安装：fetcher 的各个包，6.1.x（6.1.1 起）或 8.x 均可。fetcher 8 就是去掉了 CoSec 包的 6.1，CI 在两者上都测试客户端，所以服务端是 CoSec 8 的应用可以留在 fetcher 6.1，也可以上 fetcher 8（[fetcher 关于迁移的页面](https://fetcher.ahoo.me/guides/integrations/cosec)）：
 
 ```bash
 pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus @ahoo-wang/fetcher-storage \

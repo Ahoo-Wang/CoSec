@@ -47,6 +47,10 @@ pnpm test
 - CoSec's packages depend on fetcher's, never the other way. Every `@ahoo-wang/fetcher*` package comes from npm, through
   the catalog, as a peer dependency of the published packages. Nothing here depends on `@ahoo-wang/fetcher-cosec`, the
   name these packages replace.
+- The fetcher packages' peer range takes two majors, 6.1.x and 8.x (`^6.1.1 || ^8.0.0-rc.1` in `catalogs.peers`): fetcher 8
+  is 6.1 without its CoSec package. The workspace develops on the lockfile's fetcher 6; CI runs every step of both
+  TypeScript jobs once more on the newest fetcher 8 old enough to install (`scripts/fetcher-line.mjs`, which reads the
+  range), and `TypeScriptWorkspaceTest` holds the range and the legs.
 - Packages of this workspace depend on each other as peers (`workspace:~`, which becomes `~x.y.z` on publish).
 
 ## Versions

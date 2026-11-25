@@ -270,7 +270,9 @@ it expects a `401` is looking at a refusal without CORS headers.
 The client of a CoSec 8 application is `@ahoo-wang/cosec-fetcher`, and its React hooks are `@ahoo-wang/cosec-react`.
 They replace `@ahoo-wang/fetcher-cosec` and the CoSec hooks of `@ahoo-wang/fetcher-react`, are released with CoSec at its
 version, and speak the contract of this page. The old package speaks the contract of CoSec 7 and does not work against an 8.0
-server. Install them with their peer dependencies (the fetcher packages):
+server. Install them with their peer dependencies, the fetcher packages, of 6.1.x (6.1.1 or later) or 8.x: fetcher 8 is
+6.1 without its CoSec package, and CI tests the client on both, so an application whose server runs CoSec 8 may stay
+on fetcher 6.1 or move to fetcher 8 ([fetcher's page on the move](https://fetcher.ahoo.me/guides/integrations/cosec)):
 
 ```bash
 pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus @ahoo-wang/fetcher-storage \

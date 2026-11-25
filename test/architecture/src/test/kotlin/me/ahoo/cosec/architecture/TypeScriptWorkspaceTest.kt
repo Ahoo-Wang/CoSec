@@ -145,6 +145,31 @@ class TypeScriptWorkspaceTest {
     }
 
     /**
+     * The packages accept fetcher 6 and fetcher 8 (`catalogs.peers`): an application on CoSec 8 stays on fetcher 6.1 or
+     * moves to 8. What is accepted is tested: both CI jobs run their steps on the lockfile's fetcher 6 and once more on
+     * fetcher 8, which `scripts/fetcher-line.mjs` resolves from the peer range, so a new fetcher 8 needs no edit here.
+     */
+    @Test
+    fun `the peers accept fetcher 6 and 8, and CI runs the same steps on each`() {
+        val yaml = workspace.resolve("pnpm-workspace.yaml").readText()
+        val peers = yaml.substringAfter("\n  peers:\n").substringBefore("\n\n")
+        for (name in listOf("@ahoo-wang/fetcher", "@ahoo-wang/fetcher-eventbus", "@ahoo-wang/fetcher-storage")) {
+            peers.lines().single { "'$name':" in it }.substringAfter(": ").trim()
+                .assert().describedAs("the peer range of $name").isEqualTo("^6.1.1 || ^8.0.0-rc.1")
+        }
+        val ci = Projects.root.resolve(".github/workflows/ci.yml").readText()
+        for (name in listOf("typescript", "typescript-host")) {
+            val job = ci.substringAfter("\n  $name:\n").substringBefore("\n  # ")
+            Regex("""fetcher: (\[[^]]*'8'[^]]*]|'8')""").containsMatchIn(job)
+                .assert().describedAs("$name has a fetcher 8 leg").isTrue()
+            job.contains("""run: node scripts/fetcher-line.mjs "${'$'}{{ matrix.fetcher }}" && pnpm install --no-frozen-lockfile""")
+                .assert().describedAs("$name installs the leg's fetcher").isTrue()
+            job.contains("run: pnpm -r ls --depth 0 @ahoo-wang/fetcher")
+                .assert().describedAs("$name shows the fetcher it installed").isTrue()
+        }
+    }
+
+    /**
      * One lint command for every package, over everything it holds, its tests included: a package whose ESLint config
      * left its tests out let two unused bindings reach the code scanner first (code scanning alerts 126 and 127).
      */

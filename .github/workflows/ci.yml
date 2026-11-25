@@ -178,7 +178,7 @@ jobs:
   # whatever changed: a skipped job fails the gate, and with no package yet it takes seconds. Actions are pinned by
   # commit SHA (the version is in the comment, Renovate keeps both current); the job has no secrets and no write access.
   typescript:
-    name: TypeScript / Node ${{ matrix.node-version }}
+    name: TypeScript / Node ${{ matrix.node-version }} / fetcher ${{ matrix.fetcher }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -188,6 +188,12 @@ jobs:
         # newest 22 and not the 22.12.0 that `engines.node` promises consumers: that floor is checked by importing the
         # built packages under 22.12.0 (the package check, which arrives with the first package).
         node-version: [ '22.23.4', '24.22.2' ]
+        # The packages accept fetcher 6 and 8 (catalogs.peers): the lockfile's fetcher 6 on both Nodes, and the same
+        # steps once more on fetcher 8, the newest 8.x old enough to install (scripts/fetcher-line.mjs).
+        fetcher: [ '6' ]
+        include:
+          - node-version: '24.22.2'
+            fetcher: '8'
     defaults:
       run:
         working-directory: typescript
@@ -212,6 +218,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The fetcher leg: the development catalog pointed at the newest 8.x older than minimumReleaseAge, installed.
+      - name: Install fetcher ${{ matrix.fetcher }}
+        if: matrix.fetcher != '6'
+        run: node scripts/fetcher-line.mjs "${{ matrix.fetcher }}" && pnpm install --no-frozen-lockfile
+
+      - name: Show the fetcher packages installed
+        run: pnpm -r ls --depth 0 @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus @ahoo-wang/fetcher-storage
+
       - name: Build
         run: pnpm build
 
@@ -234,23 +248,23 @@ jobs:
 
       # engines.node promises Node 22.12.0, which pnpm 11 cannot run on: pack here, check the tarballs under 22.12.0.
       - name: Pack the packages for the Node 22.12.0 check
-        if: matrix.node-version == '22.23.4'
+        if: matrix.node-version == '22.23.4' && matrix.fetcher == '6'
         run: mkdir -p "$RUNNER_TEMP/tarballs" && for package in cosec-*/; do (cd "$package" && pnpm pack --pack-destination "$RUNNER_TEMP/tarballs"); done
 
       - name: Setup Node 22.12.0
-        if: matrix.node-version == '22.23.4'
+        if: matrix.node-version == '22.23.4' && matrix.fetcher == '6'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22.12.0
 
       - name: Check the packed packages under Node 22.12.0
-        if: matrix.node-version == '22.23.4'
+        if: matrix.node-version == '22.23.4' && matrix.fetcher == '6'
         run: node scripts/package-check.mjs --tarballs "$RUNNER_TEMP/tarballs"
 
       # What the release does, short of publishing (package-deploy.yml, job npm-publish): the Node and npm it needs, and
       # `npm publish --dry-run` of the packed tarballs, in the order and with the dist-tag a release would use.
       - name: Rehearse the publish
-        if: matrix.node-version == '24.22.2'
+        if: matrix.node-version == '24.22.2' && matrix.fetcher == '6'
         run: |
           set -euo pipefail
           node scripts/release.mjs env
@@ -262,11 +276,11 @@ jobs:
           node scripts/release.mjs publish --tarballs "$RUNNER_TEMP/dry-run" --dry-run
 
       - name: Stage the coverage
-        if: matrix.node-version == '24.22.2'
+        if: matrix.node-version == '24.22.2' && matrix.fetcher == '6'
         run: mkdir -p ../coverage-artifact && cp cosec-fetcher/coverage/coverage-final.json ../coverage-artifact/typescript-cosec-fetcher.json && cp cosec-react/coverage/coverage-final.json ../coverage-artifact/typescript-cosec-react.json
 
       - name: Keep the coverage
-        if: matrix.node-version == '24.22.2'
+        if: matrix.node-version == '24.22.2' && matrix.fetcher == '6'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-typescript
@@ -278,9 +292,14 @@ jobs:
   # `pnpm test:host` starts. A job of its own: it needs the JVM and Gradle beside Node, and runs beside `typescript`
   # instead of lengthening it. Like it: every pull request, pinned actions, no secrets, read-only Gradle cache off main.
   typescript-host:
-    name: TypeScript against a real host
+    name: TypeScript against a real host / fetcher ${{ matrix.fetcher }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # The same host tests on the lockfile's fetcher 6 and on fetcher 8, as in the `typescript` job.
+        fetcher: [ '6', '8' ]
     defaults:
       run:
         working-directory: typescript
@@ -320,6 +339,13 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Install fetcher ${{ matrix.fetcher }}
+        if: matrix.fetcher != '6'
+        run: node scripts/fetcher-line.mjs "${{ matrix.fetcher }}" && pnpm install --no-frozen-lockfile
+
+      - name: Show the fetcher packages installed
+        run: pnpm -r ls --depth 0 @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus @ahoo-wang/fetcher-storage
 
       # The packages import each other through dist.
       - name: Build
