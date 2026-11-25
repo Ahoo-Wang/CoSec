@@ -39,5 +39,7 @@ internal object RecordOperations {
                 else -> throw IllegalArgumentException("no record kind")
             }.decodeToString()
         },
+        // Whose the approval of a change record was (APR-9), as this version reads it: a release before kinds reads none.
+        "record.approval.kind" to { a -> Kinds.approvalKind(a.getValue("value").encodeToByteArray()) },
     )
 }

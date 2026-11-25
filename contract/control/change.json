@@ -31,6 +31,10 @@
         "items" : {
           "type" : "string"
         }
+      },
+      "kind" : {
+        "type" : "string",
+        "presence" : "optional"
       }
     }
   },

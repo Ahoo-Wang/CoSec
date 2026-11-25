@@ -55,7 +55,7 @@ internal object StoredRecordCases {
               "publishedRevision":4,"escalations":[{"subject":"p1","reason":"NOT_COVERED","detail":"d"}],
               "approval":{"approver":{"tenant":"acme","principal":"bob"},"at":"2026-11-01T00:00:00Z","candidate":"c1@1","covers":["p1"],
                 "memberships":{"roles":{"default":["admin"]},"attachments":["p2"],"source":"CLAIMS"},
-                "attributes":{"dept":"x"},"principalBindings":true,"breakGlass":false,"credentialId":"k2","issuedAt":"2026-11-01T00:00:00Z"},
+                "attributes":{"dept":"x"},"principalBindings":true,"breakGlass":false,"credentialId":"k2","issuedAt":"2026-11-01T00:00:00Z","kind":"PERSON"},
               "shadow":{"window":"c1@1","startedAt":"2026-11-01T00:00:00Z","closed":{"closedAt":"2026-11-01T00:00:00Z","insufficient":false,"blocked":false,
                 "counts":{"SAME":3},"vanished":["i2"]},"reporters":["i1"]},
               "confirmations":[{"policy":"p1","statement":0,"digest":"x","kind":"deny-nomatch"}]}""",

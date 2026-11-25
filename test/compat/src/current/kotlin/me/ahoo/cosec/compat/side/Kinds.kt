@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.compat.side
 
+import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.TokenSession
@@ -55,4 +56,7 @@ internal object Kinds {
 
     /** Whose [token] is, as this version's verifier read it (`IDN-46`): `person` or `workload`. */
     fun of(token: VerifiedToken): String = token.kind.name.lowercase()
+
+    /** Whose the approval of the change record [bytes] says it was (`APR-9`): its kind's name, or `none`. */
+    fun approvalKind(bytes: ByteArray): String = ChangeRequestCodec.decode(bytes).approval?.kind?.name ?: "none"
 }

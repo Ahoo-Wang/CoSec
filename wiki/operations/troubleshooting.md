@@ -1355,7 +1355,9 @@ for a check, `412` for an `ifMatch` that does not hold).
 - **An approval no longer counts at publish**: the change is `AWAITING_APPROVAL` again, its `APPROVAL` finding saying
   `the token the approver approved with is revoked`, `the approver's tokens are revoked`, `the approver no longer
   holds cosec:approve on the document`, `only a platform principal approves a boundary change`, `under four-eyes, only
-  a platform principal approves a platform principal's change`, or `the approval does not say what credential its
+  a platform principal approves a platform principal's change`, `the approval does not say its approver was a person:
+  approve the change again` (an approval recorded before 8.0.0-beta.9, or by a control host still on it, records no
+  kind, `APR-9`), or `the approval does not say what credential its
   approver approved with` (an approval from before the upgrade, from an older instance, or by a credential without an
   id). Ask for a new approval. A `403` on `:approve` with `a workload's credential (an API key, a service) cannot approve` in the log: the approver
   authenticated with an API key or stated a service's own identity (`IDN-34`); approve with a person's token; with `an approval names the approver's credential, and this one names none`: approve with a

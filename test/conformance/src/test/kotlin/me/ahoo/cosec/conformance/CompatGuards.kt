@@ -31,6 +31,7 @@ internal object CompatGuards {
         "compat:IdentityHeaderCompatTest#a member a later version adds is ignored by every reader, which reads the header it knows",
         "compat:IdentityHeaderCompatTest#each version reads what the other writes as the current reader does",
         "compat:IdentityHeaderCompatTest#the current reader reads the kind the current writer states, and a header without one as a workload's",
+        "compat:RecordCompatTest#an approval says whose it was, and one recorded before kinds says nothing",
         "compat:RecordCompatTest#a later member without crit is dropped by a rewrite, which leaves the same record",
         "compat:RecordCompatTest#a record whose crit names a member a version does not know is refused by it",
         "compat:RecordCompatTest#each version reads and writes back the record the other wrote, unchanged",

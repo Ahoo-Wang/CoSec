@@ -3,14 +3,14 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
-index 0da6cedc..ca4b9316 100644
+index 3b95ed0e5..d24f02eea 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
-@@ -174,7 +174,6 @@ internal class ApprovalRules(
+@@ -189,7 +189,6 @@ internal class ApprovalRules(
          if (approval.approver.tenant != TenantId.PLATFORM) {
              approverTenantProblem(change)?.let { return it }
          }
 -        revoked(approval)?.let { return it }
-         // As the approver authenticated: memberships from the provider are asked about again, so an approver it no
-         // longer knows, or knows as deactivated, does not count (RFC 0009 §4.2); claimed ones stand as recorded.
-         val source = if (memberships.source == Memberships.Source.PROVIDER) {
+         return stillHolds(change, approval, memberships, publisher)
+     }
+ 

@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.spi.identity.Identity
 import java.time.Instant
 
 /**
@@ -53,4 +54,10 @@ data class Approval(
      */
     val credentialId: String? = null,
     val issuedAt: Instant? = null,
+    /**
+     * Whose the credential the approver approved with was, as the host that recorded the approval read it (`APR-9`).
+     * Null in an approval recorded before kinds were: such an approval does not count at publication, and the change is
+     * approved again, since only a person's approval counts and that one cannot say it was a person's.
+     */
+    val kind: Identity.Credential.Kind? = null,
 )

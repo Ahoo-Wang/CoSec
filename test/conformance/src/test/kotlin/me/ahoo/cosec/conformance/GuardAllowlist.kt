@@ -44,6 +44,7 @@ object GuardAllowlist {
             "control:InstancesRouteTest#it is a GET",
             "control:InstanceReadersTest#the readers are the statuses of the last hour, with their releases",
             "control:InstanceReadersTest#a mixed deployment is said once each time its releases change",
+            "control:ReaderReleasesTest#every control host's release count follows the readers at each shadow pass, lease or not - CTL-89",
             "control:ClientContractTest#an instances answer holds exactly the members of its contract file",
             // SNP-26: what two releases read and write on one Redis is frozen within 8.x (RFC 0014 R6).
             "cocache:FrozenLayoutTest#goldenSamples",

@@ -1,0 +1,16 @@
+# Rule: APR-9
+# Mutant: publication counts an approval whatever kind it records, so one recorded before kinds, or by a host that read its approver as a workload's, publishes
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ApprovalKindTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
+index 09ddc7c17..6c868b54f 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
+@@ -176,7 +176,6 @@ internal class ApprovalRules(
+             return null
+         }
+         val approval = change.approval ?: return "it needs an approval"
+-        kindProblem(approval)?.let { return it }
+         val memberships = approval.memberships ?: return "the approval does not say what its approver held"
+         if (publisher.security == null) {
+             return "the approver's right to approve cannot be checked again"

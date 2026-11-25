@@ -337,7 +337,8 @@ Every route that answers a change (`POST /changes`, `GET /changes/{id}`, each st
 and the break-glass request and approval) answers the same members: `id`, `key` (its document), `base` (`revision` and
 `digest`), `operations` (as you sent them), `author`, `note`, `kind`, `state`, `findings`, `candidate` (the digest of the
 candidate an approval is given for), `createdAt`, `updatedAt`; and, once there is one, `skipShadow` (the reason),
-`publishedRevision`, `escalations`, `approval` (`approver`, `at`, `candidate`, `covers`), `shadow` (`window`, the id
+`publishedRevision`, `escalations`, `approval` (`approver`, `at`, `candidate`, `covers`, and `kind`, `PERSON` or `WORKLOAD`, whose
+the approver's credential was, absent for an approval recorded before kinds, `APR-9`), `shadow` (`window`, the id
 a publisher acknowledges, `startedAt`, and once closed `closed`) and `confirmations`. While the window is open,
 `GET /changes/{id}` adds to `shadow` how many live instances acknowledge it (`acknowledged`) and which do not
 (`waitingFor`: `instances`, at most 20 ids, sorted, and `more`, how many others), read from the instances' statuses
@@ -714,7 +715,10 @@ id (`403`), since publishing would not count its approval. The approval records 
 credential (its id, a token's `jti`, and when it was issued, its `iat`); when that token, or every token of the
 approver issued by then, is revoked before the change publishes, the approval no longer counts. An approval that
 records no credential id does not count either: one made before the upgrade to this version, one an older instance
-accepted, or one given with a credential that has no id; approve it again. A credential that does not say when it was
+accepted, or one given with a credential that has no id; approve it again. The approval also records whose the
+approver's credential was, as the host that recorded it read it (`kind`, `APR-9`), and counts at publish only when it
+says a person's: an approval recorded before 8.0.0-beta.9, or by a host still on it, says nothing and does not count,
+its `APPROVAL` finding saying `the approval does not say its approver was a person`; approve it again. A credential that does not say when it was
 issued, from an authenticator of yours that sets no `issuedAt`, loses its approvals to any revocation of its
 principal's tokens. Once the approver's access token has expired, `TokenRevoker.revoke` no longer takes it, so only
 `revokeSubject` takes its approvals back. Revocations are judged as the pipeline judges them, but a store that cannot

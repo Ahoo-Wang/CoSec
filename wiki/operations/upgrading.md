@@ -111,9 +111,13 @@ write; an instance is live, for a shadow window and `propagation`, only with a s
 
 - `GET /instances`, on the control API, lists every process that reported in the last hour with its release, and
   counts the releases ([The readers of the store](../policies/testing.md#instances)).
-- `cosec.control.instances.releases`, a gauge on the control host, is how many releases those readers ran: above 1 for
+- `cosec.control.instances.releases`, a gauge on each control-plane host, is how many releases those readers ran at
+  that host's last read of them. Every control-plane host reads them at each of its shadow passes (the shadow check
+  interval of its startup line, at most a minute; at most once every 5 seconds), whichever replica holds the pass's
+  lease, so the gauge is never older than that on any replica, and needs no call of `GET /instances`. Above 1 for
   longer than a rolling upgrade takes is an instance of an old release still reading the store
-  ([Observability](./observability.md#metrics)).
+  ([Observability](./observability.md#metrics)). The control host also logs the releases once each time they change
+  while more than one is there.
 
 While two versions run, expect `503` with `DocumentInvalid` for a document an older instance cannot compile, `503`
 `unavailable` for what an older instance must understand and does not (above), and `401` `token-invalid` from an

@@ -81,6 +81,25 @@ class RecordCompatTest {
         }
     }
 
+    /**
+     * `APR-9`, MIX-14: an approval records whose it was. One beta.8 recorded says nothing, and the current version reads
+     * it so (it does not count at publication); one that says a person's keeps it through the current version's rewrite.
+     * beta.8 drops the member when it rewrites the record, which narrows (the change is approved again): a gap until the
+     * previous release keeps it.
+     */
+    @Test
+    fun `an approval says whose it was, and one recorded before kinds says nothing`() {
+        val record = records.getValue("change")
+        val kind = { side: Side, value: String -> side("record.approval.kind", "value" to value) }
+        kind(Side.CURRENT, rewrite(Side.PREVIOUS, "change", record)).assert().isEqualTo("none")
+        val person = record.replace(""""credentialId":"k2",""", """"credentialId":"k2","kind":"PERSON",""")
+        check(person != record) { "the sample has no approval credential to put the kind beside" }
+        kind(Side.CURRENT, rewrite(Side.CURRENT, "change", person)).assert().isEqualTo("PERSON")
+        Baseline.from("8.0.0-beta.9", "the previous version keeps an approval's kind through a rewrite") {
+            kind(Side.CURRENT, rewrite(Side.PREVIOUS, "change", person)).assert().isEqualTo("PERSON")
+        }
+    }
+
     @Test
     fun `a later member without crit is dropped by a rewrite, which leaves the same record`() {
         for ((kind, record) in all()) {
