@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.kafka
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeEventJson
@@ -63,7 +62,6 @@ class KafkaChangeListener(
         drainTimeout.toKotlinDuration()
     )
 
-    @ExperimentalCoSecApi
     override suspend fun onChange(event: ChangeEvent) {
         val key = event.document.toString()
         val value = ChangeEventJson.write(event)

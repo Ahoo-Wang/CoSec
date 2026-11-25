@@ -13,4 +13,4 @@ index a521e5efb..dee009eca 100644
 -            lostCount.incrementAndGet()
              val event = entry.event
              log.error(cause) {
-                 "Change event ${event.kind} of change ${event.change.value} on ${event.document} was not recorded by " +
+                 "Change event ${event.kind} of change ${event.change} on ${event.document} was not recorded by " +

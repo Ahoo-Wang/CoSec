@@ -234,11 +234,11 @@ class PreemptionRaceTest {
     /** Events that do not gate a step reach a listener on its own queue: the one of [change] with [note] once there. */
     private fun note(events: List<ChangeEvent>, change: ChangeId, kind: ChangeEvent.Kind): String? {
         val deadline = System.nanoTime() + 10_000_000_000L
-        while (events.none { it.change == change && it.kind == kind }) {
+        while (events.none { it.change == change.value && it.kind == kind }) {
             check(System.nanoTime() < deadline) { "Not delivered: ${events.map { it.kind }}" }
             Thread.sleep(10)
         }
-        return events.single { it.change == change && it.kind == kind }.note
+        return events.single { it.change == change.value && it.kind == kind }.note
     }
 
     /**
@@ -266,11 +266,11 @@ class PreemptionRaceTest {
         changes.publish(PLATO, proposed.id).state.assert().isEqualTo(ChangeState.CONFLICTED)
         harness.revisions.head(SnapshotKey.Platform)!!.revision.assert().isEqualTo(1)
         val deadline = System.nanoTime() + 10_000_000_000L
-        while (events.count { it.change == proposed.id && it.kind == ChangeEvent.Kind.FAILED } < 2) {
+        while (events.count { it.change == proposed.id.value && it.kind == ChangeEvent.Kind.FAILED } < 2) {
             check(System.nanoTime() < deadline) { "Not delivered: ${events.map { it.kind }}" }
             Thread.sleep(10)
         }
-        events.filter { it.change == proposed.id && it.kind == ChangeEvent.Kind.FAILED }.map { it.note }.assert()
+        events.filter { it.change == proposed.id.value && it.kind == ChangeEvent.Kind.FAILED }.map { it.note }.assert()
             .contains(
                 "preempted by ${emergency.id.value}",
                 "another change took the staging slot before the head write"
@@ -333,11 +333,11 @@ class PreemptionRaceTest {
         harness.revisions.head(SnapshotKey.Platform)!!.document.policies.none { it.id == PolicyId("slow") }
             .assert().isTrue()
         val deadline = System.nanoTime() + 10_000_000_000L
-        while (events.count { it.change == proposed.id && it.kind == ChangeEvent.Kind.FAILED } < 2) {
+        while (events.count { it.change == proposed.id.value && it.kind == ChangeEvent.Kind.FAILED } < 2) {
             check(System.nanoTime() < deadline) { "Not delivered: ${events.map { it.kind }}" }
             Thread.sleep(10)
         }
-        events.filter { it.change == proposed.id && it.kind == ChangeEvent.Kind.FAILED }.map { it.note }.assert()
+        events.filter { it.change == proposed.id.value && it.kind == ChangeEvent.Kind.FAILED }.map { it.note }.assert()
             .contains("preempted by ${emergency.id.value}", "the document moved before the head write")
     }
 

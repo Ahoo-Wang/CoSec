@@ -13,14 +13,11 @@
 
 package me.ahoo.cosec.control.change
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
-
 /**
  * What one person cannot publish alone (RFC 0007 §7.5), or what the approver is shown with it: [reason] says which
  * ([Reason]). [subject] names the fragment or entry; an approval covers the escalations whose subjects it lists, and
  * needs to cover every one that is not [informational].
  */
-@ExperimentalCoSecApi
 class Escalation(val subject: String, val reason: Reason, val detail: String = "") {
     /**
      * Shown to the approver, never itself a reason to approve: the tenants an app change reaches ([Reason.TENANT_BINDINGS],

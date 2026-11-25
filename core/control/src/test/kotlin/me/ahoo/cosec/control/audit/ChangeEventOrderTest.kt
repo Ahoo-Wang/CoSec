@@ -75,7 +75,7 @@ class ChangeEventOrderTest {
                 if (cancellable) gate.await() else withContext(NonCancellable) { gate.await() }
             }
             pause()
-            received += "${event.change.value} ${event.kind}"
+            received += "${event.change} ${event.kind}"
         }
     }
 
@@ -84,7 +84,7 @@ class ChangeEventOrderTest {
         Instant.EPOCH,
         kind,
         Actor(TenantId.PLATFORM, PrincipalId("plato")),
-        ChangeId(change),
+        ChangeId(change).value,
         SnapshotKey.Tenant("acme"),
         null,
         null,
@@ -248,7 +248,7 @@ class ChangeEventOrderTest {
                 override suspend fun onChange(event: ChangeEvent) {
                     if (event.note == "fail") error("the sink refused it")
                     if (event.note == "hang") delay(1_000)
-                    received += "${event.change.value} ${event.kind}"
+                    received += "${event.change} ${event.kind}"
                 }
             }
             val sloppy = object : ChangeListener {
@@ -293,7 +293,7 @@ class ChangeEventOrderTest {
 
                 override suspend fun onChange(event: ChangeEvent) {
                     withContext(NonCancellable) { permits.receive() }
-                    received += event.change.value
+                    received += event.change
                 }
             }
             val small = ChangeEventSize.of(event(ChangeEvent.Kind.CHECKED, "s1"))

@@ -58,7 +58,7 @@ class ChangeListenersDrainTest {
 
         override suspend fun onChange(event: ChangeEvent) {
             gate.await()
-            received += "${event.change.value} ${event.kind}"
+            received += "${event.change} ${event.kind}"
         }
     }
 
@@ -67,7 +67,7 @@ class ChangeListenersDrainTest {
         Instant.EPOCH,
         kind,
         Actor(TenantId.PLATFORM, PrincipalId("plato")),
-        ChangeId(change),
+        ChangeId(change).value,
         SnapshotKey.Tenant("acme"),
         null,
         null,

@@ -1,9 +1,10 @@
 public final class me/ahoo/cosec/control/audit/ChangeEvent {
+	public fun <init> (Ljava/lang/String;Ljava/time/Instant;Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;Lme/ahoo/cosec/document/Actor;Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/audit/RevisionRef;Lme/ahoo/cosec/control/audit/RevisionRef;Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/control/change/ShadowSummary;Ljava/lang/String;Ljava/util/List;Lme/ahoo/cosec/control/change/ChangeOrigin;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/time/Instant;Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;Lme/ahoo/cosec/document/Actor;Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/audit/RevisionRef;Lme/ahoo/cosec/control/audit/RevisionRef;Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/control/change/ShadowSummary;Ljava/lang/String;Ljava/util/List;Lme/ahoo/cosec/control/change/ChangeOrigin;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/time/Instant;Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;Lme/ahoo/cosec/document/Actor;Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/audit/RevisionRef;Lme/ahoo/cosec/control/audit/RevisionRef;Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/control/change/ShadowSummary;Ljava/lang/String;Ljava/util/List;Lme/ahoo/cosec/control/change/ChangeOrigin;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBase ()Lme/ahoo/cosec/control/audit/RevisionRef;
 	public final fun getCandidate ()Lme/ahoo/cosec/control/audit/RevisionRef;
-	public final fun getChange-3oa4_5Q ()Ljava/lang/String;
+	public final fun getChange ()Ljava/lang/String;
 	public final fun getConfirmations ()Ljava/util/List;
 	public final fun getDocument ()Lme/ahoo/cosec/spi/snapshot/SnapshotKey;
 	public final fun getEscalations ()Ljava/util/List;
@@ -15,6 +16,7 @@ public final class me/ahoo/cosec/control/audit/ChangeEvent {
 	public final fun getOrigin ()Lme/ahoo/cosec/control/change/ChangeOrigin;
 	public final fun getShadow ()Lme/ahoo/cosec/control/change/ShadowSummary;
 	public final fun getTime ()Ljava/time/Instant;
+	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
 
@@ -70,12 +72,6 @@ public final class me/ahoo/cosec/control/audit/LoggingChangeListener$Companion {
 public final class me/ahoo/cosec/control/audit/MovedHead {
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Ljava/lang/String;
-	public final fun component3 ()Ljava/lang/String;
-	public final fun component4 ()Z
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)Lme/ahoo/cosec/control/audit/MovedHead;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/control/audit/MovedHead;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZILjava/lang/Object;)Lme/ahoo/cosec/control/audit/MovedHead;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getChecked ()Ljava/lang/String;
 	public final fun getCurrent ()Ljava/lang/String;
@@ -87,10 +83,6 @@ public final class me/ahoo/cosec/control/audit/MovedHead {
 
 public final class me/ahoo/cosec/control/audit/RevisionRef {
 	public fun <init> (JLjava/lang/String;)V
-	public final fun component1 ()J
-	public final fun component2 ()Ljava/lang/String;
-	public final fun copy (JLjava/lang/String;)Lme/ahoo/cosec/control/audit/RevisionRef;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/control/audit/RevisionRef;JLjava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/control/audit/RevisionRef;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getDigest ()Ljava/lang/String;
 	public final fun getRevision ()J

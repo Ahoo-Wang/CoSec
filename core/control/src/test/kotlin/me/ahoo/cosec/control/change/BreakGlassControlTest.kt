@@ -435,11 +435,11 @@ class BreakGlassControlTest {
         store.candidate(SnapshotKey.Platform).assert().isNull()
         // Not gated: it reaches the listener as it can.
         kotlinx.coroutines.withTimeout(5_000) {
-            while (audit.events.none { it.change == holding.id && it.kind == ChangeEvent.Kind.FAILED }) {
+            while (audit.events.none { it.change == holding.id.value && it.kind == ChangeEvent.Kind.FAILED }) {
                 kotlinx.coroutines.delay(10)
             }
         }
-        audit.events.single { it.change == holding.id && it.kind == ChangeEvent.Kind.FAILED }.note
+        audit.events.single { it.change == holding.id.value && it.kind == ChangeEvent.Kind.FAILED }.note
             .assert().startsWith("preempted by ")
     }
 
@@ -528,11 +528,11 @@ class BreakGlassControlTest {
     /** The event of [kind] for [change], once it reached the listener: one that does not gate its step comes later. */
     private suspend fun delivered(change: ChangeId, kind: ChangeEvent.Kind): ChangeEvent {
         kotlinx.coroutines.withTimeout(5_000) {
-            while (audit.events.none { it.change == change && it.kind == kind }) {
+            while (audit.events.none { it.change == change.value && it.kind == kind }) {
                 kotlinx.coroutines.delay(10)
             }
         }
-        return audit.events.single { it.change == change && it.kind == kind }
+        return audit.events.single { it.change == change.value && it.kind == kind }
     }
 
     /**
@@ -788,7 +788,7 @@ class BreakGlassControlTest {
         val revoke = stalled(expiring)
         clock.now = inHours(2)
         changes.abandon(plato, revoke).state.assert().isEqualTo(ChangeState.ABANDONED)
-        audit.events.single { it.kind == ChangeEvent.Kind.ABANDONED && it.change == revoke }.operator
+        audit.events.single { it.kind == ChangeEvent.Kind.ABANDONED && it.change == revoke.value }.operator
             .assert().isEqualTo(plato.actor)
     }
 
