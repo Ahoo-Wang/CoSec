@@ -135,7 +135,9 @@ CoSec 的令牌是签名的：`JwtTokenVerifier` 与 `JwtTokenConverter` 在构�
 **工作负载的凭据**（`IDN-34`）。一个主体是人还是工作负载，只看 `AuthenticatedPrincipal.workload`：API Key（`ApiKeyAuthenticator` 按来源认定，或凭据名为 `api-key`），
 或凭据名为 `service` 的身份，不论这个名字由谁写下（转发的身份、服务声明的身份、应用自己的认证器，失败关闭）。工作负载从不批准变更、不是控制面的信任根
 （`APR-7`、`APR-3`，RFC 0007 §7.3、§7.5），与任何不是 CoSec 自己令牌的凭据一样没有会话、没有 break-glass。`apiKey` 只回答“是不是 API Key”，
-不据它做授权判断：主代码里除定义处之外没有类读它（`WorkloadCredentialTest`）。给应用自己的认证器一个一等的“工作负载”标志留到 8.1，与外部 IdP 一起设计。
+不据它做授权判断：主代码里除定义处之外没有类读它（`WorkloadCredentialTest`）。
+
+**凭据的种类**（`IDN-44` 至 `IDN-46`，RFC 0014 R3；2026-11-25 取代上一段里“凭据名决定人还是工作负载”的读法，以及原先留到 8.1 的“一等的工作负载标志”）。每个凭据声明它是谁的：`Identity.Credential.kind`，`PERSON` 或 `WORKLOAD`，必需参数，没有默认值，谁构造谁选择。方法名（`auth.method`）只是给审计与记录看的标签，是开放集合；决定“人还是工作负载”的只有这个封闭的种类。`api-key` 与 `service` 按构造就是工作负载的，声明成人的即拒绝；没有凭据的主体是工作负载。种类从登录一路带到判定：登录声明它（`TokenSubject.kind`，每个 `Authentication` 必须说），CoSec 的签发方把它写进访问令牌的声明 `cosec.kind`（刷新令牌不带，客户端不得依赖它），校验器读出它（`VerifiedToken.kind`，每个 `TokenVerifier` 必须说），网关把它写进 `CoSec-Identity` 的 `auth.kind`。读方一律取限制性的读法：`person` 是人，缺失、未知的值、不是字符串的值都是工作负载，绝不因此拒绝请求；所以以后新增的种类对不认识它的读方就是工作负载。刷新与租户切换签发的令牌沿用所出示访问令牌的种类，不问应用的钩子：种类只在登录时选一次，没带声明签发的会话在用户重新登录之前一直是工作负载的。break-glass 只给 CoSec 自己的、读作人的令牌（`BRK-8`）。
 
 **网关之后同样成立**：转发的 `CoSec-Identity` 为有上限的凭据带 `auth.capped: true`，后面的服务据此不取主体绑定；break-glass 只给方法为 `jwt` 的身份（§5）。
 
@@ -201,7 +203,7 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 **8.0 的 `CoSec-Identity`**。网关把验证过的身份放进 `CoSec-Identity`（格式 v1，`IdentityCodec`，`schema/8.0/cosec-identity.schema.json`）转给后面的服务，
 后面的服务据此认证（`Pipeline.behindGateway`）。其中出自本 RFC 的成员：
 
-- `auth.method`：认证方式。后面的服务只给 `jwt` 的身份 break-glass（§4.2）。
+- `auth.method`：认证方式，只是标签。`auth.kind`：凭据是谁的（`person` 或 `workload`，`IDN-44`）；后面的服务只给 CoSec 自己的、读作人的令牌的身份 break-glass（§4.2）。
 - `auth.capped`：有上限的凭据为 `true`，其余不出现；后面的服务据此不取主体绑定（§4.2）。
 - `auth.iat`（可选）：凭据的签发时间，不晚于 `auth.exp`。
 - `auth.session`（可选）：CoSec 自己的令牌的会话，`sid`、`auth_time`（登录时间）、`generation`（代数）三者都必填；只属于 `method` 为 `jwt` 的身份，
