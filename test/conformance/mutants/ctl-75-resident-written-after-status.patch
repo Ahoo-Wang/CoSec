@@ -3,17 +3,18 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.ResidentWriteTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/InstanceReporter.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/InstanceReporter.kt
-index 9bee4c52a..013f37222 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/InstanceReporter.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/InstanceReporter.kt
-@@ -88,11 +88,11 @@ class InstanceReporter(
+@@ -88,13 +88,13 @@
       * was written.
       */
      suspend fun report(windows: Set<String>?, shadows: Boolean): Boolean {
 -        writeResident()
          val now = clock.instant()
          val written = attempt("the instance status") {
-             sink.write(InstanceStatus(instance, now, windows = windows, shadows = shadows))
+             sink.write(
+                 InstanceStatus(instance, now, windows = windows, shadows = shadows, release = InstanceStatus.RELEASE)
+             )
          }
 +        writeResident()
          if (written) {

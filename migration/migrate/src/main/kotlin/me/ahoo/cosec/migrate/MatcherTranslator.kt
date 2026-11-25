@@ -128,7 +128,7 @@ internal class MatcherTranslator(private val reject: (RejectionKind, String, Str
         val caseSensitive = options?.get(CASE_SENSITIVE)?.asBoolean() ?: true
         val decode = options?.get(DECODE_AND_PARSE_SEGMENTS)?.asBoolean() ?: true
         return Action(
-            actions = if (methods.isEmpty()) listOf("$HTTP*") else methods.map { "$HTTP$it" },
+            actions = if (methods.isEmpty()) listOf("$HTTP*") else methods.map { "$HTTP${PatternEscapes.escape(it)}" },
             resources = patterns.map { ResourceSource("$HTTP_PATH${escaped(it)}", caseSensitive, decode) },
         )
     }

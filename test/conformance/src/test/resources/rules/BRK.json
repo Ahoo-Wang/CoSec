@@ -84,6 +84,7 @@
       "guards": [
         "engine:EngineTest#a subject without break-glass matches no break-glass binding",
         "runtime:TokenAuthenticatorTest#onlyCoSecsOwnVerifierMayUseBreakGlass",
+        "spi:AuthenticatedPrincipalTest#the public constructors refuse the method jwt, whatever the kind - BRK-8",
         "jwt:JwtTokenVerifierTest#onlyThisVerifiersTokensMayUseBreakGlass"
       ],
       "pending": null

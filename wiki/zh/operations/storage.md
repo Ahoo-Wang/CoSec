@@ -116,7 +116,7 @@ CoSec 保存在 Redis 中的每条记录，都说明了读取它的实例比写�
 | 暂存的候选（`candidate:<doc>`） | `format: 1` | 忽略，除非它的 `crit` 列出了它 | 实例跳过它，不为它的窗口报告任何内容，窗口不能凭它通过 |
 | 影子报告（`shadow:report:<window>:<instance>`） | `format: 1` | 忽略，除非它的 `crit` 列出了它 | 在报告重新可读或被重新写入之前，无法查看该窗口（`503`） |
 | 窗口的报告者（`shadow:reporters:<window>`） | `format: 1` | 忽略，除非它的 `crit` 列出了它 | 在重新写入之前无法评判该窗口 |
-| 实例状态及其索引（`shadow:status:*`） | `format: 1`，带 `formatLevel`；从 8.0.0-beta.9 起带 `release`，缺失读作未知版本（按 GA 基线） | 忽略，除非它的 `crit` 列出了它 | 无法读取修订的传播情况（`GET .../propagation`）；发布不等待它；在能读取之前，没有影子窗口会通过（`CTL-10`） |
+| 实例状态及其索引（`shadow:status:*`） | `format: 1`，带 `formatLevel`；从 8.0.0-beta.9 起带 `release`，缺失读作未知版本，8.0 里没有任何东西据它计数或等待 | 忽略，除非它的 `crit` 列出了它 | 无法读取修订的传播情况（`GET .../propagation`）；发布不等待它；在能读取之前，没有影子窗口会通过（`CTL-10`） |
 | 会话（`token:family:<id>`） | `format: 1`；租户切换开始的会话是 `format: 2`，记下它的 `root`（`IDN-36`） | 忽略，除非它的 `crit` 列出了它：此时拒绝 | 读它的刷新、登出或切换答 `503`，会话保留；升级后的实例能读它（[故障排查](./troubleshooting.md#a-record-a-later-version-wrote)） |
 | API key（`apikey:*`） | `format: 3` | 拒绝 | key 被拒绝 |
 | 吊销、租约、限流计数器 | 无（标量） | 不适用 | 见上文各自的说明 |

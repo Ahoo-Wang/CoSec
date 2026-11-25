@@ -33,6 +33,7 @@ internal object StoredRecordGuards {
         "${MEMBERS}every member an 8_0 reader knows survives its rewrite",
         "${LATER}a refresh of a session a later version wrote is an outage, and the record is never rewritten",
         "${LATER}the log says a later version wrote it, once per interval at WARN, and a broken store is not told so",
+        "cocache:LaterSessionRecordStoreTest#a refresh, a logout and a switched session's logout meet a later record, refused and never rewritten - IDN-40",
         "${RECORDS}a later member crit names refuses that record as a later version's, which is never rewritten",
         "${RECORDS}a later member without crit is dropped by a rewrite, which leaves the same record",
         "control:LaterRecordsTest#a record a later version wrote is a 503 without detail, told as that",

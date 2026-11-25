@@ -94,6 +94,32 @@ class AuthenticatedPrincipalTest {
         }
     }
 
+    /** BRK-8 (RC1-26): another authenticator never names CoSec's token's method, a person's or a workload's. */
+    @Test
+    fun `the public constructors refuse the method jwt, whatever the kind - BRK-8`() {
+        Identity.Credential.Kind.entries.forEach { kind ->
+            val jwt = Identity.Credential(Identity.Method.JWT, kind, "c1", null)
+            assertThrownBy<IllegalArgumentException> {
+                AuthenticatedPrincipal(
+                    PrincipalId("bob"),
+                    TenantId("acme"),
+                    MembershipSource.Provider.UNCAPPED,
+                    credential = jwt
+                )
+            }.hasMessageContaining("is CoSec's own token's")
+            assertThrownBy<IllegalArgumentException> {
+                AuthenticatedPrincipal(PrincipalId("bob"), TenantId("acme"), memberships = null, credential = jwt)
+            }.hasMessageContaining("is CoSec's own token's")
+        }
+        // Another method of either kind is accepted.
+        AuthenticatedPrincipal(
+            PrincipalId("bob"),
+            TenantId("acme"),
+            MembershipSource.Provider.UNCAPPED,
+            credential = Identity.Credential(Identity.Method("ldap"), Identity.Credential.Kind.WORKLOAD, "c1", null),
+        ).workload.assert().isTrue()
+    }
+
     /** IDN-34: a service's credential has neither break-glass nor a session, which are CoSec's own token's alone. */
     @Test
     fun `a service's credential has no break-glass and no session - IDN-34`() {

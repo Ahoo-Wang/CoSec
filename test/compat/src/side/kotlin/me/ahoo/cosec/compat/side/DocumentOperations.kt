@@ -19,11 +19,18 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.pattern.ActionPattern
+import me.ahoo.cosec.engine.pattern.ResourcePattern
+import me.ahoo.cosec.engine.pattern.ResourceTarget
+import me.ahoo.cosec.model.Action
+import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
  * A policy document (MIX-11): `document.compile` reads and compiles a document of `key` (`platform`, `app:<id>`,
- * `tenant:<id>`) as the snapshot source does, `ok:<kind>` when this version would install it.
+ * `tenant:<id>`) as the snapshot source does, `ok:<kind>` when this version would install it. `pattern.matches` parses
+ * `pattern`, an action's or a resource's (`kind`), as a statement's is, and answers for each of `values` (one a line: an
+ * action `service:verb`, a resource `http:path:<path>` or `<type>/<id>`) whether it matches, `ok:` and `1` or `0` each.
  */
 internal object DocumentOperations {
     val ALL: Map<String, (Map<String, String>) -> String> = mapOf(
@@ -33,7 +40,27 @@ internal object DocumentOperations {
                 .compile(key, SnapshotDocuments.read(arguments.getValue("body").encodeToByteArray()))
             "ok:${compiled.kind}"
         },
+        "pattern.matches" to { arguments ->
+            val pattern = arguments.getValue("pattern")
+            val values = arguments.getValue("values").lines()
+            val matches: (String) -> Boolean = when (arguments.getValue("kind")) {
+                "action" -> ActionPattern.parse(pattern).let { parsed ->
+                    { value -> parsed.matches(Action(value.substringBefore(':'), value.substringAfter(':'))) }
+                }
+                "resource" -> ResourcePattern.parse(pattern).let { parsed ->
+                    { value -> parsed.matches(ResourceTarget(resource(value))) }
+                }
+                else -> throw IllegalArgumentException("no pattern kind ${arguments["kind"]}")
+            }
+            "ok:" + values.joinToString("") { if (matches(it)) "1" else "0" }
+        },
     )
+
+    private fun resource(text: String): Resource = if (text.startsWith(ResourcePattern.HTTP_PREFIX)) {
+        Resource(ResourcePattern.HTTP_TYPE, text.removePrefix(ResourcePattern.HTTP_PREFIX))
+    } else {
+        Resource(text.substringBefore('/'), text.substringAfter('/'))
+    }
 
     fun key(text: String): SnapshotKey = when {
         text == "platform" -> SnapshotKey.Platform

@@ -51,9 +51,11 @@ class InstanceStatus(
     /**
      * The CoSec release this instance runs (`8.0.0-beta.9`, RFC 0014 R5, `SNP-25`): what a later release reads to know
      * what this one understands, without this one telling it anything else. Null when a status does not say, as one of
-     * a release before it does not: such an instance counts as the GA baseline, the oldest a publish may wait for.
+     * a release before it does not: an unknown release, which nothing in 8.0 counts or waits on. Null unless given: a
+     * status rebuilt from what an instance wrote names that instance's release, never the reading process's; the
+     * instance's own reporter passes [RELEASE].
      */
-    val release: String? = RELEASE,
+    val release: String? = null,
 ) {
     private fun fields(): List<Any?> = listOf(instance, at, formatLevel, windows, shadows, release)
 

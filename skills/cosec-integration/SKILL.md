@@ -225,7 +225,8 @@ cosec:
   does not know is ignored, unless the header's `crit` names it, which is 503 (`IDN-41`): upgrade the service.
 - Startup fails for an unknown `cosec.pipeline.mode`, and for `mode=gateway` on a Spring Cloud Gateway host.
 - Tests of such a service, without a gateway: `IdentityHeader` (`cosec-testkit`, experimental) writes the header a
-  gateway sends: `forSubject(subject, tenant, app, space, roles)`, `of(identity)`, or `withToken(token, verifier,
+  gateway sends: `forSubject(subject, tenant, app, space, roles)` (a person's token), `forWorkload(...)` (a workload's:
+  never approves, never the trust root, no break-glass), `of(identity)`, or `withToken(token, verifier,
   revocations)` for a real token's session. A header is refused after 60s: make one per request. Never hand-write the
   JSON, and never use it in production. A Spring Boot test that starts the service states the boundary too, or the
   context fails to start: `@SpringBootTest(properties = [IdentityHeader.ONLY_GATEWAY_CAN_REACH])` (true in a test,

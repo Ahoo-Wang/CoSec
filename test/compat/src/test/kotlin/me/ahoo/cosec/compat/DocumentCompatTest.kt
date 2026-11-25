@@ -19,7 +19,9 @@ import org.junit.jupiter.api.Test
 /**
  * MIX-11, policy documents between versions (RFC 0014 R4): read strictly by both, so a document the current control
  * plane publishes is one the previous data plane installs; a pattern the current version reserves (DOC-15), which the
- * previous one took as a literal, is refused by the current one, as the upgrade notes say.
+ * previous one took as a literal, is refused by the current one, as the upgrade notes say. The bridge the notes and
+ * `cosec-migrate check-patterns` give for the upgrade (a wildcard in place of the character) means the same in both,
+ * while an escape does not: the previous version reads the backslash as a character.
  */
 class DocumentCompatTest {
     private fun body(
@@ -93,5 +95,106 @@ class DocumentCompatTest {
                 "/odata/${'$'}metadata"
             ).assert().describedAs("beta.8 read the backslash as text").isEqualTo("permit")
         }
+    }
+
+    private fun matches(side: Side, kind: String, pattern: String, values: List<String>): String =
+        side("pattern.matches", "kind" to kind, "pattern" to pattern, "values" to values.joinToString("\n"))
+
+    private val paths = listOf(
+        "/odata/${'$'}metadata",
+        "/odata/Xmetadata",
+        "/odata/metadata",
+        "/odata/XYmetadata",
+        "/odata/a/metadata"
+    )
+        .map { "http:path:$it" }
+    private val ids = listOf("doc/a(b", "doc/axb", "doc/ab", "doc/a/b", "doc/a\\(b")
+    private val actions = listOf("order:a(b", "order:a?b", "order:ab", "pay:x", "order:a\\(b")
+
+    @Test
+    fun `the bridge for a reserved character matches alike in both versions, a wildcard that matches more`() {
+        // In a path, ? is one character and * any within the segment, in both.
+        for ((pattern, expected) in listOf("/odata/?metadata" to "ok:11000", "/odata/*metadata" to "ok:11110")) {
+            for (side in listOf(Side.CURRENT, Side.PREVIOUS)) {
+                matches(
+                    side,
+                    "resource",
+                    "http:path:$pattern",
+                    paths
+                ).assert().describedAs("$side, $pattern").isEqualTo(expected)
+            }
+        }
+        // In a typed id and an action, a wildcard stands for a whole segment, verb or action, in both.
+        for (side in listOf(Side.CURRENT, Side.PREVIOUS)) {
+            matches(side, "resource", "doc/*", ids).assert().describedAs("$side").isEqualTo("ok:11101")
+            matches(side, "action", "order:*", actions).assert().describedAs("$side").isEqualTo("ok:11101")
+            matches(side, "action", "*", actions).assert().describedAs("$side").isEqualTo("ok:11111")
+            // A wildcard within a segment or a verb is refused by both: no narrower bridge there.
+            matches(side, "resource", "doc/a?b", ids).assert().describedAs("$side").startsWith("refused:")
+            matches(side, "resource", "doc/a*", ids).assert().describedAs("$side").startsWith("refused:")
+            matches(side, "action", "order:a*", actions).assert().describedAs("$side").startsWith("refused:")
+        }
+        // A ? in a verb was a character to the previous version; the current one reserves it (DOC-15).
+        matches(Side.PREVIOUS, "action", "order:a?b", actions).assert().isEqualTo("ok:01000")
+        matches(Side.CURRENT, "action", "order:a?b", actions).assert().startsWith("refused:")
+    }
+
+    @Test
+    fun `an escape is the character to the current version and a backslash and the character to the previous one`() {
+        matches(Side.CURRENT, "resource", "http:path:/odata/\\${'$'}metadata", paths).assert().isEqualTo("ok:10000")
+        matches(Side.PREVIOUS, "resource", "http:path:/odata/\\${'$'}metadata", paths).assert().isEqualTo("ok:00000")
+        // In an id or an action the previous version matches another one, which an id or a verb can be.
+        matches(Side.CURRENT, "resource", "doc/a\\(b", ids).assert().isEqualTo("ok:10000")
+        matches(Side.PREVIOUS, "resource", "doc/a\\(b", ids).assert().isEqualTo("ok:00001")
+        matches(Side.CURRENT, "action", "order:a\\(b", actions).assert().isEqualTo("ok:10000")
+        matches(Side.PREVIOUS, "action", "order:a\\(b", actions).assert().isEqualTo("ok:00001")
+    }
+
+    /**
+     * The stand-in for a DENY or a rate limit whose pattern holds a backslash, which beta.8 read as a character and the
+     * current version reads as an escape (review F-1): the stored pattern kept and its exact form, the backslash escaped
+     * too, added beside it. Both versions compile both, and each denies what was meant with one of the two; the other
+     * denies a little more on the current version and matches nothing that was meant on beta.8. In an id, a type and an
+     * action alike.
+     */
+    @Test
+    fun `a backslash DENY kept beside its exact form denies what was meant in both versions`() {
+        val body =
+            """{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z",""" +
+                """"policies":[{"id":"p","statements":[""" +
+                """{"effect":"allow","action":["doc:*","svc:*"]},""" +
+                """{"effect":"deny","action":"doc:read","resource":["doc/a\\(b","doc/a\\\\\\(b"]},""" +
+                """{"effect":"deny","action":"doc:read","resource":["do\\(c/x","do\\\\\\(c/x"]},""" +
+                """{"effect":"deny","action":["svc:re\\${'$'}ad","svc:re\\\\\\${'$'}ad"]}]}],""" +
+                """"bindings":[{"id":"anyone","subject":"*","app":"*","space":"*","policy":"p"}]}"""
+        for (side in listOf(Side.CURRENT, Side.PREVIOUS)) {
+            side(
+                "document.compile",
+                "key" to "tenant:acme",
+                "body" to body
+            ).assert().describedAs("$side").startsWith("ok:")
+            fun decide(action: String, resource: String) = side(
+                "document.decide",
+                "owner" to "acme",
+                "body" to body,
+                "principal" to "alice",
+                "action" to action,
+                "resource" to resource,
+            )
+            // What beta.8 stored the pattern for: the id, the type and the verb that hold the backslash.
+            decide("doc:read", "doc/a\\(b").assert().describedAs("$side, id").isEqualTo("deny")
+            decide("doc:read", "do\\(c/x").assert().describedAs("$side, type").isEqualTo("deny")
+            decide("svc:re\\${'$'}ad", "any/x").assert().describedAs("$side, verb").isEqualTo("deny")
+            decide("doc:write", "doc/a\\(b").assert().describedAs("$side, another action").isEqualTo("permit")
+        }
+        // The stored pattern denies a little more on the current version, which reads its backslash as an escape.
+        Side.CURRENT(
+            "document.decide",
+            "owner" to "acme",
+            "body" to body,
+            "principal" to "alice",
+            "action" to "doc:read",
+            "resource" to "doc/a(b",
+        ).assert().isEqualTo("deny")
     }
 }

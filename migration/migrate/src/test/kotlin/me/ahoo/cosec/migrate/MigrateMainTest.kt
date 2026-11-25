@@ -354,7 +354,9 @@ class MigrateMainTest {
             code.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
             output.assert().contains("PATTERN tenant:acme $.policies[0].statements[0].resource: ")
                 .contains("write http:path:/a\\(1\\)")
-                .contains("Checked 1 document(s): 1 pattern(s) to rewrite in 1 document(s), 0 could not be read.")
+                .contains(
+                    "Checked 1 document(s) and 0 open change(s): 1 pattern(s) to rewrite in 1 of them, 0 could not be read."
+                )
         }
         run("$args --document app:order").let { (code, output) ->
             code.assert().describedAs(output).isEqualTo(MigrateMain.OK)

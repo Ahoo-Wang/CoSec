@@ -28,6 +28,12 @@ import me.ahoo.cosec.runtime.http.RequestSecurity
  * Who asks the control plane (RFC 0007 §10.1): a principal the host pipeline authenticated, with the memberships and
  * token attributes of that request. [security] is the permitted request itself; [PipelineControlAuthorizer] evaluates
  * the control-plane actions as it, and without it nothing is permitted.
+ *
+ * Every operator the control plane decides for is made by [of], with its request. The two made without one never reach
+ * what reads the request's credential ([principalBindings], [breakGlass], whether it is a workload's): a recorded
+ * approver, checked again at publication, is read for its tenant alone (`ApprovalRules`); the publisher an expiry names
+ * settles a change without analysis (`Publishing.writtenBeforeExpiry`, whose moved heads are recorded unanalyzed). A new
+ * caller that builds one without [security] keeps it away from those readings, whose defaults are a token's.
  */
 @InternalCoSecApi
 class Operator(

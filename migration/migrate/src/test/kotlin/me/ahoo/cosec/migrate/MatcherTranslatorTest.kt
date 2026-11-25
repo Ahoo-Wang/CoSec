@@ -83,6 +83,18 @@ class MatcherTranslatorTest {
     }
 
     /**
+     * DOC-15 (review B-10's question): a 7.x method is compared literally, and an HTTP token may hold `!`, `$`, `^` or
+     * `|`, which 8.0 reserves in an action: it converts escaped, so the action names that method and compiles.
+     */
+    @Test
+    fun `a method holding a character 8_0 reserves converts escaped`() {
+        val action = action("""{"path":{"pattern":"/a","method":["M!","GET"]}}""")!!
+        rejections.assert().isEmpty()
+        action.actions.assert().containsExactly("http:M\\!", "http:GET")
+        action.actions.forEach { me.ahoo.cosec.engine.pattern.ActionPattern.parse(it) }
+    }
+
+    /**
      * MIG-2: 7.x decided HTTP requests only, so every action of an ALLOW is every HTTP request; `*` would also grant the
      * control plane's actions and those of checks in code. Every action of a DENY stays `*`.
      */

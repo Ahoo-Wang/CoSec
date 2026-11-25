@@ -24,6 +24,8 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to SnapshotBoundGuards.BUILD + StoredRecordGuards.BUILD + CompatGuards.BUILD + setOf(
+            // IDN-44: a workload behind the gateway approves nothing, through the starter and the kit's header.
+            "spring-boot:WorkloadApprovalTest#a workload behind the gateway is refused an approval its principal's person would give - IDN-44",
             // SNP-25: every process that reads the store reports its status and release (RFC 0014 R5).
             "spi:InstanceStatusReleaseTest#the release is the version of the build",
             "spi:InstanceStatusReleaseTest#the release reads from a repackaged jar without a manifest",

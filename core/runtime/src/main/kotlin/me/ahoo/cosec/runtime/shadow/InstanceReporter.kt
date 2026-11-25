@@ -42,8 +42,8 @@ private val log = KotlinLogging.logger {}
  * it acknowledges; without, [run] reports every [interval] on its own. The host makes the first report as it starts,
  * before this instance reads any document.
  *
- * A write that fails never stops the instance: the status is what a publish waits for, never what a request is decided
- * on. The first failure is logged at ERROR, naming the keys the instance's Redis user must be allowed to write; later
+ * A write that fails never stops the instance: the status is what the control plane shows of the readers of the store,
+ * never what a request is decided on. The first failure is logged at ERROR, naming the keys the instance's Redis user must be allowed to write; later
  * ones at most once a minute, and every one counts in [failedWrites].
  */
 @InternalCoSecApi
@@ -91,7 +91,9 @@ class InstanceReporter(
         writeResident()
         val now = clock.instant()
         val written = attempt("the instance status") {
-            sink.write(InstanceStatus(instance, now, windows = windows, shadows = shadows))
+            sink.write(
+                InstanceStatus(instance, now, windows = windows, shadows = shadows, release = InstanceStatus.RELEASE)
+            )
         }
         if (written) {
             lastWritten = now
@@ -150,7 +152,8 @@ class InstanceReporter(
             warnedAt = now
             log.error(e) {
                 "Writing $what of instance [$instance] failed: the control plane cannot see this instance among the " +
-                    "readers of the store, so a publish would not wait for it (SNP-25). Allow its Redis user to write " +
+                    "readers of the store: it is missing from GET /instances and from the count of a revision's propagation, " +
+                    "and no shadow window waits for it (SNP-25). Allow its Redis user to write " +
                     "$keys. This instance keeps serving; it writes again every ${INTERVAL.seconds} s."
             }
             return
