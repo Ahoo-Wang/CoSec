@@ -16,9 +16,19 @@ package me.ahoo.cosec.control.sdk
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import java.time.Instant
 
-/** Who approved a change, when, which [candidate] the approval is of, and which escalations it [covers]. */
+/**
+ * Who approved a change, when, which [candidate] the approval is of, which escalations it [covers], and whose the
+ * approver's credential was ([kind], `APR-9`): null for an approval recorded before kinds, which does not count at
+ * publication.
+ */
 @ExperimentalCoSecApi
-class Approval(val approver: Actor, val at: Instant, val candidate: String, covers: List<String>) {
+class Approval(
+    val approver: Actor,
+    val at: Instant,
+    val candidate: String,
+    covers: List<String>,
+    val kind: ApproverKind? = null,
+) {
     val covers: List<String> = covers.toList()
 
     override fun equals(other: Any?): Boolean = other is Approval && parts() == other.parts()
@@ -31,7 +41,8 @@ class Approval(val approver: Actor, val at: Instant, val candidate: String, cove
         "at" to at,
         "candidate" to candidate,
         "covers" to covers,
+        "kind" to kind,
     )
 
-    private fun parts(): List<Any?> = listOf(approver, at, candidate, covers)
+    private fun parts(): List<Any?> = listOf(approver, at, candidate, covers, kind)
 }

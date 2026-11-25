@@ -67,7 +67,7 @@ class ControlAnswersTest {
         stored.get("shadow").has("reporters").assert().isTrue()
         answered.get("shadow").has("reporters").assert().isFalse()
         answered.get("approval").properties().map { it.key }.assert()
-            .containsExactlyInAnyOrder("approver", "at", "candidate", "covers")
+            .containsExactlyInAnyOrder("approver", "at", "candidate", "covers", "kind")
     }
 
     @Test

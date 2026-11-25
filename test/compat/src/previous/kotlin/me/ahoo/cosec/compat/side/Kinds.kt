@@ -41,4 +41,8 @@ internal object Kinds {
     /** A release before kinds reads none from a token either. */
     @Suppress("UNUSED_PARAMETER")
     fun of(token: VerifiedToken): String = "none"
+
+    /** A release before an approval recorded its kind (`APR-9`) reads none. */
+    @Suppress("UNUSED_PARAMETER")
+    fun approvalKind(bytes: ByteArray): String = "none"
 }

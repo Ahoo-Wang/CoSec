@@ -43,7 +43,7 @@ internal object AnswerJson {
      */
     val CHANGE_READ: Set<String> = setOf(
         "approval", "approval.approver", "approval.approver.principal", "approval.approver.tenant", "approval.at",
-        "approval.candidate", "approval.covers",
+        "approval.candidate", "approval.covers", "approval.kind",
         "author", "author.principal", "author.tenant",
         "base", "base.digest", "base.revision",
         "candidate", "createdAt",
@@ -163,7 +163,13 @@ internal object AnswerJson {
         skipShadow = node.optText("skipShadow"),
         shadow = node.opt("shadow")?.let(::shadow),
         approval = node.opt("approval")?.let {
-            Approval(actor(it.need("approver")), it.instant("at"), it.text("candidate"), it.texts("covers"))
+            Approval(
+                actor(it.need("approver")),
+                it.instant("at"),
+                it.text("candidate"),
+                it.texts("covers"),
+                it.optText("kind")?.let(ApproverKind::of),
+            )
         },
         origin = node.opt("origin")?.let {
             val via = it.opt("via")

@@ -136,6 +136,7 @@ import java.time.Instant
  *            { "publish": "c1" }, { "abandon": "c1" }, { "rebase": "c1" },
  *            { "approve": { "change": "c1", "by": "bob", "candidate": "own" | "other" } },
  *            { "approveAsBefore": { "change": "c1", "by": "bob" } },  // READY, approved as an older instance stored it
+ *            { "approveBeforeKinds": { "change": "c1", "by": "bob" } },  // the same, with its credential but no kind (APR-9)
  *            { "reject": { "change": "c1", "by": "bob" } }, { "advance": "PT73H" },
  *            { "report": { "change": "c1", "instance": "i1", "counts": { "NARROWED": 2 } } },
  *            { "publish": { "change": "c1", "ack": "summary" | { "NARROWED": 1 } } },
@@ -589,6 +590,8 @@ object ChangeRunner : ScenarioRunner {
 
             "approveAsBefore" -> target(argument).let { (id, op) -> approvedAsBefore(id, op) }
 
+            "approveBeforeKinds" -> target(argument).let { (id, op) -> approvedAsBefore(id, op, beforeKinds = true) }
+
             else -> transition(action, argument)
         }
 
@@ -954,9 +957,10 @@ object ChangeRunner : ScenarioRunner {
 
         /**
          * [id] approved by [op] as an instance before RC1-11 stored it: `READY`, the approval naming no credential, written
-         * to the store as that instance would, past every check of this one's `approve`.
+         * to the store as that instance would, past every check of this one's `approve`. [beforeKinds]: as an instance
+         * before kinds (8.0.0-beta.8) stored it instead, naming [op]'s credential but not whose it was (`APR-9`).
          */
-        private suspend fun approvedAsBefore(id: ChangeId, op: Operator): ChangeRequest {
+        private suspend fun approvedAsBefore(id: ChangeId, op: Operator, beforeKinds: Boolean = false): ChangeRequest {
             val current = store.change(id) ?: throw ScenarioFormatException("No change ${id.value} to approve")
             val change = current.value
             val approval = Approval(
@@ -966,6 +970,8 @@ object ChangeRunner : ScenarioRunner {
                 change.escalations.map { it.subject },
                 op.memberships,
                 op.attributes,
+                credentialId = op.security?.principal?.credential?.id.takeIf { beforeKinds },
+                issuedAt = op.security?.principal?.issuedAt.takeIf { beforeKinds },
             )
             val approved = change.copy(state = ChangeState.READY, approval = approval)
             check(store.putChange(current.digest, approved, change.state)) { "Change ${id.value} moved meanwhile." }

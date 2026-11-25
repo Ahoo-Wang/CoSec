@@ -94,6 +94,9 @@ object ChangeMembers {
             required("approval.breakGlass"),
             required("approval.credentialId"),
             required("approval.issuedAt"),
+            // No kind, as an approval recorded before kinds: it does not count, and one is asked for again (APR-9),
+            // which narrows. An older reader that ignores it reads the person's approval this version recorded.
+            optional("approval.kind", WhenAbsent.NONE),
             // No window: none was started, so none can pass, which narrows.
             optional("shadow", WhenAbsent.NONE),
             required("shadow.window"),

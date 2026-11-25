@@ -32,14 +32,27 @@ public final class me/ahoo/cosec/control/sdk/ApplyRequest {
 }
 
 public final class me/ahoo/cosec/control/sdk/Approval {
-	public fun <init> (Lme/ahoo/cosec/control/sdk/Actor;Ljava/time/Instant;Ljava/lang/String;Ljava/util/List;)V
+	public fun <init> (Lme/ahoo/cosec/control/sdk/Actor;Ljava/time/Instant;Ljava/lang/String;Ljava/util/List;Lme/ahoo/cosec/control/sdk/ApproverKind;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/control/sdk/Actor;Ljava/time/Instant;Ljava/lang/String;Ljava/util/List;Lme/ahoo/cosec/control/sdk/ApproverKind;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getApprover ()Lme/ahoo/cosec/control/sdk/Actor;
 	public final fun getAt ()Ljava/time/Instant;
 	public final fun getCandidate ()Ljava/lang/String;
 	public final fun getCovers ()Ljava/util/List;
+	public final fun getKind ()Lme/ahoo/cosec/control/sdk/ApproverKind;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/control/sdk/ApproverKind : me/ahoo/cosec/control/sdk/ClosedValue {
+	public static final field Companion Lme/ahoo/cosec/control/sdk/ApproverKind$Companion;
+}
+
+public final class me/ahoo/cosec/control/sdk/ApproverKind$Companion {
+	public final fun getKNOWN ()Ljava/util/List;
+	public final fun getPERSON ()Lme/ahoo/cosec/control/sdk/ApproverKind;
+	public final fun getWORKLOAD ()Lme/ahoo/cosec/control/sdk/ApproverKind;
+	public final fun of (Ljava/lang/String;)Lme/ahoo/cosec/control/sdk/ApproverKind;
 }
 
 public final class me/ahoo/cosec/control/sdk/Binding {

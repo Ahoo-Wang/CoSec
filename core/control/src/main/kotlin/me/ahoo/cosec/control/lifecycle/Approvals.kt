@@ -89,6 +89,8 @@ internal class Approvals(
                 breakGlass = operator.breakGlass,
                 credentialId = operator.security?.principal?.credential?.id,
                 issuedAt = operator.security?.principal?.issuedAt,
+                // Whose it was, as this host read it: publication counts a person's only (APR-9).
+                kind = operator.security?.principal?.credential?.kind,
             )
             current.copy(
                 state = ChangeState.READY,

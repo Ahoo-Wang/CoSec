@@ -34,6 +34,7 @@ import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.contract.ContractFiles
 import me.ahoo.cosec.runtime.http.RequestSecurity
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -137,6 +138,7 @@ class ClientContractTest {
         put("effect", ControlVocabulary.EFFECTS)
         put("outcome", ControlVocabulary.OUTCOMES)
         put("conflict", ConflictKind.entries.map { it.name })
+        put("approverKind", Identity.Credential.Kind.entries.map { it.name })
         files.check("control/vocabularies.json", vocabularies)
     }
 

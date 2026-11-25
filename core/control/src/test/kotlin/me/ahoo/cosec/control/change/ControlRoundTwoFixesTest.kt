@@ -62,6 +62,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
 import me.ahoo.cosec.spi.shadow.InstanceStatus
@@ -431,6 +432,8 @@ class ControlRoundTwoFixesTest {
         changes.shadowed(change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         val approved = changes.approve(ada, change.id, changes.get(change.id).candidate!!)
         approved.approval!!.attributes.assert().isEqualTo(attributes)
+        // Whose it was, as this host read ada's credential (APR-9): only a person's counts when it publishes.
+        approved.approval!!.kind.assert().isEqualTo(Identity.Credential.Kind.PERSON)
         // As stored and read back, each attribute is what the engine reads: the same text.
         val stored = ChangeRequestCodec.decode(ChangeRequestCodec.encode(approved)).approval!!.attributes
         stored.mapValues { it.value.toString() }.assert().isEqualTo(attributes.mapValues { it.value.toString() })
@@ -454,7 +457,16 @@ class ControlRoundTwoFixesTest {
         val change = runBlocking {
             changes.propose(walt, SnapshotKey.Platform, 1, listOf(Operation.PutPolicy(writer.copyAs("more"))), "x")
         }
-        val approval = Approval(pia.actor, clock.now, change.candidate!!, emptyList(), pia.memberships, attributes)
+        val approval =
+            Approval(
+                pia.actor,
+                clock.now,
+                change.candidate!!,
+                emptyList(),
+                pia.memberships,
+                attributes,
+                kind = Identity.Credential.Kind.PERSON
+            )
         val stored = ChangeRequestCodec.decode(ChangeRequestCodec.encode(change.copy(approval = approval))).approval!!
         stored.attributes.mapValues { it.value.toString() }.assert().isEqualTo(
             attributes.mapValues { it.value.toString() }
@@ -483,6 +495,7 @@ class ControlRoundTwoFixesTest {
                 needed.map { it.subject },
                 pia.memberships,
                 credentialId = "token-pia",
+                kind = Identity.Credential.Kind.PERSON,
             )
         )
         authorityOf(engine.authorizer).approvals.approverProblem(approved, needed, walt).assert().isNull()
@@ -559,6 +572,7 @@ class ControlRoundTwoFixesTest {
                 needed.map { it.subject },
                 provided,
                 credentialId = "token-pia",
+                kind = Identity.Credential.Kind.PERSON,
             )
         )
         val noLonger = "the approver no longer holds cosec:approve on the document"
@@ -610,6 +624,7 @@ class ControlRoundTwoFixesTest {
             needed.map { it.subject },
             pia.memberships,
             credentialId = "token-pia",
+            kind = Identity.Credential.Kind.PERSON,
         )
         val authority = ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE)
         authority.approvals.approverProblem(change.copy(approval = approval), needed, walt).assert().isNull()
@@ -638,6 +653,7 @@ class ControlRoundTwoFixesTest {
             emptyList(),
             pia.memberships,
             credentialId = "token-pia",
+            kind = Identity.Credential.Kind.PERSON,
             issuedAt = clock.now,
         )
         val written = ChangeRequestCodec.encode(change.copy(approval = approval))

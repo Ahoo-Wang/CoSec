@@ -520,9 +520,12 @@ control plane cannot see it among the readers, usually a Redis user without writ
 `<s>:shadow:status:<instance>` ([Storage](./storage.md#who-may-write-which-keys)). Alert on any. The
 `cosecInstanceStatus` health indicator shows its `instance`, `release`, `lastWritten`, and `failingSince` with
 `failedWrites` while writes fail; it is always `UP` and belongs in no readiness group. On a control host,
-`cosec.control.instances.releases` (a gauge, no tags) is how many releases the readers of the last hour ran at the last
-read of them (`GET /instances`, [Testing policies](../policies/testing.md#instances)): above 1 for longer than a rolling
-upgrade takes is an instance of an old release still reading the store.
+`cosec.control.instances.releases` (a gauge, no tags) is how many releases the readers of the last hour ran at this
+host's last read of them, the read `GET /instances` answers from too ([Testing policies](../policies/testing.md#instances)).
+Every control-plane host reads them at each of its shadow passes (the shadow check interval of its startup line, at most
+a minute; at most once every 5 seconds), whether or not it holds the pass's lease (`CTL-89`): the gauge is current on
+every replica without anyone calling the route, and each replica reports its own reading. Above 1 for longer than a
+rolling upgrade takes is an instance of an old release still reading the store.
 
 `cosec.control.revisions.records` and `cosec.control.revisions.bytes` (gauges, no tags) are the revision records the
 documents retain and their stored bytes, and `cosec.control.changes.open` the open changes (`CTL-84`). The reclamation

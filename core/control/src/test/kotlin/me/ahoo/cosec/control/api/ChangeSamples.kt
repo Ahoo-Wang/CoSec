@@ -39,6 +39,7 @@ import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
@@ -91,6 +92,7 @@ internal object ChangeSamples {
             attributes = mapOf("department" to "ops"),
             credentialId = "token-pia",
             issuedAt = at,
+            kind = Identity.Credential.Kind.PERSON,
         ),
         shadow = ShadowState(
             "c1@1",

@@ -1323,7 +1323,7 @@
     {
       "id": "CTL-89",
       "source": "RFC 0014 R5, G3 (the newer side sees the older one; maintainer's decision of 2026-11-24 through the coordinator)",
-      "statement": "`GET /instances` answers the readers of the store: every instance with a status written in the last hour, each with its `instance`, its `release` (absent when its status names none), `formatLevel`, `at`, whether it is `live` (a status in the minute before `asOf`) and whether it `shadows`; the instances whose status does not decode (`unreadable`); `releases`, how many instances run each release, `unknown` for an instance without one; and `asOf`. It is authorized as a read of the platform document and served on the operators' API only, never on the service profile; it is a GET. The statuses are read at most every 5 seconds; each time the releases of the readers change while more than one is there, the control host logs them once, and `cosec.control.instances.releases` is how many there were at the last read. What it answers is `contract/control/instances.json`.",
+      "statement": "`GET /instances` answers the readers of the store: every instance with a status written in the last hour, each with its `instance`, its `release` (absent when its status names none), `formatLevel`, `at`, whether it is `live` (a status in the minute before `asOf`) and whether it `shadows`; the instances whose status does not decode (`unreadable`); `releases`, how many instances run each release, `unknown` for an instance without one; and `asOf`. It is authorized as a read of the platform document and served on the operators' API only, never on the service profile; it is a GET. The statuses are read at most every 5 seconds; each time the releases of the readers change while more than one is there, the control host logs them once, and `cosec.control.instances.releases` is how many there were at the last read. Every control host reads them at each of its shadow passes, whether or not it holds the pass's lease, so the gauge and the log line follow the readers on every replica without anyone asking `GET /instances`; each replica's gauge is its own last read. What it answers is `contract/control/instances.json`.",
       "level": "build",
       "guards": [
         "control:InstancesRouteTest#a platform operator reads the instances and their releases - CTL-89",
@@ -1331,6 +1331,7 @@
         "control:InstancesRouteTest#it is a GET",
         "control:InstanceReadersTest#the readers are the statuses of the last hour, with their releases",
         "control:InstanceReadersTest#a mixed deployment is said once each time its releases change",
+        "control:ReaderReleasesTest#every control host's release count follows the readers at each shadow pass, lease or not - CTL-89",
         "control:ClientContractTest#an instances answer holds exactly the members of its contract file"
       ],
       "pending": null

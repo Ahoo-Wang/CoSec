@@ -316,6 +316,7 @@ class ApprovalB2Test {
             approver.memberships,
             approver.attributes,
             credentialId = "token-${approver.actor.principal.value}",
+            kind = Identity.Credential.Kind.PERSON,
         )
         store.putChange(current.digest, change.copy(state = ChangeState.READY, approval = approval)).assert().isTrue()
     }
