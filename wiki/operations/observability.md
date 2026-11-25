@@ -188,7 +188,7 @@ which ties a response to its trace.
 ## Startup summary
 
 Once every bean exists, the starter logs one INFO line of what CoSec is configured as, for example
-`CoSec 8.0.0-rc.2: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), token-cache=on (max-bytes=134217728), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`.
+`CoSec 8.0.0: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), token-cache=on (max-bytes=134217728), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`.
 Each entry is what a request meets, resolved as the authenticator resolves it: the revocation reader is the application's bean, the CoCache token store's, or `RevocationReader.NONE`, which the line spells out because revoked tokens are then accepted until they expire; with no token verification (`jwt=off`) there is no reader to name. `token-cache` says whether a request's token is answered from [the verified-token cache](../integration/authentication.md#the-verified-token-cache): `off` when configured off, or for a `TokenVerifier` bean of your own. When the application declares an `Authenticator` bean, it replaces the starter's ([extending](../architecture/extending.md)): the line then says `authenticator=<class> (replaces CoSec's: tokens, revocation and API keys are its own)` and lists no `jwt`, `revocation-reader` or `api-keys`, since none of them is in force.
 A switch written `false` is added as `switched-off-by-configuration=[...]`. A rate limiter named `LocalRateLimiter` counts
 per instance: with several instances the limit is multiplied by their number. When `cosec.enabled=false` the line is
@@ -344,7 +344,7 @@ The meters above count; the health indicators and logs below answer whether an i
   read last, every minute on a thread of its own, never by a probe; one it cannot read is `UP` with `format: unknown`.
   The instance also logs one `ERROR` when it finds the old format. An alert like `cosecSnapshotEviction`: the data
   plane still decides every request, so keep it out of the readiness group
-  ([Upgrading](./upgrading-previews.md#from-8-0-0-beta-4)). The `cosec-control` image is the exception: it decides no
+  (["From 8.0.0-beta.4" in the preview notes](https://github.com/Ahoo-Wang/CoSec/blob/v8.0.0-rc.2/wiki/operations/upgrading-previews.md)). The `cosec-control` image is the exception: it decides no
   request of the data plane, and puts the indicator into its readiness group, so that an unconverted store leaves the host
   unready and named ([The control-plane host](./deployment.md#control-plane-store)).
 - **Login routes.** When the starter serves the refresh or logout route, the `cosecLoginRoutes` health indicator is

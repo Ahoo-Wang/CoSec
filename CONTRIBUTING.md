@@ -28,7 +28,7 @@ CoSec uses trunk-based development, with maintenance branches for earlier major 
 | Branch | Line | Takes |
 |---|---|---|
 | `main` | The next major version (8.0) | All changes; always releasable |
-| `7.x` | 7.x, cut at `v7.0.0` | Security and critical fixes only, until 6 months after 8.0.0 GA |
+| `7.x` | 7.x, cut at `v7.0.0` | Security and critical fixes only, until 2027-05-26 (6 months after 8.0.0, released 2026-11-26) |
 | `release/6.1.x` | 6.1.x | Security fixes only |
 
 - Work happens on short-lived topic branches named after the change type, e.g. `feat/tenant-scoped-cache`
@@ -61,11 +61,10 @@ Mark breaking changes with `!` after the type (`feat!: ...`) or a `BREAKING CHAN
 description. They are listed under 💥 Breaking Changes and require a major version.
 
 **ABI dumps and `!`.** Every published library module keeps its public ABI in `api/<project>.api` (see section 4).
-From 8.0 GA on, a pull request that removes or changes a line of a dump is a breaking change and its title carries `!`.
+From 8.0.0 on, a pull request that removes or changes a line of a dump is a breaking change and its title carries `!`.
 The one exception is a line of an `@ExperimentalCoSecApi` declaration: removing or changing it is not a breaking change
 and needs no `!`; the description names the experimental declarations it changes. A dump change that only adds lines
-needs no `!` either. Before GA, through the release candidates, the dumps already show every change, and the rule does
-not apply yet. Nothing checks the title against the dumps: the author and the reviewer do.
+needs no `!` either. Nothing checks the title against the dumps: the author and the reviewer do.
 
 ## 4. Coding conventions
 

@@ -189,10 +189,10 @@ CoSec 8 应用的客户端是 `@ahoo-wang/cosec-fetcher`，它的 React hooks �
 
 ```bash
 pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus @ahoo-wang/fetcher-storage \
-  @ahoo-wang/cosec-fetcher@beta @ahoo-wang/cosec-react@beta
+  @ahoo-wang/cosec-fetcher @ahoo-wang/cosec-react
 ```
 
-在 8.0 正式发布之前，这两个包的 `latest` 标签指向一个标为已弃用的 `0.0.0` 占位版本，所以不带标签安装得到的是占位版本和一条弃用提示，而不是客户端。安装你所运行的 CoSec 版本对应的标签：`8.0.0-beta.n` 用 `@beta`（如上），候选发布版用 `@rc`，8.0 正式发布之后不带标签；也可以写明确切版本，它在所有这些阶段都正确。标签不会越过它所指的版本线：候选发布版出现之后，`@beta` 仍是最后一个 beta，与 RC 的服务端不匹配。把 `package.json` 和每处 import 中的包名改掉，把 hooks 的 import 从 `@ahoo-wang/fetcher-react` 改为 `@ahoo-wang/cosec-react`。行为上的不同：
+不带标签安装得到最新的 8.x 正式版。客户端是对着它自己那个版本的约定测试的，所以当客户端与服务端不能错开时，写明服务端所运行的 CoSec 版本（`@ahoo-wang/cosec-fetcher@8.0.0`）。`beta` 与 `rc` 标签指向 8.0 最后的预发布版本，不再移动；不要在生产中使用它们。把 `package.json` 和每处 import 中的包名改掉，把 hooks 的 import 从 `@ahoo-wang/fetcher-react` 改为 `@ahoo-wang/cosec-react`。行为上的不同：
 
 | 旧包的做法 | `cosec-fetcher` 的做法 |
 |---|---|

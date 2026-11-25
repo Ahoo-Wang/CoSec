@@ -137,7 +137,7 @@ application on 8.0.0-beta.9 did. The bound properties are read once the environm
 A key that once set one of these fails startup with the keys CoSec does not read, and says that it is no longer a
 property and what replaced it ([Unknown properties](#unknown-properties)). Among them are the four snapshot bounds of
 the 8.0 previews: `cosec.authorization.snapshot.max-apps`, `max-tenants`, `max-absent-apps` and `max-absent-tenants`,
-now derived from the documents' quarter ([Upgrading from a preview](./upgrading-previews.md)).
+now derived from the documents' quarter ([the preview notes](https://github.com/Ahoo-Wang/CoSec/blob/v8.0.0-rc.2/wiki/operations/upgrading-previews.md)).
 
 ## Feature switches
 

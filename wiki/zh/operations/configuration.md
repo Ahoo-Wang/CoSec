@@ -103,7 +103,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 要读取生效值的代码，读绑定后的 `ServerProperties`。它不做成属性，是因为 CoSec 自己的环境后处理器会先于宿主自己的运行：宿主的后处理器较晚才设置
 `cosec.pipeline.mode` 时，上限会停在 8 KB，第一个用 8.0.0-beta.9 的应用就遇到了这种情况。绑定后的属性在环境确定之后才读取。
 
-曾经设置过其中某一项的 key 会让启动失败（作为 CoSec 不读取的 key），并说明它已不再是配置项，以及由什么取代（[未知配置项](#unknown-properties)）。其中包括 8.0 预览版的四个快照上限：`cosec.authorization.snapshot.max-apps`、`max-tenants`、`max-absent-apps` 和 `max-absent-tenants`，现在由文档的那四分之一推出（[从预览版升级](./upgrading-previews.md)）。
+曾经设置过其中某一项的 key 会让启动失败（作为 CoSec 不读取的 key），并说明它已不再是配置项，以及由什么取代（[未知配置项](#unknown-properties)）。其中包括 8.0 预览版的四个快照上限：`cosec.authorization.snapshot.max-apps`、`max-tenants`、`max-absent-apps` 和 `max-absent-tenants`，现在由文档的那四分之一推出（[预览版升级说明](https://github.com/Ahoo-Wang/CoSec/blob/v8.0.0-rc.2/wiki/zh/operations/upgrading-previews.md)）。
 
 ## 功能开关 {#feature-switches}
 

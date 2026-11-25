@@ -313,14 +313,14 @@ class DataPlaneAclTest {
     }
 
     @Test
-    fun `the operations page shows the lines this test runs, and upgrading says what to add`() {
+    fun `the operations page shows the lines this test runs, and troubleshooting says what to add`() {
         for (page in listOf("../../wiki/operations/storage.md", "../../wiki/zh/operations/storage.md")) {
             File(page).readText().assert().contains(KEYS_LINE).contains(COMMANDS_LINE)
         }
         for (
         page in listOf(
-            "../../wiki/operations/upgrading-previews.md",
-            "../../wiki/zh/operations/upgrading-previews.md",
+            "../../wiki/operations/troubleshooting.md",
+            "../../wiki/zh/operations/troubleshooting.md",
         )
         ) {
             File(page).readText().assert().contains("+evalsha_ro +eval_ro")

@@ -42,51 +42,47 @@ converts 7.x data to the 8.0 format. [Upgrading](../operations/upgrading.md) lis
 
 ## Where 8.0 stands
 
-The architecture above is merged on `main`, and the 7.x code is gone. The current release is
-[`8.0.0-rc.2`](https://github.com/Ahoo-Wang/CoSec/releases/tag/v8.0.0-rc.2), the second release candidate: 8.0.0-rc.1,
-whose npm packages also accept fetcher 8 ([Upgrading between previews](../operations/upgrading-previews.md#from-8-0-0-rc-1));
-no JVM module changed. The first candidate settled the public surface for GA. The adapter contract (`RequestGate`,
-`HttpFacts`, `Outcome` and the problems it answers), the test kit's request contexts (`PermittedRequest`,
-`IdentityHeader`, `CoSecTestBindings`), the writer of the identity header and the control plane's change events are
-stable; the control plane's storage and the shadow window's ports are CoSec's own; what stays experimental through 8.0
-says so ([Stability levels](../architecture/extending.md#stability-levels)). Each build is tested against the release
-before it, 8.0.0-rc.1, both releases on one store.
-It is built on Spring Boot 4.2 and CoCache 8.2. Next is 8.0 GA. What is still open before it is in
+8.0 is released: [`8.0.0`](https://github.com/Ahoo-Wang/CoSec/releases/tag/v8.0.0). The architecture above is the
+code on `main`, and the 7.x code is gone from it. What an application compiles against is settled: what is stable,
+what stays experimental through 8.0, and what is CoSec's own ([Stability levels](../architecture/extending.md#stability-levels)).
+Each build is tested against the previous release, both on one store and one network. It is built on Spring Boot 4.2
+and CoCache 8.2. What comes next, in 8.1 and later, is in
 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md), which is the page that tracks it;
 this one stays at the level of what you can rely on.
 
 ## Release policy
 
-- **The 8.0 alphas and betas were previews with no compatibility promise.** Public APIs, `cosec.*` properties, the
-  document and wire formats (`schema: 2`, `CoSec-Identity`) and authorization semantics changed between them, without a
-  migration path between previews.
-- **A release candidate (latest `8.0.0-rc.2`) is what 8.0 is to be.** Its public API, `cosec.*` properties, formats and
-  authorization semantics change before GA only to fix a defect, and the next candidate's notes list each such change.
-  The first came after the checks above: two review rounds of the whole system with their findings fixed, ABI validation, a
-  project of its own on 8.0.0-beta.9, and gates on its commit, a mixed run with 8.0.0-beta.9 among them. Semantic
-  versioning applies to 8.0 from GA, when ABI validation freezes the public API (RFC 0011 D4).
+- **Semantic versioning applies from 8.0.0.** A public API, a `cosec.*` property or an authorization semantic is removed
+  or changed only in a major release; ABI validation holds the public API to its dump (RFC 0011 D4). What is marked
+  `@ExperimentalCoSecApi` may change in a minor release, and the release notes say so.
+- **Two adjacent minor versions run mixed.** From 8.0.0, 8.n and 8.n+1 run side by side in one deployment, whichever is
+  upgraded first, and a rollback of one minor version is supported ([What is promised](../operations/upgrading.md#what-is-promised)).
+- **The 8.0 pre-releases were previews.** The alphas, betas and release candidates of 8.0.0 promised nothing to each
+  other or to 8.0.0: a deployment on one moves to 8.0.0 as the release notes say, not under the promise above.
 - **8.0 is not slower than 7.0.** Performance budgets are set from 7.0 measurements: compiled authorization and
   pipeline throughput at least 100 % of 7.0, with no more allocation (RFC 0008 §3.8). They are first measured on the
   end-to-end slice, and they were met before the switch from 7.x merged.
 
-## For 7.x users today
+## For 7.x users
 
-- `7.x` gets security and critical fixes until 6 months after 8.0 GA; `release/6.1.x` gets security fixes only
+- **Upgrade to 8.0.** [Upgrading](../operations/upgrading.md) starts with a checklist for a 7.x deployment, then gives
+  every change by area; `cosec-migrate` converts the 7.x data. The services, the gateway and the clients move together:
+  the order is on that page.
+- `7.x` gets security and critical fixes until 2027-05-26, 6 months after 8.0.0 (released 2026-11-26); `release/6.1.x` gets security fixes only
   ([`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md)).
-- The latest fix is
-  [7.0.2](https://github.com/Ahoo-Wang/CoSec/releases/tag/v7.0.2): the policy decoder now rejects malformed policies
+- The latest 7.x fix is
+  [7.0.2](https://github.com/Ahoo-Wang/CoSec/releases/tag/v7.0.2): the policy decoder rejects malformed policies
   (unknown fields, scalars where a list belongs, duplicate keys) instead of compiling them to something broader.
-  Read its upgrade note first: policies already stored in Redis may fail requests until you republish them.
+  Until you upgrade, run 7.0.2, and read its upgrade note: policies already stored in Redis may fail requests until you
+  republish them.
 - The latest advisory is
   [GHSA-2293-jx8h-56m8](https://github.com/Ahoo-Wang/CoSec/security/advisories/GHSA-2293-jx8h-56m8), fixed in
   7.0.1 and 6.1.2.
-- What to do now: stay on 7.0.2, the latest 7.0.x, in production. To evaluate 8.0, try the release candidate (`8.0.0-rc.2`, Java 21) in a test
-  environment with [Upgrading](../operations/upgrading.md); before GA it changes only to fix a defect.
 
 ## How to follow
 
 - [RFC index](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/rfc): the design, decisions and open questions.
-- [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md): where the work stands, the
-  gates of the release candidate, and what is left for 8.1 (Chinese).
+- [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md): where the work stands and what
+  is planned for 8.1 (Chinese).
 - [Issues](https://github.com/Ahoo-Wang/CoSec/issues) and
   [pull requests](https://github.com/Ahoo-Wang/CoSec/pulls) on GitHub.

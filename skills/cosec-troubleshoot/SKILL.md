@@ -97,7 +97,7 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   only around the whole prefix.
 - **`CoSec does not read ... cosec.authorization.snapshot.key-prefix`** (or `cosec.authorization.cache.key-prefix`,
   `cosec.api-key.key-prefix`): one `cosec.key-prefix` replaced them (SNP-9), and they fail startup as unknown keys. Which
-  families move, from where to where, is at https://cosec.ahoo.me/operations/upgrading-previews#from-8-0-0-alpha-2. Have the token
+  families move, from where to where, is at https://github.com/Ahoo-Wang/CoSec/blob/v8.0.0-rc.2/wiki/operations/upgrading-previews.md (section "From 8.0.0-alpha.2"). Have the token
   revocations and API keys copied to the new keys first (`COPY`, or `RENAME`, which keeps the expiry): a revocation
   left under the old prefix is no longer read, so the token it revoked would be accepted again. Then set
   `cosec.key-prefix` to the snapshot documents' prefix and remove the old properties; never suggest only renaming them.
@@ -521,12 +521,11 @@ Capture the installed versions (`npm ls @ahoo-wang/cosec-fetcher @ahoo-wang/cose
 the server's CoSec version, the error's `name` with its `problem` and `status` (never its `exchange`, which holds the
 `Authorization` header), and the order of the calls on the wire (`<path> <status>`). Wiring: `$cosec-client`.
 
-- **The install warns `deprecated ... Placeholder. Install the beta` and the import does not resolve**: installed
-  without a tag before 8.0 GA, which gets `latest`, a `0.0.0` placeholder with no code. Install the server's line:
-  `@beta`, `@rc`, or the exact version.
-- **The client is `8.0.0-beta.n` and the server a release candidate (or the other way)**: a tag stays on its line,
-  so `@beta` still installs the last beta once RCs are out. Install `@rc` or the server's exact version; the client is
-  tested against the `contract/` of its own version.
+- **The install warns `deprecated ... Placeholder` and the import does not resolve**: the install asked for `0.0.0`
+  (a pinned `0.0.0`, or an old lock file), a placeholder with no code. Install a version of 8.x, the server's.
+- **The client is a pre-release (`@beta`, `@rc`) and the server a release (or the other way)**: those tags stay on the
+  last pre-releases of 8.0. Install the server's exact version; the client is tested against the `contract/` of its own
+  version.
 - **The old `@ahoo-wang/fetcher-cosec` (or `@ahoo-wang/fetcher-react`'s security hooks) against an 8.0 server**: it
   speaks CoSec 7's contract. What shows: `403 scope-rejected` on every request of a host with an app though the client
   sets `appId` (8.0 reads no app header; the app is the token's `aud`); users signed out when the refresh route

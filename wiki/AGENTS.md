@@ -33,7 +33,7 @@ Organized by the task the reader is doing, not by module.
 | `scenarios/` | Building a whole use case end to end | `simple-mode`, `resource-server`, `app`, `roles`, `spaces`, `service-account`, `tenant-owner`, `external-source`, `route-maps`, `gateway` |
 | `integration/` | Developer wiring CoSec into an application, or building a client of one | `web`, `authentication`, `clients`, `checks` |
 | `policies/` | Writing and reviewing the rules | `language`, `role-permissions`, `rate-limiting`, `testing` |
-| `operations/` | Running CoSec in production | `topologies`, `configuration`, `storage`, `deployment`, `upgrading`, `upgrading-previews`, `observability`, `troubleshooting` |
+| `operations/` | Running CoSec in production | `topologies`, `configuration`, `storage`, `deployment`, `upgrading`, `observability`, `troubleshooting` |
 | `architecture/` | Contributor, or integrator who wants the internals | `overview`, `extending` |
 | `zh/` | One-to-one Chinese mirror of everything above | |
 
@@ -48,7 +48,7 @@ option, is harder to use for both jobs.
 
 | Type | Answers | Shape | Pages |
 |---|---|---|---|
-| **Guide** | "How do I …?" | Steps or recipes toward one goal; links to references for every option | `quick-start`, `scenarios/*`, `integration/*`, `role-permissions`, `rate-limiting`, `testing`, `storage`, `topologies`, `deployment`, `upgrading`, `upgrading-previews`, `observability`, `troubleshooting`, `extending` |
+| **Guide** | "How do I …?" | Steps or recipes toward one goal; links to references for every option | `quick-start`, `scenarios/*`, `integration/*`, `role-permissions`, `rate-limiting`, `testing`, `storage`, `topologies`, `deployment`, `upgrading`, `observability`, `troubleshooting`, `extending` |
 | **Reference** | "What exactly does X mean?" | Complete, terse, ordered for lookup (tables); no narrative | `policies/language`, `operations/configuration` |
 | **Explanation** | "Why does it behave this way?" | Concepts, guarantees, trade-offs, diagrams | `introduction`, `concepts`, `model`, `security-model`, `roadmap`, `architecture/overview` |
 
@@ -78,7 +78,7 @@ time one copy is updated. The homes that are easiest to duplicate by accident:
 | Every Redis key; publishing, revisions and rollback | `operations/storage.md` |
 | Behavior when Redis is unavailable | `operations/storage.md#when-redis-is-unavailable` |
 | Decision listeners, audit events, metrics, spans | `operations/observability.md` |
-| Migration steps | `operations/upgrading.md`; from one 8.0 preview to the next, `operations/upgrading-previews.md` |
+| Migration steps | `operations/upgrading.md`. `operations/upgrading-previews.md` is a placeholder, outside the sidebar and `llms.txt`: released notes and two startup messages link its address, so it stays, one paragraph that points to the notes as of `v8.0.0-rc.2`. Nothing else goes there |
 | The request path through the pipeline and why | `architecture/overview.md` |
 | Invariants and the tests that guard them; performance numbers | `architecture/overview.md` |
 | Extension points (SPIs) | `architecture/extending.md` |

@@ -121,7 +121,7 @@ starter 始终引入 `cosec-runtime`（协程请求 Pipeline、快照与令牌�
 - **`cosec-bom` 只对齐 CoSec 自己的模块。** 它列出应用可以依赖的 CoSec 模块（命令行工具 `cosec-migrate` 不是），不管理任何第三方版本。导入它可以让每个 CoSec 模块使用同一个版本，也可以自己给每个模块写同一个版本。
 - **只用于编译的依赖不会被带上。** `cosec-cocache` 和 `cosec-kafka` 的 API 中有 `cosec-control`，用于控制面的端口；它们的 POM 把它标为 `provided`，所以 Maven 不会因这两个模块而把 `cosec-control`（以及经由它的 `cosec-runtime`）带到运行时。使用控制面的应用自己添加 `cosec-control`。
 
-CoSec 自己的构建所依据的 platform `cosec-dependencies` 从 8.0 起不再发布（[升级](../operations/upgrading-previews.md#from-8-0-0-alpha-4)）。
+CoSec 自己的构建所依据的 platform `cosec-dependencies` 从 8.0 起不再发布：CoSec 的模块用 `cosec-bom` 对齐版本，其余依赖的版本由你自己声明。
 
 ## 下一步 {#where-to-go-next}
 
