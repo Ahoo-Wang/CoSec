@@ -48,6 +48,11 @@ tasks.register<Test>("systemTest") {
             excludeTags("embedded")
         }
     }
+    // The previous release's leg (-PsystemPrevious=<tag>, the leg `previous` of system-test.yml): the gateway and control
+    // images of that release in front of the services of this commit. A scenario that holds only from a later release is
+    // left out with its reason, in one place (PreviousRelease), by a condition JUnit finds on its own.
+    providers.gradleProperty("systemPrevious").orNull?.let { systemProperty("cosec.system.previous", it) }
+    systemProperty("junit.jupiter.extensions.autodetection.enabled", "true")
     // The cold start runs first, on an empty Redis; every other scenario after it, in any order (each its own tenant).
     systemProperty("junit.jupiter.testclass.order.default", "org.junit.jupiter.api.ClassOrderer\$OrderAnnotation")
     systemProperty("cosec.system.contract", contract)
