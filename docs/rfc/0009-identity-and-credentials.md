@@ -222,6 +222,8 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 - 带 `act` 声明的 token 在验证器里被拒（`JwtTokenVerifier`，验证与刷新两条路径；`TokenAuthenticator` 只看到验证结果 `VerifiedToken`，读不到原始声明），
   结果是 `RejectReason.DELEGATION_UNSUPPORTED`：按匿名求值，拒绝时为 `token-invalid`（401），审计原因码 `DELEGATION_UNSUPPORTED`。自定义的
   `TokenVerifier` 或自行解析 token 的 `Authenticator` 承担同样的义务。`may_act` 只表示"允许被谁代理"，不改变主体，忽略。
+- JWS 头里的 `crit` 列了校验器不理解的参数的 token 不读（`IDN-47`，RFC 0014 R1）：`TokenNotUnderstoodException`，管线答 `503` `unavailable`，刷新、切换、登出三个路由同样；8.0 一个也不理解。格式不对的 `crit` 是 `token-invalid`。
+  这个检查在签名校验之后，所以只有签发方签过的 token 才会被判为“看不懂”；缓存只留校验成功的结果，命中不会替这样的 token 作答。
 - 与外部 IdP 无关地成立：CoSec 自己永远不签发带 `act` 的 token，直到 §7 落地。
 
 ## 7. 委托（8.1，另开 RFC）
