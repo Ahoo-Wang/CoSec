@@ -18,49 +18,56 @@ package me.ahoo.cosec.spring.boot.pipeline
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
-import org.springframework.boot.EnvironmentPostProcessor
-import org.springframework.boot.SpringApplication
-import org.springframework.boot.context.config.ConfigDataEnvironmentPostProcessor
+import org.springframework.beans.factory.config.BeanPostProcessor
 import org.springframework.boot.context.properties.bind.Binder
-import org.springframework.boot.context.properties.bind.PropertySourcesPlaceholdersResolver
-import org.springframework.boot.context.properties.source.ConfigurationPropertySources
+import org.springframework.boot.web.server.autoconfigure.ServerProperties
 import org.springframework.core.Ordered
-import org.springframework.core.env.ConfigurableEnvironment
+import org.springframework.core.PriorityOrdered
 import org.springframework.core.env.Environment
-import org.springframework.core.env.MapPropertySource
 import org.springframework.util.unit.DataSize
 
 /**
  * The web server's request-header limit on a host that reads `CoSec-Identity` (`IDN-43`): a service in `gateway` mode
  * or a host whose caller is the forwarded identity. Spring Boot's servers count every request header against one
  * limit, `server.max-http-request-header-size`, 8 KB by default, so an identity header near the 8 KB a reader accepts
- * (`cosec.pipeline.identity.max-size`, R) would be refused by Tomcat or Netty before the gate read it. When the
+ * (`cosec.pipeline.identity.max-size`, R) would be refused by the server (`431`) before the gate read it. When the
  * operator has not set the limit, it is derived: R, and the 8 KB the server gave the request's other headers before.
- * An operator's value is kept, and named at startup when it is below that ([check]). The control API's service port
- * is the application's server on another port, configured by the same customizers (`CTL-71`), so it gets the same.
+ * An operator's value is kept, and named at startup when it is below that ([line]).
  *
- * An environment post-processor, after the configuration files are read: the limit is a property the server's
- * customizers read when they configure it, before any bean of CoSec exists.
+ * Applied to the bound [ServerProperties], the one value every server's customizer reads it from (Tomcat's, Jetty's
+ * and Reactor Netty's, for Spring MVC and WebFlux alike, and the control API's service port, the application's server
+ * on another port configured by the same customizers, `CTL-71`), once Spring has bound it and before any customizer
+ * reads it. By then the environment is the one the application runs with: whatever added `cosec.pipeline.mode` or
+ * `cosec.pipeline.caller`, an environment post-processor of the host's own in any order included, has run. An
+ * environment post-processor of CoSec's own would see the environment only as far as the post-processors before it
+ * had built it, and a host whose own post-processor adds the mode later would keep Spring Boot's 8 KB, as the first
+ * application upgraded to 8.0.0-beta.9 did.
+ *
+ * Priority-ordered, so it is registered before the ordinary post-processors, any of which could create
+ * [ServerProperties] while being created; one created before it anyway is not changed, and the startup [line] says
+ * the limit is not derived rather than claiming it.
  */
-internal class IdentityHeaderLimit : EnvironmentPostProcessor, Ordered {
-    override fun getOrder(): Int = ConfigDataEnvironmentPostProcessor.ORDER + 1
+internal class IdentityHeaderLimit(private val environment: Environment) : BeanPostProcessor, PriorityOrdered {
+    /** The limit this set on the server's properties; null when it set none. */
+    @Volatile
+    var applied: DataSize? = null
+        private set
 
-    override fun postProcessEnvironment(environment: ConfigurableEnvironment, application: SpringApplication) {
-        if (!readsIdentity(environment) || operatorLimit(environment) != null) {
-            return
+    override fun getOrder(): Int = Ordered.LOWEST_PRECEDENCE
+
+    override fun postProcessAfterInitialization(bean: Any, beanName: String): Any {
+        if (bean is ServerProperties && readsIdentity(environment) && operatorLimit(environment) == null) {
+            val derived = derived(environment)
+            bean.maxHttpRequestHeaderSize = derived
+            applied = derived
         }
-        val derived = derived(environment)
-        val limit = mapOf(SERVER_LIMIT_KEY to "${derived.toBytes()}B")
-        environment.propertySources.addLast(MapPropertySource(SOURCE, limit))
+        return bean
     }
 
     @InternalCoSecApi
     companion object {
         /** Spring Boot's request-header limit, which its Tomcat, Netty and Jetty customizers apply. */
         const val SERVER_LIMIT_KEY = "server.max-http-request-header-size"
-
-        /** The property source the derived limit is in: the last, so any value an operator writes comes first. */
-        const val SOURCE = "cosecIdentityHeaderLimit"
 
         /** What the server gave a request's headers by default, before CoSec added its own: the rest of them. */
         val OTHER_HEADERS: DataSize = DataSize.ofKilobytes(8)
@@ -87,12 +94,9 @@ internal class IdentityHeaderLimit : EnvironmentPostProcessor, Ordered {
         fun derived(environment: Environment): DataSize =
             DataSize.ofBytes(reads(environment).toBytes() + OTHER_HEADERS.toBytes())
 
-        /** The limit an operator set, from any source but the derived one; null when none did. */
-        fun operatorLimit(environment: ConfigurableEnvironment): DataSize? {
-            val sources = environment.propertySources.filter { it.name != SOURCE }
-            return Binder(ConfigurationPropertySources.from(sources), PropertySourcesPlaceholdersResolver(environment))
-                .bind(SERVER_LIMIT_KEY, DataSize::class.java).orElse(null)
-        }
+        /** The limit the operator set, from any property source; null when none did. */
+        fun operatorLimit(environment: Environment): DataSize? =
+            Binder.get(environment).bind(SERVER_LIMIT_KEY, DataSize::class.java).orElse(null)
 
         /**
          * `IDN-43`, in a process that holds both limits: a host that reads the identity and relays its callers with
@@ -122,24 +126,39 @@ internal class IdentityHeaderLimit : EnvironmentPostProcessor, Ordered {
         }
 
         /**
-         * The startup line (`IDN-43`): the derived limit and what it is derived from, at INFO; an operator's value
-         * below it, with both numbers, at WARN, since the server would refuse an identity header the gate accepts.
-         * Null for an operator's value that leaves room.
+         * The startup line (`IDN-43`): the limit in [effect] on the server, as its properties hold it once every
+         * customizer could read them, and where it came from; true first when it is at WARN. Derived only when this set
+         * it ([applied]) and it is still the value in effect; the operator's value when they set one; otherwise set by
+         * something else, after or before CoSec could. At WARN when the limit in effect is below R and the other
+         * headers' 8 KB, since the server would refuse an identity header the gate accepts. Null on a host that does not
+         * read the identity, or has no web server.
          */
-        fun check(environment: ConfigurableEnvironment): Pair<Boolean, String>? {
+        fun line(environment: Environment, effect: DataSize?, applied: DataSize?): Pair<Boolean, String>? {
+            if (!readsIdentity(environment) || effect == null) return null
             val reads = reads(environment)
             val derived = derived(environment)
             val operator = operatorLimit(environment)
-            return when {
-                operator == null -> false to "$SERVER_LIMIT_KEY is ${derived.toBytes()} bytes, derived from $R_KEY " +
-                    "(${reads.toBytes()} bytes) and ${OTHER_HEADERS.toBytes()} bytes for the request's other headers " +
-                    "(IDN-43)."
-                operator < derived -> true to "$SERVER_LIMIT_KEY is ${operator.toBytes()} bytes, below $R_KEY " +
-                    "(${reads.toBytes()} bytes) and ${OTHER_HEADERS.toBytes()} bytes for the request's other headers " +
-                    "(${derived.toBytes()} bytes): the web server refuses a request whose identity header is near " +
-                    "$R_KEY before CoSec reads it (IDN-43). Raise it, or leave it unset to have it derived."
-                else -> null
+            val room = "$R_KEY (${reads.toBytes()} bytes) and ${OTHER_HEADERS.toBytes()} bytes for the request's " +
+                "other headers"
+            val below = effect < derived
+            val raise = " The server refuses a request whose identity header is near $R_KEY: set $SERVER_LIMIT_KEY " +
+                "to at least ${derived.toBytes()} bytes."
+            val text = when {
+                operator == null && applied != null && effect == applied ->
+                    "$SERVER_LIMIT_KEY is ${effect.toBytes()} bytes, derived from $room (IDN-43)."
+                operator != null && below ->
+                    "$SERVER_LIMIT_KEY is ${effect.toBytes()} bytes, below $room (${derived.toBytes()} bytes), as the " +
+                        "operator set it: the web server refuses a request whose identity header is near $R_KEY " +
+                        "before CoSec reads it (IDN-43). Raise it, or leave it unset to have it derived."
+                operator != null ->
+                    "$SERVER_LIMIT_KEY is ${effect.toBytes()} bytes, as the operator set it, with room for $room " +
+                        "(${derived.toBytes()} bytes) (IDN-43)."
+                else ->
+                    "$SERVER_LIMIT_KEY is ${effect.toBytes()} bytes, not derived: the web server's properties were " +
+                        "set or created by something other than CoSec, so the ${derived.toBytes()} bytes of $room " +
+                        "were not applied (IDN-43)." + raise.takeIf { below }.orEmpty()
             }
+            return below to text
         }
     }
 }

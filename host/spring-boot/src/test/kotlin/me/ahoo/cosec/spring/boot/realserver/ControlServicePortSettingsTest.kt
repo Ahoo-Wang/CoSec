@@ -38,12 +38,14 @@ import org.springframework.boot.builder.SpringApplicationBuilder
 import org.springframework.boot.context.annotation.ImportCandidates
 import org.springframework.boot.reactor.netty.NettyReactiveWebServerFactory
 import org.springframework.boot.test.context.FilteredClassLoader
+import org.springframework.boot.web.server.autoconfigure.ServerProperties
 import org.springframework.context.ConfigurableApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
 import org.springframework.core.io.DefaultResourceLoader
+import org.springframework.util.unit.DataSize
 import org.springframework.web.reactive.function.server.RouterFunction
 import org.springframework.web.reactive.function.server.RouterFunctions
 import org.springframework.web.reactive.function.server.ServerResponse
@@ -153,7 +155,7 @@ class ControlServicePortSettingsTest {
                 "cosec.authorization.snapshot.eviction-check=warn",
             )
         }.use { context ->
-            context.environment.getProperty("server.max-http-request-header-size").assert().isEqualTo("16384B")
+            context.serverLimit().assert().isEqualTo(DataSize.ofKilobytes(16))
             val application = context.environment.getRequiredProperty("local.server.port").toInt()
             val service = context.environment.getRequiredProperty("local.control.service.port").toInt()
             for ((name, port) in listOf("application" to application, "service" to service)) {
@@ -162,11 +164,14 @@ class ControlServicePortSettingsTest {
             }
         }
         start().use { context ->
-            context.environment.getProperty("server.max-http-request-header-size").assert().isNull()
+            context.serverLimit().assert().isEqualTo(DataSize.ofKilobytes(8))
             val service = context.environment.getRequiredProperty("local.control.service.port").toInt()
             statusWithPadding(service, PADDING).assert().isNotEqualTo(statusWithPadding(service, 0))
         }
     }
+
+    private fun ConfigurableApplicationContext.serverLimit(): DataSize =
+        getBean(ServerProperties::class.java).maxHttpRequestHeaderSize
 
     /**
      * [block] with Spring Cloud Gateway hidden from the thread's class loader too: the guard that refuses a host believing
