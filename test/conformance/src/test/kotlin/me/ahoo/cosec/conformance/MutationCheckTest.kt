@@ -89,6 +89,75 @@ class MutationCheckTest {
         wrong.assert().describedAs("mutants whose # Inlined: line does not match their patch").isEmpty()
     }
 
+    /**
+     * A patch that names an `@InternalCoSecApi` type in a file without the opt-in does not compile, and only the full run
+     * would say so: `ctl-62` stopped compiling when the control store became internal (RC1 gate). [InternalUse] reads it
+     * from the text.
+     */
+    @Test
+    fun `no mutant names an internal type in a file that does not opt in`() {
+        val root = Path(requireNotNull(System.getProperty("cosec.repository.root")) { "cosec.repository.root" })
+        val projects = projectDirectories(root.resolve("settings.gradle.kts")).values.map { root.resolve(it) }
+        val internal = InternalUse.internalTypes(projects)
+        internal.assert().contains(
+            "me.ahoo.cosec.control.store.ControlStoreException",
+            "me.ahoo.cosec.control.change.ChangeId"
+        )
+        val unopted = Mutant.all(Path("mutants")).flatMap { mutant ->
+            InternalUse.unopted(mutant.patch, root, internal).map { "${mutant.name}: $it" }
+        }
+        unopted.assert().describedAs(
+            "mutants that name an internal type where nothing opts in: add the opt-in in the patch"
+        )
+            .isEmpty()
+    }
+
+    @Test
+    fun `an internal type named where nothing opts in is found, and the opt-in the patch adds clears it`() {
+        val root = Files.createDirectories(temp.resolve("internal-use"))
+        val sources = Files.createDirectories(root.resolve("core/x/src/main/kotlin/x"))
+        Files.writeString(
+            sources.resolve("Store.kt"),
+            """
+            |package x.store
+            |
+            |@InternalCoSecApi
+            |class StoreException : RuntimeException()
+            |
+            |@InternalCoSecApi
+            |fun helper() = Unit
+            |
+            |class Stable
+            |
+            """.trimMargin()
+        )
+        Files.writeString(sources.resolve("Read.kt"), "package x.read\n\nclass Read {\n    fun load() = 1\n}\n")
+        val internal = InternalUse.internalTypes(listOf(root.resolve("core/x")))
+        // A marked function marks no type, even with one declared below it.
+        internal.assert().containsExactly("x.store.StoreException")
+        fun patch(name: String, vararg added: String): Path = Files.writeString(
+            temp.resolve("$name.patch"),
+            "diff --git a/core/x/src/main/kotlin/x/Read.kt b/core/x/src/main/kotlin/x/Read.kt\n" +
+                "--- a/core/x/src/main/kotlin/x/Read.kt\n+++ b/core/x/src/main/kotlin/x/Read.kt\n@@ -3,3 +3,4 @@\n" +
+                added.joinToString("") { "+$it\n" },
+        )
+        // The old ctl-62: a catch of the store's exception, by its qualified name, in a file with no opt-in.
+        InternalUse.unopted(patch("bare", "    catch (e: x.store.StoreException) {}"), root, internal)
+            .assert().containsExactly("core/x/src/main/kotlin/x/Read.kt: x.store.StoreException")
+        InternalUse.unopted(
+            patch(
+                "opted",
+                "    @OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class)",
+                "    catch (e: x.store.StoreException) {}"
+            ),
+            root,
+            internal,
+        ).assert().isEmpty()
+        // A simple name only counts where it resolves to the internal type: imported, or in its package.
+        InternalUse.unopted(patch("simple", "    catch (e: StoreException) {}"), root, internal).assert().isEmpty()
+        InternalUse.unopted(patch("stable", "    val s = x.store.Stable()"), root, internal).assert().isEmpty()
+    }
+
     /** The old `ctl-41`: a default of an inline function, whose callers keep the old one unless they are recompiled. */
     private fun inlineDefault(header: String = ""): Pair<Path, Mutant> {
         val root = Files.createDirectories(temp.resolve("repo"))

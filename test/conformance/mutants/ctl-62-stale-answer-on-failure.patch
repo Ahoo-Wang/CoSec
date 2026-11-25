@@ -3,9 +3,14 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.PropagationTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/SharedRead.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/SharedRead.kt
+index 4a31524a9..dcd765f8f 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/SharedRead.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/SharedRead.kt
-@@ -71,7 +71,11 @@ internal class SharedRead<T>(
+@@ -68,10 +68,15 @@ internal class SharedRead<T>(
+     }
+ 
+     /** Loads, and gives what the load ends in to every call waiting on [shared]: the read, or the failure. */
++    @OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class)
      @Suppress("TooGenericExceptionCaught")
      private suspend fun loadInto(shared: CompletableDeferred<Read<T>?>): Read<T> {
          try {
