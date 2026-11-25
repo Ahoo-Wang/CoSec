@@ -11,7 +11,6 @@
  * limitations under the License.
  */
 
-
 package me.ahoo.cosec.conformance
 
 /** The build guards of the cross-version formats (MIX-*, RFC 0014 T): the cross-version tests of test/compat. */
