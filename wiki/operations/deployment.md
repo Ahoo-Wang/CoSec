@@ -22,7 +22,10 @@ application: it is published only as an image, never as a library.
 **Tags.** A branch push is tagged with the branch name (`main`, `7.x`; a `/` in the name becomes `-`), a pull request
 with `pr-<number>`, and the nightly build refreshes `main`: these tags move with every build, so never run one in
 production. A version tag `v8.0.0-rc.1` publishes `8.0.0-rc.1`, which names one release. A pre-release has no
-other tag; a stable release also moves `<major>.<minor>` (`8.0`) to its newest patch version. Pin
+other tag; a stable release also moves `<major>.<minor>` (`8.0`) to its newest patch version. CoSec 8 publishes no
+`latest`: `ahoowang/cosec-gateway:latest` is still the newest 7.x release, written by the 7.x branch, because a major
+version must never arrive through a floating tag. A 7.x gateway pulled again as `latest` would otherwise come back as
+8.0, which reads none of 7.x's store, and refuse every request. Pin
 the exact version, or the digest of the image you tested (`ahoowang/cosec-gateway@sha256:...`): a floating tag can change
 under a deployment between two restarts. The manifests in [`k8s/`](#kubernetes) pin a version in
 `k8s/base/kustomization.yaml`.
