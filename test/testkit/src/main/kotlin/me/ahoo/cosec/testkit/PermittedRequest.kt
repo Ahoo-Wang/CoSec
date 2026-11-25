@@ -73,7 +73,13 @@ object PermittedRequest {
                     "pass the token as [token], not through [headers]."
             )
         }
-        val pipeline = PermittingHost.pipeline(TokenAuthenticator(verifier, revocations))
+        val pipeline = PermittingHost.pipeline(
+            TokenAuthenticator(
+                verifier,
+                revocations,
+                acceptUnavailableRevocations = false,
+            )
+        )
         val facts = HttpFacts(
             method = "POST",
             rawPath = "/",

@@ -113,7 +113,14 @@ class SwitchFromReplayedPairTest {
     /** The request made with [accessToken], as the pipeline let it through: CoSec's token authenticator verified it. */
     private fun requestWith(accessToken: String): SecurityContext {
         val pipeline = Pipeline
-            .builder(TokenAuthenticator(verifier, RevocationReader.NONE), SuspendingSnapshotSource(EMPTY))
+            .builder(
+                TokenAuthenticator(
+                    verifier,
+                    RevocationReader.NONE,
+                    acceptUnavailableRevocations = false,
+                ),
+                SuspendingSnapshotSource(EMPTY)
+            )
             .engine(PERMITTING)
             .build()
         val facts = HttpFacts(

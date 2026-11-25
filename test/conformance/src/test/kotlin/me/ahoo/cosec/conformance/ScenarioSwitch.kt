@@ -173,7 +173,7 @@ internal object ScenarioSwitch {
     /** The request made with [access], as the pipeline lets it through: a token it cannot verify is anonymous. */
     private fun requestWith(access: String, revocations: RevocationReader): SecurityContext {
         val pipeline = Pipeline.builder(
-            TokenAuthenticator(ScenarioJwt.VERIFIER, revocations),
+            TokenAuthenticator(ScenarioJwt.VERIFIER, revocations, acceptUnavailableRevocations = true),
             SuspendingSnapshotSource(EMPTY)
         )
             .engine(PERMITTING)

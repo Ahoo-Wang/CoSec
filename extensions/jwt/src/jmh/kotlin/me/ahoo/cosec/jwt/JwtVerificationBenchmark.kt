@@ -124,9 +124,9 @@ open class JwtVerificationBenchmark {
         }
         accessToken = JwtTokenConverter(RandomIdGenerator, signing).toToken(subject).accessToken
         verifier = JwtTokenVerifier(signing)
-        authenticator = TokenAuthenticator(verifier, LocalRevocations)
+        authenticator = TokenAuthenticator(verifier, LocalRevocations, acceptUnavailableRevocations = false)
         cachedVerifier = verifier.cached(VerifiedTokenCache(HeapBudget.of().tokenCache))
-        cachedAuthenticator = TokenAuthenticator(cachedVerifier, LocalRevocations)
+        cachedAuthenticator = TokenAuthenticator(cachedVerifier, LocalRevocations, acceptUnavailableRevocations = false)
         credentials = Credentials("Bearer $accessToken", null)
         check(authenticate() is AuthnResult.Authenticated) { "The benchmark's token does not authenticate." }
         check(authenticateCached() is AuthnResult.Authenticated) { "The benchmark's token does not authenticate." }
