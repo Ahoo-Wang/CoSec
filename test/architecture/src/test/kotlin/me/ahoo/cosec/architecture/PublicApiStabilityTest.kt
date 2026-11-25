@@ -85,8 +85,8 @@ class PublicApiStabilityTest {
                 "spi.snapshot.SnapshotKey\$App" to value,
                 "spi.snapshot.SnapshotKey\$Tenant" to value,
             ) + listOf(
-                // The control store's records are experimental with the store (R9, D3); MovedHead and RevisionRef are
-                // experimental with the ChangeEvent that carries them (R2C-5).
+                // The control store's records are experimental with the store (R9, D3). The values a ChangeEvent carries
+                // are stable plain classes (MovedHead, RevisionRef, Escalation, ChangeOrigin, Confirmation), but this one.
                 "change.ShadowSummary" to "A closed shadow window's counts by outcome, when it closed, its two " +
                     "verdicts and the instances whose evidence was missing (CTL-56): a new outcome is a new key of " +
                     "the counts, not a new field.",
@@ -116,8 +116,6 @@ class PublicApiStabilityTest {
                     "source compiles through; its constructor and members are internal, so an application only names it.",
                 "social.justauth.JustAuthProvider" to "Implements the internal SocialAuthenticationProvider; it becomes " +
                     "internal itself in this round (report P-9).",
-                "control.audit.ChangeEvent" to "Its change is the internal ChangeId; the change events become stable " +
-                    "with a change id an application can read in this round (report P-2, group G).",
                 "control.store.ControlStore" to store,
                 "control.store.InMemoryControlStore" to store,
                 "control.store.ListedChange" to store,

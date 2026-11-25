@@ -69,7 +69,7 @@ class ChangeListenerTimeoutTest {
         Instant.EPOCH,
         ChangeEvent.Kind.PUBLISHED,
         Actor(TenantId.PLATFORM, PrincipalId("plato")),
-        ChangeId("c1"),
+        ChangeId("c1").value,
         SnapshotKey.Platform,
         RevisionRef(1, "d"),
         null,

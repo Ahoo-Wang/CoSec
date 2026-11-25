@@ -100,7 +100,7 @@ internal class LostHeads(
                 time = clock.instant(),
                 kind = ChangeEvent.Kind.HEAD_LOST,
                 operator = provenance.publishedBy,
-                change = ChangeId(provenance.change),
+                change = ChangeId(provenance.change).value,
                 document = key,
                 base = RevisionRef(headRevision, headDigest),
                 candidate = RevisionRef(entry.revision, entry.digest.toString()),

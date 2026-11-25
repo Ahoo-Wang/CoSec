@@ -228,7 +228,7 @@ class ChangeListenerLane internal constructor(
             lostCount.incrementAndGet()
             val event = entry.event
             log.error(cause) {
-                "Change event ${event.kind} of change ${event.change.value} on ${event.document} was not recorded by " +
+                "Change event ${event.kind} of change ${event.change} on ${event.document} was not recorded by " +
                     "REQUIRED change listener [${listener.name}]: ${cause.message ?: cause.javaClass.simpleName}. " +
                     "The step is stored; this listener misses the event."
             }

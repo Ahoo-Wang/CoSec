@@ -31,7 +31,7 @@ internal object ChangeEventSize {
     private const val STRING = 40L
 
     fun of(event: ChangeEvent): Long {
-        var bytes = EVENT + text(event.id) + text(event.change.value) + text(event.document.toString()) +
+        var bytes = EVENT + text(event.id) + text(event.change) + text(event.document.toString()) +
             text(event.note) + text(event.operator.principal.value) + text(event.operator.tenant.value)
         event.base?.let { bytes += OBJECT + text(it.digest) }
         event.candidate?.let { bytes += OBJECT + text(it.digest) }

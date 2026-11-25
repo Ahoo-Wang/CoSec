@@ -38,7 +38,7 @@ class StepEventsTest {
 
     private suspend fun kinds(id: ChangeId): List<ChangeEvent.Kind> {
         fixture.listeners.awaitDelivered()
-        return fixture.events.filter { it.change == id }.map { it.kind }
+        return fixture.events.filter { it.change == id.value }.map { it.kind }
     }
 
     private suspend fun proposed(note: String, base: Long = 1) =
@@ -56,7 +56,7 @@ class StepEventsTest {
                 ChangeEvent.Kind.SHADOW_SKIPPED,
                 ChangeEvent.Kind.ABANDONED,
             )
-            val skipped = fixture.events.single { it.change == change.id && it.kind == ChangeEvent.Kind.SHADOW_SKIPPED }
+            val skipped = fixture.events.single { it.change == change.id.value && it.kind == ChangeEvent.Kind.SHADOW_SKIPPED }
             skipped.note.assert().contains("hotfix for incident 42")
             skipped.operator.assert().isEqualTo(fixture.alice.actor)
         }

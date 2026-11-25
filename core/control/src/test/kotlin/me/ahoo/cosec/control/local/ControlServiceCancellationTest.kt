@@ -110,7 +110,7 @@ class ControlServiceCancellationTest {
             change.publishedRevision.assert().isEqualTo(revision + 1)
             fixture.memory.stage(acme)?.value?.holder.assert().isNull()
             fixture.listeners.awaitDelivered()
-            fixture.events.filter { it.change == ChangeId(id) }.map { it.kind }.assert()
+            fixture.events.filter { it.change == ChangeId(id).value }.map { it.kind }.assert()
                 .contains(ChangeEvent.Kind.PUBLISHED)
         }
 

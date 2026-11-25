@@ -15,9 +15,7 @@
 
 package me.ahoo.cosec.control.audit
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeOrigin
 import me.ahoo.cosec.control.change.Confirmation
 import me.ahoo.cosec.control.change.Escalation
@@ -30,8 +28,10 @@ import java.time.Instant
  * What happened to a change (RFC 0007 §10.5). Never carries a document's content: the change id, the document, the
  * base and candidate it was about, what needed approval, the confirmations, the shadow summary and the note; for
  * [Kind.HEADS_MOVED] and [Kind.REVIEW_NEEDED], the heads that [moved] and the escalations the analysis finds now.
+ *
+ * Stable (RFC 0010 C4): a value a [ChangeListener] reads and the control plane makes. A plain class, not a `data class`:
+ * a member it gains in 8.x is a new constructor, never a changed one, and it compares by every member.
  */
-@ExperimentalCoSecApi
 // stays: a record of what happened in a step, one parameter per member of the event
 @Suppress("LongParameterList")
 class ChangeEvent(
@@ -39,7 +39,11 @@ class ChangeEvent(
     val time: Instant,
     val kind: Kind,
     val operator: Actor,
-    val change: ChangeId,
+    /**
+     * The change's id, as the control API names it (`GET /changes/{id}`) and `cosec-control-sdk`'s `Change.id` reads
+     * it: a string with none of `:`, `#`, `@`, `/`.
+     */
+    val change: String,
     val document: SnapshotKey,
     val base: RevisionRef?,
     val candidate: RevisionRef?,
@@ -114,5 +118,14 @@ class ChangeEvent(
         val gated: Boolean get() = this == PUBLISHING || this == BREAK_GLASS_REQUESTED || this == BREAK_GLASS_APPROVED
     }
 
-    override fun toString(): String = "ChangeEvent($kind, change=${change.value}, document=$document, by=${operator.principal.value})"
+    override fun equals(other: Any?): Boolean = this === other || other is ChangeEvent && parts() == other.parts()
+
+    override fun hashCode(): Int = parts().hashCode()
+
+    /** What a log line needs to find the step: its [kind], the [change], the [document] and who acted; never the [note]. */
+    override fun toString(): String = "ChangeEvent($kind, change=$change, document=$document, by=${operator.principal.value})"
+
+    private fun parts(): List<Any?> = listOf(
+        id, time, kind, operator, change, document, base, candidate, escalations, confirmations, shadow, note, moved, origin,
+    )
 }
