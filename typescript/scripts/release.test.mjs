@@ -88,7 +88,11 @@ describe('distTag', () => {
     assert.equal(distTag('8.0.0'), 'latest');
     assert.equal(distTag('8.0.0-alpha.4'), 'alpha');
     assert.equal(distTag('8.0.0-beta.1'), 'beta');
-    assert.equal(distTag('8.0.0-RC1'), 'rc');
+    assert.equal(distTag('8.0.0-rc.1'), 'rc');
+    // An uppercase or unnumbered pre-release sorts wrongly on npm: refused, never given a tag.
+    assert.throws(() => distTag('8.0.0-RC1'));
+    assert.throws(() => distTag('8.0.0-Beta.1'));
+    assert.throws(() => distTag('8.0.0-rc'));
     assert.throws(() => distTag('8.0.0-snapshot.1'));
     assert.throws(() => distTag('8.0'));
   });
