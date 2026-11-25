@@ -215,9 +215,11 @@ any other, so on the application port of an application it needs a statement tha
 ([Actuator on an application](../integration/web.md#actuator-on-an-application)). Liveness is not touched by the missing
 document: the liveness state stays `CORRECT`, which is not a reason to restart the instance. An HTTP liveness probe is
 another matter: on the application port of an application it answers `503` until the first document is published, and so
-does a WebFlux application's management port, so the kubelet would restart the pod before it can be ready. Point a WebMvc
-application's liveness probe at its management port (outside CoSec), and give a WebFlux application a `tcpSocket` probe on
-the application port.
+does the management port of a WebFlux application whose pipeline decides, so the kubelet would restart the pod before it
+can be ready. Point a WebMvc application's liveness probe at its management port (outside CoSec), and give a WebFlux
+application whose pipeline decides a `tcpSocket` probe on the application port. A WebFlux host whose gate is the forwarded
+identity (`gateway` mode, or `cosec.pipeline.caller=forwarded-identity`) can be probed over HTTP on its management port
+([Actuator on an application](../integration/web.md#actuator-on-an-application)).
 
 With Spring Boot Actuator, the `cosecSnapshot` health indicator reports `UP` once the same documents are installed,
 `DOWN` before, with the details `platform` (`installed`, `invalid`, `failed`, `absent` or `loading`), `prewarmed` and
@@ -297,10 +299,11 @@ docker run -d -p 127.0.0.1:8080:8080 \
 |---|---|---|
 | **8080** | the operators' API, `/cosec/control/**` (`cosec.control.http.base-path`), every route of [the control API](../policies/testing.md#the-control-plane) | the gateway's pods |
 | **8082** | the service API (`cosec.control.http.service-port`), the narrow profile for a service that calls the control plane directly: which tenant and app documents there are ([`GET /documents?kind=`](../policies/testing.md#listing-documents), granted to a service by `cosec:read` on `doc/tenant` or `doc/app`), the tenant and app documents, and their change flow ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)); every other route is a `404` there | exactly the services you name |
-| **8081** | the management port: `/actuator/health/liveness`, `/actuator/health/readiness`, `/actuator/prometheus`; outside CoSec. The control API is a `404` there, as on any port but 8080 and 8082 (`CTL-69`) | monitoring only |
+| **8081** | the management port: `/actuator/health/liveness`, `/actuator/health/readiness`, `/actuator/prometheus`; under CoSec's identity gate, which decides nothing for a request without `CoSec-Identity`, so the probes pass, and still refuses a malformed identity header there ([Actuator on an application](../integration/web.md#actuator-on-an-application)). The control API is a `404` there, as on any port but 8080 and 8082 (`CTL-69`) | monitoring only |
 
 Nothing in CoSec authorizes the management port, and the actuator is not on the application port: probe the management
-port. The management port is not only the actuator: Spring Boot's management server
+port. The probes pass there because the host's gate is the forwarded identity's, which decides nothing for a request
+that carries none; an application whose WebFlux pipeline decides cannot be probed over HTTP on its management port. The management port is not only the actuator: Spring Boot's management server
 also serves an application's own functional routes there, which the image has none of; CoSec's own routes, the control API
 included, answer on the application port and the service port only. The service port is the application's own server on
 another port, with its TLS, client authentication and bind address: if mutual TLS on the application port is what makes the

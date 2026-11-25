@@ -376,7 +376,7 @@ flowchart LR
 
 对文档持有 `cosec:approve` 的平台主体是信任根：其自己的变更不做分析，除非开启了 `cosec.control.approval.four-eyes`，这时它们会像其他人的变更一样被分析。平台授予了其租户文档上 `cosec:approve` 的租户主体，审批别人的变更，它自己的变更要经分析。开启 four-eyes 时，信任根的变更需要审批的部分必须由另一位平台主体审批。租户的边界属于平台：只有平台主体能设置它（否则 `403`），也只有平台主体能审批、驳回或放弃设置边界的变更。
 
-工作负载的凭证无论其主体持有什么，都不是信任根，也从不审批（`IDN-34`）：API key，或服务自己的身份（`ControlCaller.service`），其凭证名为 `service`。CoSec 按校验来源识别自己的 API key，任何名为 `api-key` 或 `service` 的凭证（包括网关转发的身份所带的）也算作工作负载的凭证。你自己的认证器认可的凭证，除非它把凭证命名为 `service`，在 CoSec 看来都是人的凭证：不要给面向工作负载的认证器授予 `cosec:approve` 或 `cosec:platform-admin`，或者让它把凭证命名为 `service`。
+工作负载的凭证无论其主体持有什么，都不是信任根，也从不审批（`IDN-34`）：API key、服务自己的身份（`ControlCaller.service`），以及任何没有声明自己是人的凭证（`IDN-44`）。决定的是种类，从不是凭证的方式：CoSec 签发的令牌带着它（`cosec.kind`），网关转发它（`auth.kind`），不是 `person` 或什么都没写的，都读作工作负载的。你自己的认证器构造的凭证就是它声明的那种（[认证器](../architecture/extending.md#authenticators)）：把机器客户端的凭证声明为工作负载的，并且不要给面向工作负载的认证器授予 `cosec:approve` 或 `cosec:platform-admin`。
 
 分析看不到的东西：
 
