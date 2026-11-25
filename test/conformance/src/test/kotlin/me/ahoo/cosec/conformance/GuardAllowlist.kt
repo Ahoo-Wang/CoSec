@@ -93,6 +93,9 @@ object GuardAllowlist {
             "control:ApprovalB2Test#a service's own identity never approves - IDN-34",
             "control:ApprovalB2Test#a service's own identity is never the trust root - IDN-34",
             "architecture:WorkloadCredentialTest#whether a principal is a workload is read from workload, never from apiKey alone - IDN-34",
+            // IDN-45: a login declares whose the token is, and CoSec's issuer writes it as cosec.kind.
+            "jwt:JwtTokenConverterTest#the access token says whose it is, and the refresh token does not - IDN-45",
+            "login:TokenSubjectTest#a subject's kind is part of it, and its session keeps it - IDN-45",
             // IDN-44: every credential declares whose it is, and that kind, never the method's name, decides.
             "spi:AuthenticatedPrincipalTest#a credential named api-key or service cannot be declared a person's - IDN-44",
             "document:IdentityKindTest#every writer of CoSec writes the kind, and it reads back - IDN-44",
@@ -279,7 +282,7 @@ object GuardAllowlist {
             "jwt:VerifiedTokenCachePropertyTest#a cached verification is what verifying again answers, at every instant",
             "jwt:VerifiedTokenCachePropertyTest#a token that differs from a cached one only in its signature is refused",
             "jwt:VerifiedTokenCachePropertyTest#the cache keeps within its bound and counts what it does",
-            "jwt:VerifiedTokenCacheSizeTest#an entry weighs what it retains, and the share of a 2 GiB heap holds the large tokens the old bound did",
+            "jwt:VerifiedTokenCacheSizeTest#an entry weighs what it retains, and the share of a 2 GiB heap holds the bytes the old bound did",
             "spring-boot:OneVerifierTest#CoSec's own verifier answers a request's token from the cache, and a logout still refuses it next",
             "spring-boot:OneVerifierTest#an application's own verifier is never given the cache",
             // PIP-32: nothing reads the server's request after the response.

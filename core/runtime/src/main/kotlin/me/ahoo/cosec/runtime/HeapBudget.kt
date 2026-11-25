@@ -64,7 +64,7 @@ class HeapBudget private constructor(val heap: Long) {
         /** 2 GiB / 8 = 256 MiB: 516,222 entries in each table at 290 + 230 bytes, where the bound was 500,000. */
         const val REVOCATION_TABLES_SHARE: Long = 8
 
-        /** 2 GiB / 16 = 128 MiB: more than the 16,384 entries of 7.3 KB (about 115 MB) the bound was. */
+        /** 2 GiB / 16 = 128 MiB: no less than the 16,384 largest test tokens the bound was, at 5 bytes a character. */
         const val TOKEN_CACHE_SHARE: Long = 16
 
         /** 2 GiB / 64 = 32 MiB, shared by the BEST_EFFORT listeners, where each had 1,024 events. */

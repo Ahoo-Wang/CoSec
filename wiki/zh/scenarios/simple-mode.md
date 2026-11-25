@@ -33,7 +33,7 @@ description: "一个服务、一个租户，没有应用和空间：一份平台
 用户登录时签发带角色的令牌：
 
 ```kotlin
-TokenSubject(id = user.id, app = null, roles = setOf("admin"))
+TokenSubject(id = user.id, kind = Kind.PERSON, app = null, roles = setOf("admin"))
 ```
 
 ## 验证 {#check-it}

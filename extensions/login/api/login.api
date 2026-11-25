@@ -132,12 +132,13 @@ public final class me/ahoo/cosec/login/token/TokenFamilies$Issue {
 
 public final class me/ahoo/cosec/login/token/TokenSubject {
 	public static final field Companion Lme/ahoo/cosec/login/token/TokenSubject$Companion;
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;Ljava/time/Instant;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;Ljava/time/Instant;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Lme/ahoo/cosec/spi/identity/Identity$Credential$Kind;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;Ljava/time/Instant;)V
+	public synthetic fun <init> (Ljava/lang/String;Lme/ahoo/cosec/spi/identity/Identity$Credential$Kind;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;Ljava/time/Instant;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getApp ()Ljava/lang/String;
 	public final fun getAttributes ()Ljava/util/Map;
 	public final fun getId ()Ljava/lang/String;
+	public final fun getKind ()Lme/ahoo/cosec/spi/identity/Identity$Credential$Kind;
 	public final fun getMembershipMarker ()Ljava/lang/String;
 	public final fun getNotAfter ()Ljava/time/Instant;
 	public final fun getPolicies ()Ljava/util/Set;

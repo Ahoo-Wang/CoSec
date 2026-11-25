@@ -65,6 +65,7 @@ import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.spi.audit.AuditEventSink
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipProvider
@@ -133,7 +134,15 @@ class StarterWiringTest {
     private fun token(context: ApplicationContext, principal: String, provider: Boolean = false): String {
         val marker = if (provider) MembershipClaims.PROVIDER else null
         return context.getBean(TokenConverter::class.java)
-            .toToken(TokenSubject(principal, app = "cosec-control", tenant = TENANT, membershipMarker = marker))
+            .toToken(
+                TokenSubject(
+                    principal,
+                    Identity.Credential.Kind.PERSON,
+                    app = "cosec-control",
+                    tenant = TENANT,
+                    membershipMarker = marker
+                )
+            )
             .accessToken
     }
 

@@ -26,6 +26,7 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.stage.MembershipResolver
 import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipProvider
@@ -57,7 +58,14 @@ class MembershipClaimsJwtTest {
     )
 
     private fun principal(roles: Set<String> = this.roles) =
-        TokenSubject("alice", tenant = tenant.value, roles = roles, policies = policies, attributes = attributes)
+        TokenSubject(
+            "alice",
+            Identity.Credential.Kind.PERSON,
+            tenant = tenant.value,
+            roles = roles,
+            policies = policies,
+            attributes = attributes
+        )
 
     /** A token as CoSec 7.x writes it. */
     private fun sevenXToken(
@@ -130,6 +138,7 @@ class MembershipClaimsJwtTest {
             decoded.claims.keys.assert().containsExactlyInAnyOrder(
                 "jti",
                 "sub",
+                Jwts.KIND_CLAIM,
                 "iat",
                 "exp",
                 "policies",
@@ -168,7 +177,7 @@ class MembershipClaimsJwtTest {
 
     @Test
     fun onlyRolesCountWhenThereAreNoPolicies() {
-        val principal = TokenSubject("alice", roles = roles)
+        val principal = TokenSubject("alice", Identity.Credential.Kind.PERSON, roles = roles)
         val decoded = Jwts.decode(converter(claimSize(roles)).toToken(principal).accessToken)
 
         decoded.getClaim("roles").asList(String::class.java).assert().containsExactly("admin", "editor@team-a")
@@ -197,7 +206,14 @@ class MembershipClaimsJwtTest {
 
     @Test
     fun refreshingKeepsAnInvalidMarkerAndItsClaims() {
-        val marked = TokenSubject("alice", roles = roles, policies = policies, membershipMarker = "claims")
+        val marked =
+            TokenSubject(
+                "alice",
+                Identity.Credential.Kind.PERSON,
+                roles = roles,
+                policies = policies,
+                membershipMarker = "claims"
+            )
 
         val decoded = Jwts.decode(converter(0).toToken(marked).accessToken)
 

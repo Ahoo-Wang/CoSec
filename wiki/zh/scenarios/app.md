@@ -69,7 +69,7 @@ cosec-migrate publish --to-redis redis://localhost:6379 --file documents/apps/wm
 登录时说明令牌是为哪个应用签发的，以及用户在其中持有的角色：
 
 ```kotlin
-TokenSubject(id = user.id, app = "wms", tenant = user.tenant, roles = setOf("clerk"))
+TokenSubject(id = user.id, kind = Kind.PERSON, app = "wms", tenant = user.tenant, roles = setOf("clerk"))
 ```
 
 为其他应用或不为任何应用签发的令牌，会被这个服务拒绝（[应用](../integration/authentication.md#apps)）。

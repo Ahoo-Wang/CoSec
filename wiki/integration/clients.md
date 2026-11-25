@@ -186,7 +186,7 @@ are the claims of an access token ([Tokens](./authentication.md#tokens)):
 | `roles`, `policies` | Nothing about what the user may do: they are left out when empty and **when `cosec.membership` is `"provider"`**, and a change takes effect at the next login or refresh | Does not mean "no roles" |
 | `jti` | An id | |
 | `sid`, `auth_time` | The session's id and the time its user signed in (seconds) | Not a session: the pair is never refreshed |
-| `cosec.generation`, `cosec.token`, `cosec.membership` | Nothing: a client must not depend on them | |
+| `cosec.generation`, `cosec.token`, `cosec.membership`, `cosec.kind` | Nothing: a client must not depend on them | |
 
 The refresh token is a JWT as well. Read its `exp`; its other claims name the session and its access token, and a
 client has no use for them.

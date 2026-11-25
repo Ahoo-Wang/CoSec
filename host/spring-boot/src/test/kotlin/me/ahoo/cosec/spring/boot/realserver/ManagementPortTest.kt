@@ -29,6 +29,7 @@ import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
 import me.ahoo.test.asserts.assert
@@ -201,7 +202,9 @@ class ManagementPortTest {
                 app
             }
             val token = context.getBean(TokenConverter::class.java)
-                .toToken(TokenSubject("plato", app = "cosec-control", tenant = "(platform)")).accessToken
+                .toToken(
+                    TokenSubject("plato", Identity.Credential.Kind.PERSON, app = "cosec-control", tenant = "(platform)")
+                ).accessToken
             val before = Observation(probes(app, stack, token), probes(management, stack, token))
             publish(context)
             // The platform document is installed once the application's own public route answers (a gateway has none:

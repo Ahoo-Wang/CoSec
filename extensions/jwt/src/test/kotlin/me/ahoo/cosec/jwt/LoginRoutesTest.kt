@@ -34,6 +34,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.http.ProblemRenderer
 import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.RevocationUnavailableException
@@ -109,7 +110,11 @@ class LoginRoutesTest {
     }
 
     private fun login(user: String = "alice"): CompositeToken = converter.toToken(
-        TokenSubject(user).inSession(runBlocking { families.start(TenantId.DEFAULT, PrincipalId(user)) }),
+        TokenSubject(user, Identity.Credential.Kind.PERSON).inSession(
+            runBlocking {
+                families.start(TenantId.DEFAULT, PrincipalId(user))
+            }
+        ),
     )
 
     private fun body(pair: CompositeToken): ByteArray =

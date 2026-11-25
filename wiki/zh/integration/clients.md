@@ -139,7 +139,7 @@ CoSec 不提供登录和租户切换：它们属于应用，用 CoSec 的类编�
 | `roles`、`policies` | 不要用来判断用户能做什么：为空时不写，**`cosec.membership` 为 `"provider"` 时也不写**，变化要到下次登录或刷新才生效 | 不表示"没有角色" |
 | `jti` | 一个 id | |
 | `sid`、`auth_time` | 会话 id 和用户登录的时间（秒） | 不属于会话：这个令牌对永远不会被刷新 |
-| `cosec.generation`、`cosec.token`、`cosec.membership` | 不要用：客户端不能依赖它们 | |
+| `cosec.generation`、`cosec.token`、`cosec.membership`、`cosec.kind` | 不要用：客户端不能依赖它们 | |
 
 刷新令牌也是 JWT。读它的 `exp`；它的其他声明指明会话和它的访问令牌，客户端用不到。
 

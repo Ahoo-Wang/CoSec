@@ -44,11 +44,8 @@ internal object TokenOperations {
     )
 
     private fun subject(name: String): TokenSubject = when (name) {
-        "person" -> TokenSubject(
-            "alice", tenant = "acme", app = "order", roles = setOf("clerk", "viewer@team-a"),
-            attributes = mapOf("dept" to "sales"),
-        )
-        "platform" -> TokenSubject("plato", tenant = "(platform)", app = "cosec-control", roles = setOf("admin"))
+        "person" -> Kinds.person("alice", "acme", "order", setOf("clerk", "viewer@team-a"), mapOf("dept" to "sales"))
+        "platform" -> Kinds.person("plato", "(platform)", "cosec-control", setOf("admin"), emptyMap())
         else -> throw IllegalArgumentException("no sample $name")
     }
 

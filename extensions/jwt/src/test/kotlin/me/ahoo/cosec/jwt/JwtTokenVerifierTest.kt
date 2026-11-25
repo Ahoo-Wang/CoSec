@@ -45,7 +45,7 @@ class JwtTokenVerifierTest {
 
     @Test
     fun verify() {
-        val token: CompositeToken = jwtTokenConverter.toToken(TokenSubject("alice"))
+        val token: CompositeToken = jwtTokenConverter.toToken(TokenSubject("alice", Identity.Credential.Kind.PERSON))
         jwtTokenVerifier.verify(token.accessToken).principal.assert().isEqualTo("alice")
     }
 
@@ -85,11 +85,13 @@ class JwtTokenVerifierTest {
     @Test
     fun anAccessTokenIsRefusedWhereARefreshTokenIsExpected() {
         val victim = jwtTokenConverter.toToken(
-            TokenSubject("alice", tenant = "acme", roles = setOf("admin")),
+            TokenSubject("alice", Identity.Credential.Kind.PERSON, tenant = "acme", roles = setOf("admin")),
             Duration.ofSeconds(-3600),
             Duration.ofDays(7),
         )
-        val attacker = jwtTokenConverter.toToken(TokenSubject(JWT.decode(victim.accessToken).id))
+        val attacker = jwtTokenConverter.toToken(
+            TokenSubject(JWT.decode(victim.accessToken).id, Identity.Credential.Kind.PERSON)
+        )
         assertThrownBy<TokenVerificationException> {
             jwtTokenVerifier.refresh(CompositeToken(victim.accessToken, attacker.accessToken))
         }.message().contains("not a refresh token")
@@ -107,7 +109,7 @@ class JwtTokenVerifierTest {
     /** `IDN-13`: a refresh token is signed and unexpired, and is still not an access token: it never becomes a principal. */
     @Test
     fun aRefreshTokenIsRefusedWhereAnAccessTokenIsExpected() {
-        val composite = jwtTokenConverter.toToken(TokenSubject("alice"))
+        val composite = jwtTokenConverter.toToken(TokenSubject("alice", Identity.Credential.Kind.PERSON))
         val accessTokenId = JWT.decode(composite.accessToken).id
         assertThrownBy<TokenVerificationException> {
             jwtTokenVerifier.verify(composite.refreshToken)
@@ -369,10 +371,10 @@ class JwtTokenVerifierTest {
 
     @Test
     fun refresh() {
-        val oldToken: CompositeToken = jwtTokenConverter.toToken(TokenSubject("alice"))
+        val oldToken: CompositeToken = jwtTokenConverter.toToken(TokenSubject("alice", Identity.Credential.Kind.PERSON))
         val newTokenPrincipal = jwtTokenVerifier.refresh(oldToken)
-        newTokenPrincipal.principal.assert().isEqualTo(TokenSubject("alice").id)
-        newTokenPrincipal.tenant.assert().isEqualTo(TokenSubject("alice").tenant)
+        newTokenPrincipal.principal.assert().isEqualTo(TokenSubject("alice", Identity.Credential.Kind.PERSON).id)
+        newTokenPrincipal.tenant.assert().isEqualTo(TokenSubject("alice", Identity.Credential.Kind.PERSON).tenant)
     }
 
     @Test
@@ -384,7 +386,7 @@ class JwtTokenVerifierTest {
                 Duration.ofMillis(1),
                 Duration.ofMillis(1)
             )
-        val oldToken: CompositeToken = converter.toToken(TokenSubject("alice"))
+        val oldToken: CompositeToken = converter.toToken(TokenSubject("alice", Identity.Credential.Kind.PERSON))
         TimeUnit.SECONDS.sleep(1)
         assertThrows(TokenExpiredException::class.java) { jwtTokenVerifier.refresh(oldToken) }
     }
@@ -392,8 +394,8 @@ class JwtTokenVerifierTest {
     @Test
     fun refreshWhenRefreshTokenBelongsToAnotherAccessToken() {
         // A valid refresh token paired with another valid access token is an invalid token (401), not a bad argument.
-        val first: CompositeToken = jwtTokenConverter.toToken(TokenSubject("alice"))
-        val second: CompositeToken = jwtTokenConverter.toToken(TokenSubject("alice"))
+        val first: CompositeToken = jwtTokenConverter.toToken(TokenSubject("alice", Identity.Credential.Kind.PERSON))
+        val second: CompositeToken = jwtTokenConverter.toToken(TokenSubject("alice", Identity.Credential.Kind.PERSON))
         val mismatched = CompositeToken(accessToken = second.accessToken, refreshToken = first.refreshToken)
 
         assertThrows(RefreshTokenMismatchException::class.java) {
@@ -403,11 +405,11 @@ class JwtTokenVerifierTest {
 
     @Test
     fun refreshWhenAccessTokenSignatureIsForged() {
-        val oldToken: CompositeToken = jwtTokenConverter.toToken(TokenSubject("alice"))
+        val oldToken: CompositeToken = jwtTokenConverter.toToken(TokenSubject("alice", Identity.Credential.Kind.PERSON))
         val legitAccessTokenId = Jwts.decode(oldToken.accessToken).id
         val forgedAccessToken = JWT.create()
             .withJWTId(legitAccessTokenId)
-            .withSubject(TokenSubject("alice").id)
+            .withSubject(TokenSubject("alice", Identity.Credential.Kind.PERSON).id)
             .sign(Algorithm.HMAC256("attacker-secret"))
         val forgedToken = CompositeToken(
             accessToken = forgedAccessToken,
@@ -427,12 +429,12 @@ class JwtTokenVerifierTest {
             Duration.ofMillis(1),
             Duration.ofDays(7),
         )
-        val oldToken: CompositeToken = converter.toToken(TokenSubject("alice"))
+        val oldToken: CompositeToken = converter.toToken(TokenSubject("alice", Identity.Credential.Kind.PERSON))
         TimeUnit.SECONDS.sleep(1)
 
         val newTokenPrincipal = jwtTokenVerifier.refresh(oldToken)
 
-        newTokenPrincipal.principal.assert().isEqualTo(TokenSubject("alice").id)
-        newTokenPrincipal.tenant.assert().isEqualTo(TokenSubject("alice").tenant)
+        newTokenPrincipal.principal.assert().isEqualTo(TokenSubject("alice", Identity.Credential.Kind.PERSON).id)
+        newTokenPrincipal.tenant.assert().isEqualTo(TokenSubject("alice", Identity.Credential.Kind.PERSON).tenant)
     }
 }

@@ -24,6 +24,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -80,6 +81,7 @@ class SwitchTenantAuthentication<C : SwitchTenantCredentials>(
     private fun inTarget(previous: SecurityContext, target: String, membership: TenantMembership): TokenSubject =
         TokenSubject(
             id = previous.principal.id,
+            kind = Identity.Credential.Kind.PERSON,
             app = membership.app?.also(::requireAppId) ?: previous.scope.appId.ifEmpty { null },
             tenant = target,
             roles = membership.roles,

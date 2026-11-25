@@ -219,6 +219,8 @@ export class FakeCoSecHost {
       ...(session.roles.length > 0 ? { roles: session.roles } : {}),
       ...(session.aud ? { aud: session.aud } : {}),
       ...(session.tenant ? { tenantId: session.tenant } : {}),
+      // Whose the token is (IDN-45): every access token says, and a client must not depend on it.
+      'cosec.kind': 'person',
       ...common,
     };
     const refresh = {

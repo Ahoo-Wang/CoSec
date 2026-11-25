@@ -41,7 +41,7 @@ tenant `(0)`, and no app, so no app document is read.
 Issue a token with a role when the user signs in:
 
 ```kotlin
-TokenSubject(id = user.id, app = null, roles = setOf("admin"))
+TokenSubject(id = user.id, kind = Kind.PERSON, app = null, roles = setOf("admin"))
 ```
 
 ## Check it

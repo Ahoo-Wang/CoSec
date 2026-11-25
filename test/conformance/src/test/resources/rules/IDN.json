@@ -432,7 +432,7 @@
         "jwt:VerifiedTokenCachePropertyTest#the cache keeps within its bound and counts what it does",
         "spring-boot:OneVerifierTest#CoSec's own verifier answers a request's token from the cache, and a logout still refuses it next",
         "spring-boot:OneVerifierTest#an application's own verifier is never given the cache",
-        "jwt:VerifiedTokenCacheSizeTest#an entry weighs what it retains, and the share of a 2 GiB heap holds the large tokens the old bound did"
+        "jwt:VerifiedTokenCacheSizeTest#an entry weighs what it retains, and the share of a 2 GiB heap holds the bytes the old bound did"
       ],
       "properties": [
         "jwt:VerifiedTokenCachePropertyTest#a cached verification is what verifying again answers, at every instant"
@@ -660,6 +660,17 @@
         "runtime:IdentityGateTest#a forwarded identity's kind decides whether it is a workload and may use break-glass - IDN-44",
         "control:ApprovalB2Test#a credential declared a workload's never approves, whatever its method - IDN-44",
         "control:ApprovalB2Test#a credential declared a workload's is never the trust root, whatever its method - IDN-44"
+      ]
+    },
+    {
+      "id": "IDN-45",
+      "source": "RFC 0014 R3 (the maintainer's word of 2026-11-24 on the kind through login, tokens, verifiers and the header, “同意”); the R3 design page v2, §B",
+      "statement": "A login declares whose the token it issues is: TokenSubject.kind, PERSON or WORKLOAD, a required parameter with no default, so every Authentication says which for every principal it signs in (a social sign-in is a person's). CoSec's issuer writes it into every access token as the claim `cosec.kind`, `person` or `workload`, and into no refresh token; a client must not depend on it (contract/token/claims.json).",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "jwt:JwtTokenConverterTest#the access token says whose it is, and the refresh token does not - IDN-45",
+        "login:TokenSubjectTest#a subject's kind is part of it, and its session keeps it - IDN-45"
       ]
     }
   ]

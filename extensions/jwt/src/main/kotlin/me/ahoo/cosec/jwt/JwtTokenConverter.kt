@@ -106,6 +106,8 @@ class JwtTokenConverter @InternalCoSecApi constructor(
                 .withSubject(subject.id)
                 .withIssuedAt(now)
                 .withExpiresAt(accessTokenExp)
+                // Whose the token is (IDN-45), always: a verifier reads none as a workload's.
+                .withClaim(Jwts.KIND_CLAIM, Jwts.kindValue(subject.kind))
         subject.app?.let { accessTokenBuilder.withAudience(it) }
         writeMemberships(accessTokenBuilder, subject)
         writeSession(accessTokenBuilder, subject)

@@ -144,13 +144,14 @@ class DemoController(private val tokenConverter: TokenConverter) {
     // Demo only: issues a token for any user id, without checking a password.
     @GetMapping("/token")
     fun token(@RequestParam user: String): CompositeToken =
-        tokenConverter.toToken(TokenSubject(id = user, app = null))
+        tokenConverter.toToken(TokenSubject(id = user, kind = Kind.PERSON, app = null))
 }
 ```
 
 The starter configures `TokenConverter` (`me.ahoo.cosec.login.token`) from `cosec.jwt`. `TokenSubject` is in the
 same package, `CompositeToken` in `me.ahoo.cosec.api.token`; the response carries an
-`accessToken` and a `refreshToken`. A real login endpoint checks credentials before it issues a token; see
+`accessToken` and a `refreshToken`. `Kind` is `Identity.Credential.Kind` (`me.ahoo.cosec.spi.identity`): a user's token
+is a person's, a machine's a workload's, which never approves a change and has no break-glass (`IDN-45`). A real login endpoint checks credentials before it issues a token; see
 [Logging in](../integration/authentication.md#logging-in).
 
 ## Send requests
@@ -238,7 +239,7 @@ acknowledged, and the way back from one is `cosec-migrate restore` ([Storage](..
    @Bean
    fun platformToken(tokenConverter: TokenConverter) = ApplicationRunner {
        // Demo only: anyone who can run this can administer the deployment.
-       val token = tokenConverter.toToken(TokenSubject(id = "alice", app = "cosec-control", tenant = "(platform)"))
+       val token = tokenConverter.toToken(TokenSubject(id = "alice", kind = Kind.PERSON, app = "cosec-control", tenant = "(platform)"))
        println("platform token: ${token.accessToken}")
    }
    ```

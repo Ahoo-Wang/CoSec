@@ -30,13 +30,13 @@ description: "把租户所有者做成令牌里的附加策略：谁是所有者
 身份系统给所有者签发两个令牌。给应用的令牌，`policies` 列出附加策略：
 
 ```kotlin
-TokenSubject(id = "bob", app = "wms", tenant = "acme", policies = setOf("tenant-owner"))
+TokenSubject(id = "bob", kind = Kind.PERSON, app = "wms", tenant = "acme", policies = setOf("tenant-owner"))
 ```
 
 给控制面的令牌，为它的应用签发，带角色：
 
 ```kotlin
-TokenSubject(id = "bob", app = "cosec-control", tenant = "acme", roles = setOf("owner"))
+TokenSubject(id = "bob", kind = Kind.PERSON, app = "cosec-control", tenant = "acme", roles = setOf("owner"))
 ```
 
 只为身份系统确认拥有该租户的用户签发带 `tenant-owner` 的令牌。附加策略按令牌所说的信任，这正是它的用处，也是令牌的签发者决定所有权的原因。

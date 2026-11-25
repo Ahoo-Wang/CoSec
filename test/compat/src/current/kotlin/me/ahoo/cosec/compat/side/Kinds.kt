@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.compat.side
 
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.TokenSession
 import java.time.Instant
@@ -36,6 +37,17 @@ internal object Kinds {
     /** An API key's credential, a workload's by construction. */
     fun apiKey(id: String, expiresAt: Instant, capped: Boolean): Identity.Credential =
         Identity.Credential(Identity.Method.API_KEY, Identity.Credential.Kind.WORKLOAD, id, expiresAt, capped = capped)
+
+    /** A person's sign-in, as a login declares it (`IDN-45`). */
+    fun person(id: String, tenant: String, app: String, roles: Set<String>, attributes: Map<String, Any>): TokenSubject =
+        TokenSubject(
+            id,
+            Identity.Credential.Kind.PERSON,
+            tenant = tenant,
+            app = app,
+            roles = roles,
+            attributes = attributes
+        )
 
     /** Whose [credential] is, as this version read it: `person` or `workload`. */
     fun of(credential: Identity.Credential): String = credential.kind.name.lowercase()
