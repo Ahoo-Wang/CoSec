@@ -300,7 +300,8 @@ error naming the character and its position (`DOC-15`). So a pattern written for
 a literal that matches nothing: a DENY that relied on it would otherwise be void on an instance of this version.
 
 A backslash writes a character as text: `\` followed by one of `[ ] ( ) | ! ^ $ \ * ? { }` is that character, and
-followed by anything else is a compile error. An escaped `*`, `?` or `{` is never a wildcard or a capture.
+followed by anything else is a compile error. An escaped `*`, `?` or `{` is never a wildcard or a capture. In the
+service or the verb of an action, `*`, `?`, `{` and `}` are written escaped too: an action has no wildcard within a name.
 
 | You mean | Write | In JSON |
 |---|---|---|

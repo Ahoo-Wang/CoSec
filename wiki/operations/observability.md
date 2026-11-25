@@ -185,7 +185,7 @@ which ties a response to its trace.
 ## Startup summary
 
 Once every bean exists, the starter logs one INFO line of what CoSec is configured as, for example
-`CoSec 8.0.0-beta.8: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), token-cache=on (max-bytes=134217728), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`.
+`CoSec 8.0.0-beta.9: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), token-cache=on (max-bytes=134217728), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`.
 Each entry is what a request meets, resolved as the authenticator resolves it: the revocation reader is the application's bean, the CoCache token store's, or `RevocationReader.NONE`, which the line spells out because revoked tokens are then accepted until they expire; with no token verification (`jwt=off`) there is no reader to name. `token-cache` says whether a request's token is answered from [the verified-token cache](../integration/authentication.md#the-verified-token-cache): `off` when configured off, or for a `TokenVerifier` bean of your own. When the application declares an `Authenticator` bean, it replaces the starter's ([extending](../architecture/extending.md)): the line then says `authenticator=<class> (replaces CoSec's: tokens, revocation and API keys are its own)` and lists no `jwt`, `revocation-reader` or `api-keys`, since none of them is in force.
 A switch written `false` is added as `switched-off-by-configuration=[...]`. A rate limiter named `LocalRateLimiter` counts
 per instance: with several instances the limit is multiplied by their number. When `cosec.enabled=false` the line is
@@ -523,8 +523,9 @@ control plane cannot see it among the readers, usually a Redis user without writ
 `cosec.control.instances.releases` (a gauge, no tags) is how many releases the readers of the last hour ran at this
 host's last read of them, the read `GET /instances` answers from too ([Testing policies](../policies/testing.md#instances)).
 Every control-plane host reads them at each of its shadow passes (the shadow check interval of its startup line, at most
-a minute; at most once every 5 seconds), whether or not it holds the pass's lease (`CTL-89`): the gauge is current on
-every replica without anyone calling the route, and each replica reports its own reading. Above 1 for longer than a
+a minute; at most once every 5 seconds), whether or not it holds the pass's lease (`CTL-89`): each replica reports its
+own reading without anyone calling the route. The gauge is `0` until the host's first pass, up to one interval after it
+starts, and keeps its last value, however old, while the readers cannot be read (the failure is logged). Above 1 for longer than a
 rolling upgrade takes is an instance of an old release still reading the store.
 
 `cosec.control.revisions.records` and `cosec.control.revisions.bytes` (gauges, no tags) are the revision records the

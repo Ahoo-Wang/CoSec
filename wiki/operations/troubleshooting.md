@@ -532,6 +532,11 @@ answers `503` while no platform document is installed and `401` to an anonymous 
 permits the path. Liveness is not touched in Spring's state, but an HTTP liveness probe is a request, so it fails with the
 rest, and the kubelet restarts the pod.
 
+This is a host whose pipeline decides (`enforce` with `caller: credential`, the default). A WebFlux host whose gate is the
+forwarded identity (`gateway` mode, or `caller: forwarded-identity`, as the control-plane image) decides nothing for a
+request without `CoSec-Identity`: its probes answer as Spring's own, and HTTP probes work there, on the management port
+too ([Actuator on an application](../integration/web.md#actuator-on-an-application)).
+
 - **Readiness over HTTP:** permit `GET` on the two probe paths for anyone, with one statement
   ([the policy](../integration/web.md#actuator-on-an-application)). Before the first publish it still answers `503`, the
   right answer for "not ready". Spring Boot 4 serves the probes on every platform (`management.endpoint.health.probes.enabled`
@@ -571,7 +576,7 @@ rest, and the kubelet restarts the pod.
 - `` '<c>' is reserved for a future pattern syntax; write \<c> for the character ``: a pattern holds one of
   `[ ] ( ) | ! ^ $ \` unescaped (`DOC-15`), which an earlier preview read as text. Write it escaped, `\$` for `$`, a
   backslash doubled in JSON ([Policy language](../policies/language.md#reserved-characters)). The message gives the
-  position. From the preview after 8.0.0-beta.8 on, a stored document with one is installed as failed, and the requests that read it answer
+  position. From 8.0.0-beta.9 on, a stored document with one is installed as failed, and the requests that read it answer
   `503`: find such documents before upgrading with [`cosec-migrate check-patterns`](./upgrading.md#check-the-patterns-before-an-upgrade) ([Upgrading from 8.0.0-beta.8](./upgrading-previews.md#from-8-0-0-beta-8)).
 - `` \<c> escapes nothing ``: a backslash before a character that is not one of `[ ] ( ) | ! ^ $ \ * ? { }`.
 - `` a request path holds no backslash ``, `` hold no ';' ``, `` holds no control character ``, `` holds no dot segment ``,
@@ -579,6 +584,11 @@ rest, and the kubelet restarts the pod.
   (`PIP-5`, `PIP-14`, `PIP-30`), so a DENY written so would deny nothing. Name the path as the pipeline sees it.
 - A route map that does not load with one of these messages: its path, action or resource template holds the
   character; the same rule applies.
+- **No error, but a DENY stopped denying, or an ALLOW started granting, after the upgrade from 8.0.0-beta.8:** a pattern
+  stored before it holds a backslash, which beta.8 read as a character and this version reads as an escape
+  (`DOC-15`). A DENY on `doc/a\(b` denied the id `a\(b` and now denies `a(b`; an ALLOW on `http:path:/files/\$x`
+  matched nothing and now grants `/files/$x`. `cosec-migrate check-patterns` names each such pattern and the form that
+  keeps its meaning (the backslash escaped, `doc/a\\\(b`); publish it.
 
 ## A compilation does not end {#a-compilation-does-not-end}
 
@@ -777,6 +787,17 @@ An application has one `ControlService`: the in-process one where it runs the co
 host. To embed the control plane, remove `cosec.control.service-url`. To call the host, set `cosec.control.enabled=false`
 (or leave `cosec-control` out). `cosec.control.service-url needs cosec-control-http` means the host is named and the
 module that calls it is missing: add `me.ahoo.cosec:cosec-control-http`.
+
+### Startup fails on the identity header limit {#startup-fails-on-the-identity-header-limit}
+
+```text
+cosec.pipeline.identity.max-size is 4096 bytes, below the 6144 bytes HttpControlService relays this host's callers within: it would relay identity headers larger than its own gate admits (IDN-43). Set cosec.pipeline.identity.max-size to at least 6144 bytes.
+```
+
+A host that reads the identity (`gateway` mode, or `cosec.pipeline.caller=forwarded-identity`) and calls a control-plane
+host (`HttpControlService`) relays each caller's identity in at most 6 KB, the writer's limit (`IDN-43`). With its own
+reader's limit, `cosec.pipeline.identity.max-size`, set below that, it would relay headers its own gate refuses. Raise
+it to at least 6 KB, or unset it: every 8.x service reads 8 KB by default.
 
 ### A control call over HTTP fails on its client or its answer {#a-control-call-over-http-fails-on-its-client-or-its-answer}
 
@@ -1365,8 +1386,10 @@ for a check, `412` for an `ifMatch` that does not hold).
 - **A person is refused with `a workload's credential (an API key, a service) cannot approve`, or a break-glass binding
   does not reach them, after an upgrade from an earlier 8.0 preview**: their session began before CoSec's tokens said
   whose they are, so their access token has no `cosec.kind` claim, which CoSec's verifier reads as a workload's, and a
-  refresh keeps it (`IDN-46`). Have them sign in again: the new session's token says `person`. A login of your own that
-  declares `Kind.WORKLOAD` for a person's sign-in shows the same, for every new session.
+  refresh keeps it (`IDN-46`). A session refreshed or switched on an issuer replica still on 8.0.0-beta.8, during a
+  rolling upgrade of the issuer or after a rollback of it, loses its claim the same way. Have them sign in again on an
+  upgraded issuer: the new session's token says `person`. A login of your own that declares `Kind.WORKLOAD` for a
+  person's sign-in shows the same, for every new session.
 - **A service's change waits for a person although it states a platform administrator**: the change came through
   `ControlService` or the control-plane host's service port, where no one is the trust root (`CTL-81`), so it is
   analyzed: `NOT_ANALYZED` on an app's catalog, `CROSS_TENANT` on a grant in a tenant's document. Have a person approve

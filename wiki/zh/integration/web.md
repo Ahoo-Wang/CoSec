@@ -411,7 +411,7 @@ docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT
 | 服务器 | 应用端口 | 独立的 `management.server.port` |
 |---|---|---|
 | WebFlux，做判定的管道（`enforce` 且 `caller: credential`） | 经 CoSec：第一份平台文档之前探针是 `503`，之后匿名调用方是 `401` | 同样经 CoSec：Spring Boot 的管理服务器会收集应用的 `WebFilter` 和 `RouterFunction`，所以管道在它前面，应用自己的函数式路由在那里提供，经过它（应用的控制器是 `404`）；CoSec 自己的路由，控制 API 和登录路由，在那里是 `404`（`CTL-69`）。绝不要用 HTTP 探测它：给它 `tcpSocket` 探针 |
-| WebFlux，转发身份的闸门（`gateway` 模式，或 `caller: forwarded-identity`，如控制面镜像） | CoSec 的闸门，与管理端口相同 | 同样是 CoSec 的闸门，按上面的方式收集：不带 `CoSec-Identity` 的请求按匿名通过，闸门什么也不判定，所以探针按 Spring 自己的方式回答（存活 `200`；文档安装之前就绪为 `503`）；畸形、重复、超大或过期的身份头，或宿主不认识的 `crit`，仍然被拒绝（`400`、`401`、`503`）。这里可以用 HTTP 探测；CoSec 自己的路由在那里是 `404`（`CTL-69`） |
+| WebFlux，转发身份的闸门（`gateway` 模式，或 `caller: forwarded-identity`，如控制面镜像） | CoSec 的闸门，与管理端口相同 | 同样是 CoSec 的闸门，按上面的方式收集：不带 `CoSec-Identity` 的请求按匿名通过，闸门什么也不判定，所以探针按 Spring 自己的方式回答（存活 `200`；在持有文档的宿主上，如控制面镜像，文档安装之前就绪为 `503`；`gateway` 模式的服务不持有文档，就绪也不等待文档）；畸形、重复、超大或过期的身份头，或宿主不认识的 `crit`，仍然被拒绝（`400`、`401`、`503`）。这里可以用 HTTP 探测；CoSec 自己的路由在那里是 `404`（`CTL-69`） |
 | WebMvc | 经 CoSec，同 WebFlux | 不经 CoSec：actuator 的端点是 Spring 自己的（存活 `200`；就绪在文档安装之前是 `503`，之后 `200`），控制器、函数式路由、控制 API 和登录路由都是 `404` |
 | 网关（[单独一节](#actuator-on-a-gateway)） | 只有网关的路由 | 不经 CoSec：actuator 的端点是 Spring 自己的，网关的路由不在那里提供；控制 API 也不在 |
 
