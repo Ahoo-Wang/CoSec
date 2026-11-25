@@ -47,7 +47,7 @@ internal object CompatGuards {
         "compat:ControlApiCompatTest#an operation with a member a control plane does not know is refused by it",
         "compat:ControlApiCompatTest#an answer either version's control plane gives, either version's client reads alike, ignoring a later member",
         "compat:ControlApiCompatTest#a document's entries in an answer are read strictly by every client",
-        "compat:EdgeCompatTest#both versions answer a client with the same problems, statuses and types",
+        "compat:EdgeCompatTest#every problem the previous version answers a client with, the current one answers alike",
         "compat:LocalStateCompatTest#one route map is resolved alike by both versions",
         "compat:LocalStateCompatTest#no module of CoSec consumes Kafka",
         "compat:EdgeCompatTest#the CoSec parameters are read alike, and an ambiguous one refused, by both versions",
