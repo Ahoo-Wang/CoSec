@@ -17,21 +17,23 @@
     {
       "id": "MIX-2",
       "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 2",
-      "statement": "CoSec's access token is ignorable: a verifier reads its named claims and ignores the others, except the claims whose presence refuses the token (cosec.token, act); a missing claim reads as its documented absence, never wider. A token one version issues, the other version verifies as the current verifier does. cosec.kind is such a claim: a previous verifier ignores it, and a token without it, as every token of a release before kinds, is a workload's to the current verifier (IDN-45, IDN-46).",
+      "statement": "CoSec's access token is ignorable: a verifier reads its named claims and ignores the others, except the claims whose presence refuses the token (cosec.token, act); a missing claim reads as its documented absence, never wider. A token one version issues, the other version verifies as the current verifier does. cosec.kind is such a claim: a previous verifier ignores it, and a token without it, as every token of a release before kinds, is a workload's to the current verifier (IDN-45, IDN-46). A token whose JWS crit header names an extension is read by no version that does not understand it (IDN-47): the current verifier refuses it; beta.8's ignores crit, a gap from 8.0.0-beta.9.",
       "level": "build",
       "guards": [
         "compat:TokenCompatTest#each version verifies what the other issues as the current verifier does",
-        "compat:TokenCompatTest#the current verifier reads the kind the current issuer declared, and a token without one as a workload's"
+        "compat:TokenCompatTest#the current verifier reads the kind the current issuer declared, and a token without one as a workload's",
+        "compat:TokenCompatTest#a token whose crit names an extension is refused by a version that does not understand it"
       ],
       "pending": null
     },
     {
       "id": "MIX-3",
       "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 3",
-      "statement": "A refresh token is strict: only a token whose cosec.token is refresh is one, and no version takes it for an access token.",
+      "statement": "A refresh token is strict: only a token whose cosec.token is refresh is one, and no version takes it for an access token. A refresh token whose crit names an extension is not read either (IDN-47), from 8.0.0-beta.9 on both sides.",
       "level": "build",
       "guards": [
-        "compat:TokenCompatTest#a refresh token is refused as an access token by every version"
+        "compat:TokenCompatTest#a refresh token is refused as an access token by every version",
+        "compat:TokenCompatTest#a refresh token whose crit names an extension is refused by a version that does not understand it"
       ],
       "pending": null
     },

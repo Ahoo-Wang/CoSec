@@ -3,13 +3,13 @@
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest
 
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
-index efa7a555..de3bec80 100644
+index cd4af24da..eee8fbe36 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
 +++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
-@@ -73,7 +73,6 @@ class JwtTokenVerifier(
-             throw TokenVerificationException(exception.message ?: "The access token is malformed.", exception)
+@@ -153,7 +153,6 @@ class JwtTokenVerifier @InternalCoSecApi constructor(
          }
          verifyAccessTokenSignature(decodedAccessToken)
+         CriticalHeader.requireUnderstood(decodedAccessToken)
 -        Jwts.requireRefreshToken(decodedRefreshToken)
          Jwts.requireSameSession(decodedRefreshToken, decodedAccessToken)
          // The converter issues the pair together: the refresh token's `sub` is the access token's `jti`, and both carry

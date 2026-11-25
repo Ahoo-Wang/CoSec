@@ -423,6 +423,10 @@ with the host stopped. Its probes are on the management port 8081, never on 8080
   names, exactly by space; attached policies and principal bindings grant it nothing, but their DENYs still apply
   (IDN-2, BND-9), so a capped key is denied what its principal is denied. A key grants nothing its principal does not
   hold (IDN-1), and no API key ever gets break-glass (BRK-8). `roles: []` leaves only `Anyone`, less those DENYs.
+- `503` (`AUTHENTICATOR_UNAVAILABLE`) for every token of one issuer, and its served refresh and logout `503` too: the
+  issuer runs a later CoSec whose tokens mark a header parameter critical (JWS `crit`), which this version does not
+  understand (IDN-47, `TokenNotUnderstoodException`). Upgrade this instance; the same tokens then pass. A malformed
+  `crit` is `401` `token-invalid`.
 - Break-glass that does not apply: only a token CoSec's own `JwtTokenVerifier` verified, and read as a person's, gets it
   (BRK-8, IDN-46), never a token of a custom `TokenVerifier`, even through `TokenAuthenticator`. A session begun on an
   earlier 8.0 preview has no `cosec.kind` claim, reads as a workload's (no break-glass, no approving: `a workload's

@@ -307,6 +307,13 @@ and a token without the claim or with any other value a workload's, never refuse
 beginning with `(`, a blank subject, an empty tenant, an unpaired surrogate, an impossible app), so `verify` refuses them whichever
 verifier read them.
 
+A token's JWS `crit` header lists the header parameters a reader must understand to read the token at all (RFC 7515
+§4.1.11, `IDN-47`). Your verifier refuses a token whose `crit` names anything it does not understand: once the
+signature is verified, it throws `TokenNotUnderstoodException`, which the pipeline answers `503` `unavailable` (no
+refusal of the token: the verifier is older than the issuer), and for a malformed `crit` it throws
+`TokenVerificationException`. A JWT library may not do this for you: `java-jwt` ignores `crit`. CoSec's own verifier
+understands no critical parameter in 8.0.
+
 A `TokenVerifier` is pure computation by contract: no I/O and nothing that blocks, since the pipeline calls it on the
 request's thread. Whether a token was revoked is not its question: `TokenAuthenticator`, refresh
 (`RefreshTokenAuthentication`) and `TokenRevoker` read it through the suspending `RevocationReader`, all with one

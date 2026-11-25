@@ -41,6 +41,8 @@ internal object CompatGuards {
         "compat:SideIsolationTest#neither version is visible to the test's own class loader",
         "compat:SideIsolationTest#the previous side runs the published release and the current side this build",
         "compat:TokenCompatTest#a refresh token is refused as an access token by every version",
+        "compat:TokenCompatTest#a token whose crit names an extension is refused by a version that does not understand it",
+        "compat:TokenCompatTest#a refresh token whose crit names an extension is refused by a version that does not understand it",
         "compat:TokenCompatTest#each version verifies what the other issues as the current verifier does",
         "compat:LocalStateCompatTest#an invalidation either version publishes drops the other's copy of a membership",
         "compat:ControlStoreCompatTest#each version reads the record alike, and reads it again after the other rewrote it",

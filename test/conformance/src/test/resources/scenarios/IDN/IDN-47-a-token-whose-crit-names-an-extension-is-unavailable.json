@@ -1,0 +1,63 @@
+{
+  "rules": [
+    "IDN-47"
+  ],
+  "level": "pipeline",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "reads",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "reads",
+            "subject": {
+              "principal": "alice",
+              "tenant": "acme"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "reads"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "polarity": "positive",
+  "description": "CoSec's own token for alice, signed and unexpired, whose protected header marks the parameter cosec.later critical: this version understands no extension, so it does not read the token without it. The instance is older than the issuer, not the token wrong: 503 unavailable, never a permit and never token-invalid.",
+  "authentication": {
+    "result": "jwt",
+    "jwt": {
+      "jti": "t1",
+      "sub": "alice",
+      "tenantId": "acme",
+      "header": {
+        "crit": [
+          "cosec.later"
+        ],
+        "cosec.later": true
+      }
+    }
+  },
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

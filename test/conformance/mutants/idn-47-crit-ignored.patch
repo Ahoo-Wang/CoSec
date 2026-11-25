@@ -1,0 +1,25 @@
+# Rule: IDN-47
+# Mutant: CoSec's verifier never reads the crit header, so a token whose crit names an extension it does not understand is read without it
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.TokenCritTest :conformance:test
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
+index cd4af24da..c36e00138 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
+@@ -97,8 +97,6 @@ class JwtTokenVerifier @InternalCoSecApi constructor(
+         } catch (exception: Exception) {
+             throw translated(exception)
+         }
+-        // A token the issuer signed is read whole or not at all: never without an extension its crit requires (IDN-47).
+-        CriticalHeader.requireUnderstood(decoded)
+         return decoded
+     }
+ 
+@@ -152,7 +150,6 @@ class JwtTokenVerifier @InternalCoSecApi constructor(
+             throw TokenVerificationException(exception.message ?: "The access token is malformed.", exception)
+         }
+         verifyAccessTokenSignature(decodedAccessToken)
+-        CriticalHeader.requireUnderstood(decodedAccessToken)
+         Jwts.requireRefreshToken(decodedRefreshToken)
+         Jwts.requireSameSession(decodedRefreshToken, decodedAccessToken)
+         // The converter issues the pair together: the refresh token's `sub` is the access token's `jti`, and both carry

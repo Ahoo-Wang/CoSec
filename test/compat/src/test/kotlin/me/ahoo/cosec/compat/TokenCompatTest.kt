@@ -20,7 +20,8 @@ import org.junit.jupiter.api.Test
  * MIX-2 and MIX-3, CoSec's tokens between versions: a token one version issues, the other verifies as the current
  * verifier does, and a refresh token is never taken for an access token by either. The current issuer's `cosec.kind`
  * is a claim beta.8's verifier ignores (`IDN-45`); a beta.8 token, which has none, is a workload's to the current
- * verifier (`IDN-46`).
+ * verifier (`IDN-46`). A `crit` header the current verifier does not understand makes it refuse the token, where beta.8
+ * reads the token without it (`IDN-47`).
  */
 class TokenCompatTest {
     private val secret = "compat-secret-compat-secret-compat-secret"
@@ -52,6 +53,50 @@ class TokenCompatTest {
             val previous = Side.PREVIOUS("token.issue", "secret" to secret, "sample" to sample).substringBefore(' ')
             Side.CURRENT("token.kind", "secret" to secret, "token" to previous).assert()
                 .describedAs("previous -> current, $sample").isEqualTo("workload")
+        }
+    }
+
+    /**
+     * `IDN-47`: a token whose signed header marks an extension critical is not read by a version that does not understand
+     * it. The current verifier refuses it as a token it does not understand (`503`); beta.8's ignores `crit`, a gap that
+     * closes from 8.0.0-beta.9.
+     */
+    @Test
+    fun `a token whose crit names an extension is refused by a version that does not understand it`() {
+        for (issuer in listOf(Side.CURRENT, Side.PREVIOUS)) {
+            val access = Jws.withCrit(
+                issuer("token.issue", "secret" to secret, "sample" to "person").substringBefore(' '),
+                secret
+            )
+            Side.CURRENT("token.verify", "secret" to secret, "token" to access).assert()
+                .describedAs("$issuer -> current").startsWith("refused:TokenNotUnderstoodException")
+            Baseline.from("8.0.0-beta.9", "the previous verifier refuses a token whose crit it does not understand") {
+                Side.PREVIOUS("token.verify", "secret" to secret, "token" to access).assert()
+                    .describedAs("$issuer -> previous").startsWith("refused:")
+            }
+        }
+    }
+
+    /** `IDN-47`, MIX-3: a refresh reads the refresh token whole too. */
+    @Test
+    fun `a refresh token whose crit names an extension is refused by a version that does not understand it`() {
+        for (issuer in listOf(Side.CURRENT, Side.PREVIOUS)) {
+            val (access, refresh) = issuer("token.issue", "secret" to secret, "sample" to "person").split(' ')
+            val critical = Jws.withCrit(refresh, secret)
+            for (version in listOf(Side.CURRENT, Side.PREVIOUS)) {
+                // The pair as issued refreshes on both: what changes below is the refresh token's header alone.
+                version("token.refresh", "secret" to secret, "access" to access, "refresh" to refresh).assert()
+                    .describedAs("$issuer -> $version").doesNotStartWith("refused:")
+            }
+            Side.CURRENT("token.refresh", "secret" to secret, "access" to access, "refresh" to critical).assert()
+                .describedAs("$issuer -> current").startsWith("refused:TokenNotUnderstoodException")
+            Baseline.from(
+                "8.0.0-beta.9",
+                "the previous verifier refuses a refresh token whose crit it does not understand"
+            ) {
+                Side.PREVIOUS("token.refresh", "secret" to secret, "access" to access, "refresh" to critical).assert()
+                    .describedAs("$issuer -> previous").startsWith("refused:")
+            }
         }
     }
 
