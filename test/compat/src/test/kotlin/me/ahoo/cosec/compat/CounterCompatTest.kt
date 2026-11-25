@@ -26,11 +26,53 @@ class CounterCompatTest {
     @Test
     fun `a rate limit taken half by each version allows no more than its quota`() {
         val prefix = prefix()
+        // The counter each version's engine obliges for the same request, not literals: one rule id and one bucket, or
+        // the two versions would count one client in two counters.
+        val counters = sides.map { it("limit.obligation", "owner" to "acme.eu-1", "principal" to "alice") }
+        counters.distinct().assert().containsExactly("tenant:acme.eu-1/api k:alice")
+        val (rule, bucket) = counters.first().split(' ')
         val allowed = (0 until 20).count { i ->
-            sides[i % 2]("limit.acquire", "prefix" to prefix, "rule" to "r1", "bucket" to "alice", "permits" to "0.1", "window" to "60") ==
+            sides[i % 2]("limit.acquire", "prefix" to prefix, "rule" to rule, "bucket" to bucket, "permits" to "0.1", "window" to "60") ==
                 "allowed=true"
         }
         allowed.assert().isEqualTo(6)
+    }
+
+    /**
+     * Across a window's roll-over: the count of the window before is carried into `p` and weighted by what is left of the
+     * new window, by whichever version takes first. A window of 2^16 seconds, so a quota of 100 is exact and the weight
+     * barely moves while the test runs; each run starts from the same carried count.
+     */
+    @Test
+    fun `a rate limit carried over a window's roll-over allows, taken by both versions, what either alone allows`() {
+        val window = "65536"
+        val permits = (100.0 / 65536).toString()
+        fun run(takers: List<Side>): Int {
+            val prefix = prefix()
+            Side.CURRENT(
+                "limit.seed",
+                "prefix" to prefix,
+                "rule" to "r1",
+                "bucket" to "alice",
+                "previous" to "40",
+                "window" to window
+            )
+            return (0 until 120).count { i ->
+                takers[i % takers.size](
+                    "limit.acquire", "prefix" to prefix, "rule" to "r1", "bucket" to "alice", "permits" to permits, "window" to window,
+                ) == "allowed=true"
+            }
+        }
+        val mixed = run(sides)
+        val current = run(listOf(Side.CURRENT))
+        val previous = run(listOf(Side.PREVIOUS))
+        listOf(
+            mixed,
+            current,
+            previous
+        ).distinct().assert().describedAs("mixed, current, previous").containsExactly(current)
+        // The carried count took its share: 40 weighted by what is left of the window, never all 100 permits.
+        mixed.assert().isLessThanOrEqualTo(100).isGreaterThanOrEqualTo(60)
     }
 
     @Test

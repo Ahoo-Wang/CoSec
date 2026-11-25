@@ -75,10 +75,10 @@ class SessionRecordCompatTest {
         val record = Side.CURRENT("raw.get", "prefix" to prefix, "cache" to cache, "key" to "f1")
         val later = HeaderJson.adding(record, "\"device\":\"d1\"", "\"crit\":[\"device\"]")
         Side.CURRENT("raw.put", "prefix" to prefix, "cache" to cache, "key" to "f1", "value" to later)
-        Side.CURRENT("session.rotate", "prefix" to prefix, "id" to "f1").assert().isEqualTo("refused:format")
+        Side.CURRENT("session.rotate", "prefix" to prefix, "id" to "f1").assert().isEqualTo("refused:format:later")
         Side.CURRENT("raw.get", "prefix" to prefix, "cache" to cache, "key" to "f1").assert().isEqualTo(later)
         Baseline.from("8.0.0-beta.9", "the previous version refuses a session record crit names a member of") {
-            Side.PREVIOUS("session.rotate", "prefix" to prefix, "id" to "f1").assert().isEqualTo("refused:format")
+            Side.PREVIOUS("session.rotate", "prefix" to prefix, "id" to "f1").assert().isEqualTo("refused:format:later")
             Side.CURRENT("raw.get", "prefix" to prefix, "cache" to cache, "key" to "f1").assert().isEqualTo(later)
         }
     }

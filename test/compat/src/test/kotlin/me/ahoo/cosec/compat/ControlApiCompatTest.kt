@@ -51,7 +51,7 @@ class ControlApiCompatTest {
                 "plane.operations",
                 "key" to "tenant:acme",
                 "body" to body
-            ).assert().describedAs("$plane").isEqualTo("refused:format")
+            ).assert().describedAs("$plane").isEqualTo("refused:format:malformed")
         }
     }
 
