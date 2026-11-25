@@ -21,7 +21,16 @@ import org.junit.jupiter.api.assertThrows
 class BaselineTest {
     @Test
     fun `releases are ordered as published`() {
-        val ordered = listOf("8.0.0-beta.8", "8.0.0-beta.9", "8.0.0-beta.10", "8.0.0-rc.1", "8.0.0-RC2", "8.0.0", "8.0.1", "8.1.0")
+        val ordered = listOf(
+            "8.0.0-beta.8",
+            "8.0.0-beta.9",
+            "8.0.0-beta.10",
+            "8.0.0-rc.1",
+            "8.0.0-RC2",
+            "8.0.0",
+            "8.0.1",
+            "8.1.0"
+        )
         ordered.map(Baseline.Release::of).zipWithNext { a, b -> a < b }.assert().containsOnly(true)
     }
 

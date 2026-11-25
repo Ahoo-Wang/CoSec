@@ -51,8 +51,18 @@ class SessionRecordCompatTest {
             val prefix = prefix()
             Side.CURRENT("session.create", "prefix" to prefix, "id" to "f1", "root" to "r1")
             val record = Side.CURRENT("raw.get", "prefix" to prefix, "cache" to cache, "key" to "f1")
-            Side.CURRENT("raw.put", "prefix" to prefix, "cache" to cache, "key" to "f1", "value" to HeaderJson.adding(record, "\"hint\":1"))
-            rewriter("session.rotate", "prefix" to prefix, "id" to "f1").assert().describedAs("$rewriter").isEqualTo("true")
+            Side.CURRENT(
+                "raw.put",
+                "prefix" to prefix,
+                "cache" to cache,
+                "key" to "f1",
+                "value" to HeaderJson.adding(record, "\"hint\":1")
+            )
+            rewriter(
+                "session.rotate",
+                "prefix" to prefix,
+                "id" to "f1"
+            ).assert().describedAs("$rewriter").isEqualTo("true")
             Side.CURRENT("session.read", "prefix" to prefix, "id" to "f1").assert().describedAs("$rewriter")
                 .isEqualTo("id=f1;tenant=acme;principal=alice;generation=2;rotated=true;revoked=false;root=r1")
         }

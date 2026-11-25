@@ -26,10 +26,18 @@ class CredentialCompatTest {
         for ((writer, reader) in PAIRS) {
             val prefix = prefix()
             writer("revoke.token", "prefix" to prefix, "id" to "t1")
-            reader("revoked.token", "prefix" to prefix, "id" to "t1").assert().describedAs("$writer -> $reader").isEqualTo("true")
+            reader(
+                "revoked.token",
+                "prefix" to prefix,
+                "id" to "t1"
+            ).assert().describedAs("$writer -> $reader").isEqualTo("true")
             reader("revoked.token", "prefix" to prefix, "id" to "t2").assert().isEqualTo("false")
             writer("revoke.subject", "prefix" to prefix, "principal" to "alice", "before" to "2026-11-01T00:00:00Z")
-            reader("revoked.subject", "prefix" to prefix, "principal" to "alice").assert().describedAs("$writer -> $reader")
+            reader(
+                "revoked.subject",
+                "prefix" to prefix,
+                "principal" to "alice"
+            ).assert().describedAs("$writer -> $reader")
                 .isEqualTo("2026-11-01T00:00:00Z")
         }
     }

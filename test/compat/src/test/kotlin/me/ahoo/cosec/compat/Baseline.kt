@@ -42,7 +42,9 @@ object Baseline {
             false
         }
         if (holds) {
-            throw AssertionError("$what already holds against $previous: it holds from $previous, not $release; move it.")
+            throw AssertionError(
+                "$what already holds against $previous: it holds from $previous, not $release; move it."
+            )
         }
     }
 
@@ -50,20 +52,30 @@ object Baseline {
     class Release private constructor(private val numbers: List<Int>, private val stage: Int, private val count: Int) :
         Comparable<Release> {
         override fun compareTo(other: Release): Int =
-            compareValuesBy(this, other, { it.numbers[0] }, { it.numbers[1] }, { it.numbers[2] }, { it.stage }, { it.count })
+            compareValuesBy(
+                this,
+                other,
+                { it.numbers[0] },
+                { it.numbers[1] },
+                { it.numbers[2] },
+                { it.stage },
+                { it.count }
+            )
 
         companion object {
+            private const val STAGE = 4
+            private const val COUNT = 5
             private val PATTERN = Regex("""(\d+)\.(\d+)\.(\d+)(?:-(beta|rc|RC)\.?(\d+))?""")
 
             fun of(text: String): Release {
                 val match = requireNotNull(PATTERN.matchEntire(text)) { "[$text] is not a release" }
-                val (major, minor, patch, stage, count) = match.destructured
-                val rank = when (stage.lowercase()) {
+                val groups = match.groupValues
+                val rank = when (groups[STAGE].lowercase()) {
                     "beta" -> 1
                     "rc" -> 2
                     else -> 3
                 }
-                return Release(listOf(major.toInt(), minor.toInt(), patch.toInt()), rank, count.toIntOrNull() ?: 0)
+                return Release((1..3).map { groups[it].toInt() }, rank, groups[COUNT].toIntOrNull() ?: 0)
             }
         }
     }

@@ -31,7 +31,10 @@ class IdentityHeaderCompatTest {
         for (sample in samples) {
             for ((writer, reader) in PAIRS) {
                 val header = writer("identity.write", "sample" to sample)
-                read(reader, header).assert().describedAs("$writer -> $reader, $sample").isEqualTo(read(Side.CURRENT, header))
+                read(
+                    reader,
+                    header
+                ).assert().describedAs("$writer -> $reader, $sample").isEqualTo(read(Side.CURRENT, header))
                 read(reader, header).assert().describedAs("$writer -> $reader, $sample").doesNotStartWith("refused:")
             }
         }
@@ -58,7 +61,9 @@ class IdentityHeaderCompatTest {
     @Test
     fun `a later member crit names is refused as an outage by a reader that does not know it`() {
         val known = Side.CURRENT("identity.write", "sample" to "person")
-        val later = HeaderJson.header(HeaderJson.adding(HeaderJson.of(known), "\"device\":\"d1\"", "\"crit\":[\"device\"]"))
+        val later = HeaderJson.header(
+            HeaderJson.adding(HeaderJson.of(known), "\"device\":\"d1\"", "\"crit\":[\"device\"]")
+        )
         read(Side.CURRENT, later).assert().isEqualTo("refused:identity:UNSUPPORTED_MEMBER")
         Baseline.from("8.0.0-beta.9", "the previous reader refuses a crit member as an outage") {
             read(Side.PREVIOUS, later).assert().isEqualTo("refused:identity:UNSUPPORTED_MEMBER")

@@ -22,7 +22,9 @@ import org.junit.jupiter.api.Test
  * previous one took as a literal, is refused by the current one, as the upgrade notes say.
  */
 class DocumentCompatTest {
-    private fun body(policies: String) = """{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z","policies":$policies}"""
+    private fun body(
+        policies: String
+    ) = """{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z","policies":$policies}"""
 
     private val documents = mapOf(
         "tenant:acme" to body(
@@ -36,14 +38,21 @@ class DocumentCompatTest {
     fun `a document either version compiles, the other compiles too`() {
         for ((key, document) in documents) {
             for (side in listOf(Side.CURRENT, Side.PREVIOUS)) {
-                side("document.compile", "key" to key, "body" to document).assert().describedAs("$side, $key").startsWith("ok:")
+                side(
+                    "document.compile",
+                    "key" to key,
+                    "body" to document
+                ).assert().describedAs("$side, $key").startsWith("ok:")
             }
         }
     }
 
     @Test
     fun `a pattern the current version reserves is refused by it, though the previous one took it as a literal`() {
-        val reserved = body("""[{"id":"p","statements":[{"effect":"deny","action":"*","resource":"http:path:/odata/${'$'}metadata"}]}]""")
+        val reserved =
+            body(
+                """[{"id":"p","statements":[{"effect":"deny","action":"*","resource":"http:path:/odata/${'$'}metadata"}]}]"""
+            )
         Side.CURRENT("document.compile", "key" to "tenant:acme", "body" to reserved).assert().startsWith("refused:")
         Side.PREVIOUS("document.compile", "key" to "tenant:acme", "body" to reserved).assert().startsWith("ok:")
     }

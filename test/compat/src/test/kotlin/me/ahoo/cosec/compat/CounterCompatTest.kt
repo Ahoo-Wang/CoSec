@@ -38,7 +38,12 @@ class CounterCompatTest {
         val prefix = prefix()
         val pushed = (1..8).flatMap { i ->
             sides[i % 2](
-                "session.admit", "prefix" to prefix, "id" to "f$i", "principal" to "alice", "now" to (1_000L * i).toString(), "limit" to "4",
+                "session.admit",
+                "prefix" to prefix,
+                "id" to "f$i",
+                "principal" to "alice",
+                "now" to (1_000L * i).toString(),
+                "limit" to "4",
             ).split(',').filter { it.isNotEmpty() }
         }
         pushed.assert().containsExactly("f1", "f2", "f3", "f4")

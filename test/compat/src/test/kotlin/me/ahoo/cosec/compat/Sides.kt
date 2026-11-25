@@ -31,9 +31,12 @@ class Side private constructor(val name: String, private val side: BiFunction<St
 
     companion object {
         private fun load(name: String, property: String): Side {
-            val classpath = checkNotNull(System.getProperty(property)) { "$property is not set: run the tests through Gradle." }
+            val classpath = checkNotNull(
+                System.getProperty(property)
+            ) { "$property is not set: run the tests through Gradle." }
             val urls = classpath.split(File.pathSeparator).filter { it.isNotBlank() }.map { File(it).toURI().toURL() }
             val loader = URLClassLoader("cosec-$name", urls.toTypedArray(), ClassLoader.getPlatformClassLoader())
+
             @Suppress("UNCHECKED_CAST")
             val side = loader.loadClass("me.ahoo.cosec.compat.side.Side").getConstructor().newInstance()
                 as BiFunction<String, Map<String, String>, String>

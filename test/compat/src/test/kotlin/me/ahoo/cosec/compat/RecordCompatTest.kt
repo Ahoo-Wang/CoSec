@@ -23,11 +23,13 @@ import org.junit.jupiter.api.Test
  * does not know it, which then writes nothing back.
  */
 class RecordCompatTest {
+    private val digest = "SHA-256:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+
     private val records = mapOf(
-        "change" to """{"format":1,"id":"c1","key":"tenant:acme","base":{"revision":3,"digest":"SHA-256:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"},"operations":[],""" +
+        "change" to """{"format":1,"id":"c1","key":"tenant:acme","base":{"revision":3,"digest":"$digest"},"operations":[],""" +
             """"author":{"tenant":"acme","principal":"alice"},"note":"n","kind":"PUBLISH","state":"READY",""" +
             """"findings":[{"check":"V9","path":"$","message":"m","status":400,"severity":"WARNING"}],""" +
-            """"candidate":"c1@1","checkedWith":{"tenant:acme":"SHA-256:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"},"checkedApps":{"digest":"SHA-256:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"},""" +
+            """"candidate":"c1@1","checkedWith":{"tenant:acme":"$digest"},"checkedApps":{"digest":"$digest"},""" +
             """"createdAt":"2026-11-01T00:00:00Z","updatedAt":"2026-11-01T00:00:00Z","skipShadow":"no traffic",""" +
             """"origin":{"asserted":true,"via":{"method":"jwt","credential":"k1","request":"r1"},"peer":"10.0.0.1"},""" +
             """"publishedRevision":4,"escalations":[{"subject":"p1","reason":"NOT_COVERED","detail":"d"}],""" +
@@ -51,11 +53,19 @@ class RecordCompatTest {
 
     private fun all(): Map<String, String> = records + ("instance_status" to """{"i1":$status}""")
 
-    private fun rewrite(side: Side, kind: String, value: String) = side("record.rewrite", "kind" to kind, "value" to value)
+    private fun rewrite(side: Side, kind: String, value: String) = side(
+        "record.rewrite",
+        "kind" to kind,
+        "value" to value
+    )
 
     /** [record] with members added at its top, or at its one instance's status. */
     private fun adding(kind: String, record: String, vararg members: String): String =
-        if (kind == "instance_status") """{"i1":${HeaderJson.adding(status, *members)}}""" else HeaderJson.adding(record, *members)
+        if (kind == "instance_status") {
+            """{"i1":${HeaderJson.adding(status, *members)}}"""
+        } else {
+            HeaderJson.adding(record, *members)
+        }
 
     @Test
     fun `each version reads and writes back the record the other wrote, unchanged`() {
@@ -63,7 +73,11 @@ class RecordCompatTest {
             val current = rewrite(Side.CURRENT, kind, record)
             current.assert().describedAs(kind).doesNotStartWith("refused:")
             rewrite(Side.PREVIOUS, kind, current).assert().describedAs(kind).isEqualTo(current)
-            rewrite(Side.CURRENT, kind, rewrite(Side.PREVIOUS, kind, record)).assert().describedAs(kind).isEqualTo(current)
+            rewrite(
+                Side.CURRENT,
+                kind,
+                rewrite(Side.PREVIOUS, kind, record)
+            ).assert().describedAs(kind).isEqualTo(current)
         }
     }
 
