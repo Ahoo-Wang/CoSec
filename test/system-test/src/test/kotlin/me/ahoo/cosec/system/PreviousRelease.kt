@@ -33,10 +33,35 @@ object PreviousRelease {
     class Later(val since: String, val reason: String)
 
     /**
-     * Scenarios (`Class` or `Class#method`) that hold only from a later release than an earlier one under test.
-     * Empty while every scenario holds against the previous release (8.0.0-beta.8 for this commit).
+     * Scenarios (`Class` or `Class#method`) that hold only from a later release than an earlier one under test. Against
+     * 8.0.0-beta.8 every entry follows from one change, the credential's kind (IDN-44 to IDN-46): this commit's writers of
+     * `CoSec-Identity` state `auth.kind`, and beta.8's reader refuses a member it does not know (400), as every reader
+     * before RFC 0014's did; beta.8's gateway writes no `auth.kind`, which this commit's services read as a workload's.
+     * 8.0.0-beta.9 is the first release whose reader ignores a member it does not know (IDN-41).
      */
-    val LATER: Map<String, Later> = emptyMap()
+    val LATER: Map<String, Later> = mapOf(
+        "ColdStartScenario#with no documents every request is unavailable and readiness refuses, while each process stays live"
+            to Later(BETA_9, "it states an identity with auth.kind to the control host, whose beta.8 reader answers 400, not 503"),
+        "ControlHostScenario#the operators' port, the service port and the management port each serve what they are for"
+            to Later(BETA_9, "it states identities with auth.kind to the control host's operators' and service ports, refused 400"),
+        "ControlHostScenario#an identity the host cannot trust is refused, be it none, doubled, expired or too old"
+            to Later(BETA_9, "its stated identities carry auth.kind, refused 400 before the expiry each case is about"),
+        "ControlReplicaScenario" to Later(BETA_9, "it proposes through the service port as a stated service, with auth.kind: refused 400"),
+        "ControlServiceScenario" to Later(BETA_9, "every case states its caller to the service port with auth.kind: refused 400"),
+        "TenantOnboardingScenario" to Later(
+            BETA_9,
+            "the IAM onboards through the control host's service port, and its relay states auth.kind there, refused 400; every " +
+                "case works on the tenant it onboards",
+        ),
+        "IdentityScenario#a permitted request reaches the service with the identity the gateway verified, and the path it decided on"
+            to Later(BETA_9, "it reads auth.kind of the identity the gateway forwards, which beta.8's gateway does not write"),
+        "IdentityScenario#a token CoSec's login issued reaches the service with its session, which a service relies on"
+            to Later(BETA_9, "it reads auth.kind of the identity the gateway forwards, which beta.8's gateway does not write"),
+        "IdentityScenario#a refreshed token stays a person's, and a token without its kind is forwarded as a workload's"
+            to Later(BETA_9, "it reads auth.kind of the identity the gateway forwards, which beta.8's gateway does not write"),
+    )
+
+    private const val BETA_9 = "8.0.0-beta.9"
 
     /** What [scenario] needs of the release under test, if anything, or null when it runs. */
     fun leftOut(scenario: String, underTest: String? = this.underTest, listed: Map<String, Later> = LATER): String? {
