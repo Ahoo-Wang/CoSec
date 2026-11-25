@@ -46,7 +46,11 @@ class LocalStateCompatTest {
             holder("memberships.held", "prefix" to prefix).assert().describedAs("$publisher -> $holder").isEqualTo("k2")
             // The memberships themselves were never written to Redis: were they, they would be a format two versions read.
             RedisClient.create("redis://localhost:6379").use { client ->
-                client.connect().use { it.sync().keys("$prefix*") }.assert().describedAs("$publisher -> $holder").isEmpty()
+                client.connect().use {
+                    it.sync().keys(
+                        "$prefix*"
+                    )
+                }.assert().describedAs("$publisher -> $holder").isEmpty()
             }
         }
     }
@@ -63,7 +67,9 @@ class LocalStateCompatTest {
     @Test
     fun `no module of CoSec consumes Kafka`() {
         val root = Path.of(checkNotNull(System.getProperty("cosec.compat.root")) { "cosec.compat.root is not set" })
-        val consumers = Regex("""KafkaConsumer|@KafkaListener|ConsumerFactory|KafkaReceiver|ReceiverOptions|\.subscribe\(.*[Tt]opic""")
+        val consumers = Regex(
+            """KafkaConsumer|@KafkaListener|ConsumerFactory|KafkaReceiver|ReceiverOptions|\.subscribe\(.*[Tt]opic"""
+        )
         val found = Files.walk(root).use { paths ->
             paths.filter { it.extension == "kt" && it.toString().contains("/src/main/") && "/build/" !in it.toString() }
                 .filter { consumers.containsMatchIn(it.readText()) }

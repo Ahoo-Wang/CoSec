@@ -37,7 +37,9 @@ class ControlApiCompatTest {
             val read = plane("plane.operations", "key" to "tenant:acme", "body" to body)
             read.assert().describedAs("$client -> $plane").doesNotContain("refused:")
             read.lines().size.assert().isEqualTo(3)
-            read.assert().describedAs("$client -> $plane").isEqualTo(Side.CURRENT("plane.operations", "key" to "tenant:acme", "body" to body))
+            read.assert().describedAs(
+                "$client -> $plane"
+            ).isEqualTo(Side.CURRENT("plane.operations", "key" to "tenant:acme", "body" to body))
         }
     }
 
@@ -45,7 +47,11 @@ class ControlApiCompatTest {
     fun `an operation with a member a control plane does not know is refused by it`() {
         val body = Side.CURRENT("sdk.propose").replaceFirst("{\"op\":", "{\"later\":1,\"op\":")
         for (plane in listOf(Side.CURRENT, Side.PREVIOUS)) {
-            plane("plane.operations", "key" to "tenant:acme", "body" to body).assert().describedAs("$plane").isEqualTo("refused:format")
+            plane(
+                "plane.operations",
+                "key" to "tenant:acme",
+                "body" to body
+            ).assert().describedAs("$plane").isEqualTo("refused:format")
         }
     }
 
@@ -56,16 +62,27 @@ class ControlApiCompatTest {
             val read = client("sdk.change", "answer" to answer)
             read.assert().describedAs("$plane -> $client").doesNotStartWith("refused:")
             read.assert().isEqualTo(Side.CURRENT("sdk.change", "answer" to answer))
-            client("sdk.change", "answer" to HeaderJson.adding(answer, "\"later\":1")).assert().describedAs("$client").isEqualTo(read)
+            client(
+                "sdk.change",
+                "answer" to HeaderJson.adding(answer, "\"later\":1")
+            ).assert().describedAs("$client").isEqualTo(read)
         }
     }
 
     @Test
     fun `a document's entries in an answer are read strictly by every client`() {
         for (client in listOf(Side.CURRENT, Side.PREVIOUS)) {
-            client("sdk.document", "key" to "tenant:acme", "answer" to document).assert().describedAs("$client").doesNotStartWith("refused:")
+            client(
+                "sdk.document",
+                "key" to "tenant:acme",
+                "answer" to document
+            ).assert().describedAs("$client").doesNotStartWith("refused:")
             val later = document.replace("{\"id\":\"orders\",", "{\"id\":\"orders\",\"later\":1,")
-            client("sdk.document", "key" to "tenant:acme", "answer" to later).assert().describedAs("$client").startsWith("refused:")
+            client(
+                "sdk.document",
+                "key" to "tenant:acme",
+                "answer" to later
+            ).assert().describedAs("$client").startsWith("refused:")
         }
     }
 }
