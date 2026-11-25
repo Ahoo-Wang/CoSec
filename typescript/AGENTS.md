@@ -129,8 +129,9 @@ Publishing the GitHub release `vX.Y.Z` publishes the packages to npm, from the `
 3. Frozen install, build, tests; `pnpm pack` writes the tarballs (`workspace:` and `catalog:` become versions; the
    publish refuses a package.json that still has one), `scripts/package-check.mjs --tarballs` checks them, and **those
    tarballs** are published: `@ahoo-wang/cosec-fetcher`, then `@ahoo-wang/cosec-react`.
-4. The dist-tag follows the version: `-alpha.n` is `alpha`, `-beta.n` is `beta`, `-RCn` is `rc`, none is `latest`. A
-   pre-release never gets `latest`, and a pre-release this table does not know fails. Install one with
+4. The dist-tag follows the version: `-alpha.n` is `alpha`, `-beta.n` is `beta`, `-rc.n` is `rc`, none is `latest`. A
+   pre-release never gets `latest`, and a pre-release this table does not know fails, an uppercase one (`-RC1`) among them:
+   semver orders it below every lowercase one, so `8.0.0-RC1` would come before `8.0.0-beta.9`. Install one with
    `pnpm add @ahoo-wang/cosec-fetcher@beta`.
 5. A version already on npm is skipped with a message, so re-running the job after a partial failure goes on with the
    next package. "Already on npm" needs positive evidence: `npm view <name>@<version> version` printing exactly that

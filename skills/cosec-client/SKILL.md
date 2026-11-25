@@ -15,7 +15,7 @@ log, embed or commit a real token.
 
 ## Inspect first
 
-- Which CoSec the server runs (`8.0.0-beta.n`, `8.0.0-RCn`, `8.0.0`): it picks the npm tag. A CoSec 7 server needs the
+- Which CoSec the server runs (`8.0.0-beta.n`, `8.0.0-rc.n`, `8.0.0`): it picks the npm tag. A CoSec 7 server needs the
   old `@ahoo-wang/fetcher-cosec` and the hooks of `@ahoo-wang/fetcher-react`; nothing here works against it.
 - Whether the application already has `@ahoo-wang/fetcher-cosec` or `@ahoo-wang/fetcher-react`'s security hooks
   (then follow [Coming from `@ahoo-wang/fetcher-cosec`](#coming-from-ahoo-wangfetcher-cosec)).

@@ -36,13 +36,13 @@ description: "CoSec 8.0 改变什么、发布前处于什么状态，以及 7.x 
 
 ## 8.0 的现状 {#where-8-0-stands}
 
-上述架构已经合入 `main`，7.x 的代码已经移除。当前的预览版是 `8.0.0-beta.9`，契约完整的 beta：8.0 的读方与写方怎样对待它不认识的东西已经定下，候选发布版再把它固定到整个 8.x。身份头与存储记录的读方忽略它不认识的成员，除非写方把它列为必须理解；每个凭证都说明它属于人还是工作负载，由这个种类而不是方法名决定谁能审批、谁能用应急访问；将来的模式语法需要的字符已被保留；每个读存储的进程都报告自己的发布版本；每次构建都对着上一个发布版测试（[预览版之间的升级](../operations/upgrading-previews.md#from-8-0-0-beta-8)）。它基于 Spring Boot 4.2 与 CoCache 8.2 构建。接下来是候选发布版。候选发布版之前还差什么，见 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md)，由它负责跟踪；本页只写你可以依赖什么。
+上述架构已经合入 `main`，7.x 的代码已经移除。当前的发布版是 [`8.0.0-rc.1`](https://github.com/Ahoo-Wang/CoSec/releases/tag/v8.0.0-rc.1)，第一个候选发布版：8.0.0-beta.9 加上它的修复，并为 GA 定下了公共面。适配器契约（`RequestGate`、`HttpFacts`、`Outcome` 及它答复的问题）、测试套件的请求上下文（`PermittedRequest`、`IdentityHeader`、`CoSecTestBindings`）、身份头的写方与控制面的变更事件是稳定的；控制面的存储与影子窗口的端口是 CoSec 自己的；整个 8.0 都保持实验性的部分会标明（[稳定性等级](../architecture/extending.md#stability-levels)）。它与 8.0.0-beta.9 混跑测试：两个发布版共用一个存储与一个网络（[预览版之间的升级](../operations/upgrading-previews.md#from-8-0-0-beta-9)）。它基于 Spring Boot 4.2 与 CoCache 8.2 构建。接下来是 8.0 GA。GA 之前还差什么，见 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md)，由它负责跟踪；本页只写你可以依赖什么。
 
 ## 发布策略 {#release-policy}
 
-- **8.0 的预发布版（alpha 和 beta，最新为 `8.0.0-beta.9`）是预览版，不承诺兼容性。** 公共 API、`cosec.*` 属性、文档与线上格式（`schema: 2`、`CoSec-Identity`）
-  以及授权语义，在之后的任何 alpha 或 RC 中都可能改变，预览版之间不提供迁移路径。请在生产以外试用，暂时不要在它上面构建。
-- 候选发布版要等上述检查完成：对整个系统的两轮审查（RC 安全审查，然后按模块审查）及其发现全部修复，以及 ABI 校验（GA 时冻结公共 API，RFC 0011 D4）。此后 8.0 才遵循语义化版本。
+- **8.0 的 alpha 与 beta 是预览版，不承诺兼容性。** 公共 API、`cosec.*` 属性、文档与线上格式（`schema: 2`、`CoSec-Identity`）
+  以及授权语义在它们之间都改变过，预览版之间不提供迁移路径。
+- **候选发布版（最新为 `8.0.0-rc.1`）就是 8.0 要成为的样子。** 它的公共 API、`cosec.*` 属性、格式与授权语义在 GA 之前只为修复缺陷而改变，每处这样的改变都列在下一个候选版的说明里。它在上述检查之后发布：对整个系统的两轮审查及其发现全部修复、ABI 校验、一个真实项目用过 8.0.0-beta.9，以及在它的提交上跑过的门禁，其中包括与 8.0.0-beta.9 的混跑。GA 时 ABI 校验冻结公共 API（RFC 0011 D4），自此 8.0 遵循语义化版本。
 - **8.0 不比 7.0 慢。** 性能预算以 7.0 的实测数字设定：编译执行的授权吞吐与 Pipeline 吞吐不低于 7.0 的 100 %，分配不高于 7.0
   （RFC 0008 §3.8）。预算先在端到端切片上测量；在从 7.x 切换的变更合入之前，这些预算已经达标。
 
@@ -54,8 +54,8 @@ description: "CoSec 8.0 改变什么、发布前处于什么状态，以及 7.x 
   （未知字段、应为列表处写了标量、重复键），不再把它们编译成范围更大的策略。升级前先读它的升级说明：已存入 Redis 的策略在重新发布之前，可能让请求失败。
 - 最新的安全公告是
   [GHSA-2293-jx8h-56m8](https://github.com/Ahoo-Wang/CoSec/security/advisories/GHSA-2293-jx8h-56m8)，已在 7.0.1 与 6.1.2 中修复。
-- 现在该做的：生产环境继续用 7.0.2，即最新的 7.0.x。想评估 8.0，在测试环境中试用最新的预发布版（`8.0.0-beta.9`，需要 Java 21），配合[升级](../operations/upgrading.md)；
-  RC 之前还会有改动。
+- 现在该做的：生产环境继续用 7.0.2，即最新的 7.0.x。想评估 8.0，在测试环境中试用候选发布版（`8.0.0-rc.1`，需要 Java 21），配合[升级](../operations/upgrading.md)；
+  GA 之前它只为修复缺陷而改变。
 
 ## 如何跟进 {#how-to-follow}
 
