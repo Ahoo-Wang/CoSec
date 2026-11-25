@@ -64,4 +64,26 @@ class JacksonSignatureTest {
         checked.map { it.name }.assert().contains("me.ahoo.cosec.jwt.JwtSigning", "me.ahoo.cosec.jwt.JwtTokenVerifier")
         PublicSignatures.violations(checked, Regex("""com\.auth0\.""")).assert().isEmpty()
     }
+
+    /**
+     * `cosec-social` keeps JustAuth inside but for one reviewed exposure (P-9): `JustAuthCredentials` extends JustAuth's
+     * `AuthCallback`, whose bean properties are the provider's callback parameters an application binds by name and the
+     * provider hands to JustAuth as they are. A JustAuth upgrade that changes `AuthCallback` changes CoSec's API there,
+     * and nowhere else; `JustAuthProvider`, which takes JustAuth's `AuthRequest`, is `@InternalCoSecApi`.
+     */
+    @Test
+    fun `social carries no JustAuth type in a public signature, but the credentials' reviewed supertype`() {
+        val checked = PublicSignatures.classes { it == "social" }
+        checked.map { it.name }.assert().contains("me.ahoo.cosec.social.justauth.JustAuthCredentials")
+        val violations = PublicSignatures.violations(checked, Regex("""me\.zhyd\.oauth\."""))
+        violations.filterNot { it in JUSTAUTH_REVIEWED }.assert().isEmpty()
+        // A reviewed exposure that is gone must leave the list, so the list cannot outlive what it was written for.
+        JUSTAUTH_REVIEWED.filterNot { it in violations }.assert().isEmpty()
+    }
+
+    private companion object {
+        val JUSTAUTH_REVIEWED: Set<String> = setOf(
+            "me.ahoo.cosec.social.justauth.JustAuthCredentials extends me.zhyd.oauth.model.AuthCallback",
+        )
+    }
 }

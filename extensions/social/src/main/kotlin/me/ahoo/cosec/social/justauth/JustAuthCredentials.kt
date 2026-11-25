@@ -16,7 +16,12 @@ import me.ahoo.cosec.social.SocialCredentials
 import me.zhyd.oauth.model.AuthCallback
 
 /**
- * JustAuth Credentials .
+ * The callback of a social sign-in: the provider's name, the browser's binding, and the provider's callback parameters
+ * (`code`, `state`, ...), which an application binds from the request onto the JustAuth [AuthCallback] this extends.
+ *
+ * The one JustAuth type in CoSec's API, reviewed (P-9, `architecture:JacksonSignatureTest`): the callback's parameters
+ * are JustAuth's bean properties, which a web framework binds by name and the provider hands to JustAuth as they are,
+ * so a JustAuth upgrade that changes [AuthCallback] changes this class.
  *
  * @author ahoo wang
  */

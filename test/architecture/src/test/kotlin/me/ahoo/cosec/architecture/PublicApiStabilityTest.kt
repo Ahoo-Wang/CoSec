@@ -111,8 +111,6 @@ class PublicApiStabilityTest {
                     "verify, a member of the stable TokenVerifier, and can mark no verifier of its own as CoSec's.",
                 "document.PolicyDocumentCompiler" to "Implements SnapshotCompiler, the internal port the snapshot " +
                     "source compiles through; its constructor and members are internal, so an application only names it.",
-                "social.justauth.JustAuthProvider" to "Implements the internal SocialAuthenticationProvider; it becomes " +
-                    "internal itself in this round (report P-9).",
             ).associate { (name, reason) -> "me.ahoo.cosec.$name" to reason }
         }
 
