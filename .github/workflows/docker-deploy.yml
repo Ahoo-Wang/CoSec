@@ -99,6 +99,10 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+          # No `latest`: a major version is never reached through a floating tag. `latest` stays 7.x's, whose own
+          # workflow writes it; an 8.x image is pulled by its version, or by `8.0` (wiki/operations/deployment.md).
+          flavor: |
+            latest=false
 
       - name: Build and push
         uses: docker/build-push-action@v7
@@ -156,6 +160,9 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+          # No `latest`, as in the docker-deploy job.
+          flavor: |
+            latest=false
 
       - name: Login to GHCR
         uses: docker/login-action@v4
@@ -240,6 +247,9 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+          # No `latest`, as in the docker-deploy job.
+          flavor: |
+            latest=false
       - name: Pull the image
         run: docker pull "ghcr.io/ahoo-wang/cosec-${{ matrix.name }}:${{ steps.meta.outputs.version }}"
       - name: Smoke requests
