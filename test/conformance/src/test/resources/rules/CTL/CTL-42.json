@@ -1,0 +1,15 @@
+{
+  "id": "CTL-42",
+  "source": "RFC 0007 §5.8; design B of the back-references, beta.5 (#1729)",
+  "statement": "A back-reference set that cannot be read, a value in the format before 8.0.0-beta.5 included, fails closed: a read throws naming cosec-migrate repair-references, a check that needs it refuses the change (503), a head write that needs it is not made, and no member is added to or removed from it. Every read of a set asks Redis: the sets of record keep no local copy a read could answer from (local-max-age and degraded-local-max-age locked to 1 ns).",
+  "level": "control",
+  "guards": [
+    "control:ChangesB1Test#back-references that cannot be read refuse a platform id and block a removal - CTL-42",
+    "control:RevisionsTest#a back-reference set that cannot be read blocks the platform removing its policy - CTL-42",
+    "cocache:CoCacheControlStoreTest#a back-reference value in the format before beta 5 fails closed, naming the repair",
+    "cocache:CacheTtlPolicyTest#setOfRecordCachesNeverExpireAndKeepNoLocalCopy",
+    "cocache:SetOfRecordReadTest#every read of a back-reference set asks Redis, even in the millisecond its copy was filled in",
+    "cocache:SetOfRecordReadTest#the same loop over a set kept locally misses the member, so the test above can fail"
+  ],
+  "pending": null
+}

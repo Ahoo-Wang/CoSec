@@ -1,0 +1,10 @@
+{
+  "id": "SCP-3",
+  "source": "RFC 0004 §4.6 (review of #1015); RFC 0006 §6.1",
+  "statement": "An anonymous request that declares CoSec-Space-Id is answered 401.",
+  "level": "pipeline",
+  "guards": [
+    "runtime:PipelineTest#scopeRejectedForAnAnonymousPrincipal"
+  ],
+  "pending": null
+}

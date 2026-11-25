@@ -1,0 +1,25 @@
+{
+  "id": "SNP-27",
+  "source": "RFC 0014 R1 on stored records and G5 (the coordinator's ruling of 2026-11-24, after the red-team review CE-9, CE-10, CE-15); RFC 0014 §5 (sentences proposed in the PR)",
+  "statement": "A stored record CoSec reads by the reader's rule (StoredFormat) may carry crit, the members a reader must understand: an array of paths from the record's root (member names joined by '.'; through an array, each element's member), not written when empty and never written by an 8.0 writer. A reader ignores a member it does not know unless crit names it; then it refuses that one record as one a later version wrote, and never reads or rewrites it, so a member an older reader must not ignore or drop is never lost to it (RFC 0014 G5); the other records read as before. A crit that is not one (not an array, an entry that is not a path, an entry repeated, more than 16, or a member this version knows that the record does not hold) is malformed. A refused session record is answered 503 on the refresh, logout or switch that read it, the session kept; a refused record of the control plane or of a shadow window is answered 503 by the control API, without detail, never the 500 of a record that does not decode; the log tells a record a later version wrote apart from a store that is broken.",
+  "level": "build",
+  "guards": [
+    "document:StoredCritTest#a record without crit, or with an empty one, reads as before",
+    "document:StoredCritTest#a member crit names that this version knows is read, through an array's elements too",
+    "document:StoredCritTest#a member crit names that this version does not know refuses the record as a later version's, and counts it",
+    "document:StoredCritTest#a crit that is not one, or a record that is not one, is malformed, and counts as malformed",
+    "document:StoredCritTest#a path is printed printably, and a member is listed once",
+    "cocache:TokenFamilyMembersTest#a later member crit names is refused by an older reader, which never rewrites it",
+    "cocache:TokenFamilyMembersTest#a later member without crit is dropped by an older reader, and the session it leaves is the same session",
+    "cocache:TokenFamilyMembersTest#every member an 8_0 reader knows survives its rewrite",
+    "login:LaterSessionRecordTest#a refresh of a session a later version wrote is an outage, and the record is never rewritten",
+    "login:LaterSessionRecordTest#the log says a later version wrote it, once per interval at WARN, and a broken store is not told so",
+    "cocache:StoredRecordMembersTest#a later member crit names refuses that record as a later version's, which is never rewritten",
+    "cocache:StoredRecordMembersTest#a later member without crit is dropped by a rewrite, which leaves the same record",
+    "control:LaterRecordsTest#a record a later version wrote is a 503 without detail, told as that",
+    "spring-boot:ControlServiceParityTest#a record a later version wrote is a 503 alike through both implementations - CTL-77",
+    "control:LaterRecordsTest#a later record is told at WARN once per interval, and a broken store is not told as one",
+    "cocache:LaterSessionRecordStoreTest#a refresh, a logout and a switched session's logout meet a later record, refused and never rewritten - IDN-40"
+  ],
+  "pending": null
+}

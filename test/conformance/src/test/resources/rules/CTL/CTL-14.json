@@ -1,0 +1,11 @@
+{
+  "id": "CTL-14",
+  "source": "RFC 0007 §3.1 N2, §9.2, §9.4, Q15, #1224",
+  "statement": "The control plane refuses a tenant policy whose id the platform document already uses unless it is an exact copy of the platform's policy (422): the data plane reads such an id as ambiguous unless both contents are the same, and the copy is the first step of the partition flow.",
+  "level": "control",
+  "guards": [
+    "control:PublishCompileTest",
+    "control:SharedPolicyCopyTest"
+  ],
+  "pending": null
+}

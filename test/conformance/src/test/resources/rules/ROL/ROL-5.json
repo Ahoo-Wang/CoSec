@@ -1,0 +1,7 @@
+{
+  "id": "ROL-5",
+  "source": "RFC 0012 §4.3",
+  "statement": "A permission with both an action and a hand-written policy does not compile.",
+  "level": "engine",
+  "pending": null
+}

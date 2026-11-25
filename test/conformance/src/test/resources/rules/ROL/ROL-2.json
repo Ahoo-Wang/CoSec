@@ -1,0 +1,7 @@
+{
+  "id": "ROL-2",
+  "source": "RFC 0012 §6.1",
+  "statement": "Compilation, the grant analysis, the reference index and the diff read the expanded document.",
+  "level": "control",
+  "pending": null
+}

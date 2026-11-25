@@ -1,0 +1,25 @@
+{
+  "id": "CTL-55",
+  "source": "Review round 2, R2C-4 (saas-open-changes-design.md §1); RFC 0007 §10.2",
+  "statement": "A listing of open changes shows a change only if reading it by id would show it to the caller, leaves out what the caller may not see before the page is cut, and tells nothing of what it leaves out, with one exception: its cursor. A listing by state is decided before anything is read: a tenant's principal scans its own tenant's document only; a platform principal scans each layer it holds cosec:read on (doc/tenant, doc/app, doc/platform for the platform document's changes); anyone else is refused, 403 without detail, and nothing is scanned. Each request reads at most four pages of changes. A scan the bound stops answers what it found, short or empty, and a cursor holding the position where it stopped, which may be an entry the caller may not see: it is given only to a caller admitted to scan that layer, the change it points at answers by id as it does to anyone who may not read it, and the caller learns from it that some document of a layer it may enumerate has an open change in that state, and, decoding it, that change's id (so, listing one at a time, how many there are), nothing else of the change (DR1-E-8; an opaque position is 8.1's). A cursor is a token the client passes back unchanged, the same convention as the document listing's (contract/control/cursor.json); it hides nothing from one who decodes it. A token that does not decode or belongs to another listing is a 400, never a listing from the start.",
+  "level": "control",
+  "guards": [
+    "control:OpenChangeListingTest#another tenant's changes are left out, and the page says nothing of them - CTL-55",
+    "control:OpenChangeListingTest#a listing by document or by state shows the caller's tenant only, a summary of each change",
+    "control:OpenChangeListingTest#a page is cut after what the caller may see, and the next one goes on from it",
+    "control:OpenChangeListingTest#a cursor names only a change the caller sees, and only when one follows it - CTL-55",
+    "control:OpenChangeListingTest#a member of the tenant who may not read its changes sees none, a viewer sees them - CTL-55",
+    "control:StateListingScanTest#a platform principal without any layer read is refused, and nothing is scanned - R3-3",
+    "control:StateListingScanTest#a layer that cannot be decided is a 503, and nothing is scanned - R3-3",
+    "control:StateListingScanTest#the tenant layer read scans the tenant documents only, and shows what reading by id would - R3-3",
+    "control:StateListingScanTest#the platform document's own read admits its changes to the scan - R3-3",
+    "control:StateListingScanTest#a tenant's principal scans its own tenant's document, with no layer decision - R3-3",
+    "control:StateListingBoundTest#a scan stopped by its bound answers where it stopped, and the next request goes on from there - R3-3",
+    "control:StateListingBoundTest#no request reads more than its bound, whatever it may see - R3-3",
+    "control:ListingCursorTest#a token round-trips for its listing, and is no raw position on the wire",
+    "control:ListingCursorTest#a malformed or foreign token is refused for every listing",
+    "control:ListingCursorTest#the routes refuse a cursor that is not theirs with a 400, before listing anything",
+    "control:ClientContractTest#the listings' cursor follows the convention of its contract file"
+  ],
+  "pending": null
+}

@@ -1,0 +1,12 @@
+{
+  "id": "SNP-21",
+  "source": "Review round 2, R2D-6 (an instance that started while the store could not be read never became ready)",
+  "statement": "Every document readiness waits for is read again after a failed first read, without a request: the platform document, the configured prewarm documents and those a host names later. An instance that started while the store could not be read becomes ready once it can; while the store cannot be read, it stays not ready. A configured document counts as loaded only once its own prewarm has completed, not another's.",
+  "level": "startup",
+  "guards": [
+    "runtime:DocumentReadinessRetryTest#a host whose first reads failed becomes ready once the store answers, with no request",
+    "runtime:DocumentReadinessRetryTest#a host whose store cannot be read stays not ready",
+    "runtime:DocumentReadinessRetryTest#the configured documents wait for their own prewarm, not another"
+  ],
+  "pending": null
+}

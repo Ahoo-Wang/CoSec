@@ -1,0 +1,11 @@
+{
+  "id": "ATR-2",
+  "source": "RFC 0006 §5.4.3 (K12, Q12)",
+  "statement": "An ALLOW skipped because an external attribute it reads cannot be fetched makes what would be the implicit deny Indeterminate (503); another matching ALLOW still permits, and onMissing nomatch makes it a plain miss.",
+  "level": "pipeline",
+  "guards": [
+    "engine:ExternalAttributesTest",
+    "runtime:ExternalAttributesPipelineTest"
+  ],
+  "pending": null
+}

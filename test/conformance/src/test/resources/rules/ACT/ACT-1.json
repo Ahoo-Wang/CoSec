@@ -1,0 +1,7 @@
+{
+  "id": "ACT-1",
+  "source": "RFC 0005 §2 J9; GHSA-2293-jx8h-56m8",
+  "statement": "A value substituted for a path template variable never changes the pattern.",
+  "level": "pipeline",
+  "pending": null
+}

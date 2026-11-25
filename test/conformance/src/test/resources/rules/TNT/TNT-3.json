@@ -1,0 +1,10 @@
+{
+  "id": "TNT-3",
+  "source": "RFC 0007 §7.2",
+  "statement": "A tenant's principals write only their own tenant's documents (a hard rule, not a policy).",
+  "level": "control",
+  "pending": null,
+  "guards": [
+    "control:ControlAuthorizationTest#the hard rule stands whatever the policies say"
+  ]
+}

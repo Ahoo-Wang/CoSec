@@ -1,0 +1,10 @@
+{
+  "id": "ALG-3",
+  "source": "RFC 0004 §6.1",
+  "statement": "Without a matching DENY, an unresolved input (a missing attachment or policy, a required document unavailable or not loaded) makes the decision Indeterminate, never Permit.",
+  "level": "engine",
+  "properties": [
+    "engine:EnginePropertyTest#P9 missing and unavailable data never permit"
+  ],
+  "pending": null
+}

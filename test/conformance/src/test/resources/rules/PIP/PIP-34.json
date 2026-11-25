@@ -1,0 +1,20 @@
+{
+  "id": "PIP-34",
+  "source": "RFC 0006 §6.2, §6.3 (amended 2026-11-22, #1840)",
+  "statement": "A host may render the body of a refusal with one ProblemRenderer, given the Problem only (its type, status, request id and trace id), never the decision, its cause or the principal. The status and every header (Content-Type application/problem+json, CoSec-Request-Id, Retry-After, RateLimit-*) stay CoSec's, and a renderer can set neither a status nor a header. The same renderer answers alike behind the three adapters and the login routes. A renderer that throws or answers no bytes is replaced by CoSec's own body for that response, counted and logged, and the request stays refused with CoSec's status. Without a renderer the body is CoSec's own, byte for byte.",
+  "level": "build",
+  "pending": null,
+  "guards": [
+    "runtime:ProblemBodiesTest#without a renderer the body is CoSec's own, byte for byte",
+    "runtime:ProblemBodiesTest#a renderer's bytes are the body, and it is given the problem only",
+    "runtime:ProblemBodiesTest#a renderer that throws, answers no bytes or answers null is replaced by CoSec's body, and counted",
+    "spring-boot:WebAdapterParityTest#a host's renderer writes the same body behind the three adapters, under CoSec's status and headers",
+    "jwt:LoginRoutesTest#the login routes render a refusal as the adapters do",
+    "spring-boot:ProblemRendererWiringTest#the application's renderer writes the body, under CoSec's status and media type",
+    "spring-boot:ProblemRendererWiringTest#two renderers fail startup and name both",
+    "spring-boot:GatewayHostProblemBodyTest#the control routes of a gateway host render a refusal with the host's renderer",
+    "architecture:OneDecisionPathTest#renderersNeverSeeDecisions",
+    "architecture:OneDecisionPathTest#refusalBodiesComeFromProblemBodies",
+    "micrometer:ProblemRenderFailedMetricTest#each refusal a renderer failed is counted, and a rendered one is not"
+  ]
+}

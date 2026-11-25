@@ -1,0 +1,11 @@
+{
+  "id": "ANA-2",
+  "source": "RFC 0005 §4.2",
+  "statement": "When implies(c1, c2) = YES, no request satisfies c1 but not c2 (A2).",
+  "level": "analysis",
+  "properties": [
+    "model:AnalysisPropertyTest#A2 implies is sound",
+    "model:AdversarialAnalysisTest#A2 holds on adversarial values"
+  ],
+  "pending": null
+}

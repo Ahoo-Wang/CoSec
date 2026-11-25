@@ -1,0 +1,12 @@
+{
+  "id": "BRK-10",
+  "source": "RFC 0007 §6.1, §8 (RC1-51)",
+  "statement": "Only its author abandons a change that revokes a break-glass binding that still grants; anyone else, the principal it revokes included, is refused (403, or 404 for one who may not see the change). Every abandon is recorded as an ABANDONED change event; a break-glass change's abandon needs a REQUIRED change listener and is recorded there before it is stored.",
+  "level": "control",
+  "pending": null,
+  "guards": [
+    "control:BreakGlassControlTest#only its author abandons a revoke of a live binding",
+    "control:BreakGlassControlTest#abandoning break-glass is recorded first",
+    "control:BreakGlassControlTest#abandoning any other change is recorded after, best effort"
+  ]
+}

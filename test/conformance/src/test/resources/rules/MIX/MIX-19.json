@@ -1,0 +1,10 @@
+{
+  "id": "MIX-19",
+  "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on phase 2 of the cross-version fixture); the red-team inventory, row 19",
+  "statement": "A route map is not exchanged: each instance reads its own file (cosec.authorization.routes.location) at startup, so two versions meet only through the same file rolled out to both, which they resolve alike.",
+  "level": "build",
+  "guards": [
+    "compat:LocalStateCompatTest#one route map is resolved alike by both versions"
+  ],
+  "pending": null
+}

@@ -1,0 +1,17 @@
+{
+  "id": "OBL-6",
+  "source": "R9 (2026-11-14): LocalRateLimiter bounds",
+  "statement": "The local rate limiter admits at most a bound of buckets in total, a lower bound per rule, and a lower bound per document for the rules a document owns (its counter ids' document). A bucket it cannot admit cannot be counted: the call fails, and the rule's strictFailure decides (503, or the rule is skipped); it is never counted into a bucket the limiter does not keep. A rule that reaches its bound refuses only its own new buckets, and the rules of a document that reaches its bound only that document's.",
+  "level": "build",
+  "guards": [
+    "runtime:RateLimitObligationTest#aFullLocalLimiterIsOneThatCannotCount",
+    "runtime:LocalRateLimiterBoundsTest#a flood on one rule leaves the other rules counting and admitting",
+    "runtime:LocalRateLimiterBoundsTest#a limiter full in total refuses new buckets of every rule",
+    "runtime:LocalRateLimiterBoundsTest#a request that loses the admission of its key counts into the winner's bucket",
+    "runtime:LocalRateLimiterBoundsTest#the counters equal what the limiter holds while sweeps run",
+    "runtime:LocalRateLimiterBoundsTest#two flooded rules of one tenant fill only its document's share",
+    "runtime:LocalRateLimiterBucketBytesTest#a bucket retains a bounded number of bytes, whatever the length of the key a client chose",
+    "engine:RateLimitObligationTest#a key value past the bound names a bucket of bounded length, its own"
+  ],
+  "pending": null
+}

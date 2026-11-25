@@ -1,0 +1,14 @@
+{
+  "id": "IDN-46",
+  "source": "RFC 0014 R3 (the maintainer's word of 2026-11-24 on the kind through login, tokens, verifiers and the header, “同意”); the R3 design page v2, §A and §B",
+  "statement": "A verified token says whose it is: VerifiedToken.kind, PERSON or WORKLOAD, a required parameter with no default, so every TokenVerifier says which for every token it verifies, and the credential TokenAuthenticator makes of it is of that kind; break-glass reaches only CoSec's own token read as a person's. CoSec's verifier reads `cosec.kind`: `person` is a person's, and a token without the claim (an earlier preview issued it) or with any other value, a string or not, is a workload's, never refused. A refresh and a tenant switch issue a token of the kind of the access token presented, never one an application's hook answers, so a kind is chosen once, at login, and a session issued without the claim stays a workload's until its user signs in again.",
+  "level": "pipeline",
+  "pending": null,
+  "guards": [
+    "runtime:TokenKindTest#a token's credential is of the kind its verifier read, and only CoSec's own person's token uses break-glass - IDN-46",
+    "jwt:TokenKindJwtTest#a token is a person's only when cosec kind says exactly person, and a workload's otherwise - IDN-46",
+    "jwt:TokenKindJwtTest#a refresh keeps the kind of the token it refreshes, whatever its hook answers - IDN-46",
+    "login:SwitchTenantAuthenticationTest#the new token keeps the kind of the previous one - IDN-46",
+    "testkit:ForwardedKindTest#a gateway forwards the kind CoSec's login declared, through a refresh, and a token without one as a workload's - IDN-46"
+  ]
+}

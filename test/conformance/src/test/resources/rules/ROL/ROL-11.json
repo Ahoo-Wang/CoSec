@@ -1,0 +1,7 @@
+{
+  "id": "ROL-11",
+  "source": "RFC 0012 §5.2, §3.2",
+  "statement": "A role applies only in its own app, and a role that names a space only in that space.",
+  "level": "engine",
+  "pending": null
+}

@@ -1,0 +1,11 @@
+{
+  "id": "CTL-44",
+  "source": "RFC 0007 §5.8; design B of the back-references, beta.5 (#1729)",
+  "statement": "What a tenant's publish reads and writes does not depend on how many other documents refer to the same policies, for a reference it adds and for one it drops alike: it records what it adds in its own revision index before adding one member per reference, and drops exactly the members that record holds, without reading the sets.",
+  "level": "control",
+  "guards": [
+    "control:PublishCostTest#a tenant's publish that adds a reference costs the same at 10 and at 400 referrers",
+    "control:PublishCostTest#a tenant's publish that drops a reference costs the same at 10 and at 400 referrers"
+  ],
+  "pending": null
+}

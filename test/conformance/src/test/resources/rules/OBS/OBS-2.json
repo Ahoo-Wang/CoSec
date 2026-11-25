@@ -1,0 +1,10 @@
+{
+  "id": "OBS-2",
+  "source": "RFC 0006 §9.4.3 (Q20); RFC 0004 I9",
+  "statement": "A permit through a break-glass binding proceeds only when a REQUIRED listener recorded it; without one registered it is 503.",
+  "level": "pipeline",
+  "guards": [
+    "runtime:BreakGlassAndShadowTest"
+  ],
+  "pending": null
+}

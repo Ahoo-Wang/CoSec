@@ -1,0 +1,15 @@
+{
+  "id": "SNP-16",
+  "source": "RFC 0013 §5.4",
+  "statement": "An effect that throws ends its key's load in flight as a transient failure and the key goes on: a step offers at most one `EffectFailed`, and an `EffectFailed`'s own step offers none, so no thread loops on a key whose effects keep failing.",
+  "level": "build",
+  "guards": [
+    "runtime:KeyEffectFailureTest#every effect of a step that throws gives one EffectFailed, and its own failed log gives none",
+    "runtime:KeyEffectFailureTest#an EffectFailed whose log throws gives no other on the compile pool, which drains unbounded",
+    "runtime:KeyEffectFailureTest#what an EffectFailed's own step fails is logged in place, and no other EffectFailed comes",
+    "runtime:KeyEffectFailureTest#a VirtualMachineError in a step with other failures is still logged on a caller's thread",
+    "runtime:KeyEffectFailureTest#a VirtualMachineError in a step with other failures is still rethrown on the compile pool",
+    "runtime:KeyEffectFailureTest#a VirtualMachineError from logging what an EffectFailed's step failed is kept and logged, not dropped"
+  ],
+  "pending": null
+}

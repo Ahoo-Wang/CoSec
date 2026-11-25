@@ -1,0 +1,13 @@
+{
+  "id": "SNP-7",
+  "source": "RFC 0003 §4.2; RC1-7",
+  "statement": "An entry for a document the store does not hold never evicts one it holds: such entries have a bound of their own in each family (`maxAbsentApps`, `maxAbsentTenants`) and evict only each other, so however many ids without a document a client names, every document a family holds within its bound stays installed.",
+  "level": "timing",
+  "properties": [
+    "runtime:SnapshotFailClosedPropertyTest#absentEntriesNeverEvictDocuments"
+  ],
+  "guards": [
+    "runtime:DocumentSnapshotSourceTest#a flood of ids without a document never evicts a document"
+  ],
+  "pending": null
+}

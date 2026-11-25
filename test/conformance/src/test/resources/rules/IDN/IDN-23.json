@@ -1,0 +1,24 @@
+{
+  "id": "IDN-23",
+  "source": "RFC 0009 §11.3; docs/roadmap.md §9 as of commit 8b881ed3 (the starter serves the refresh route)",
+  "statement": "When cosec.authentication.login.refresh.path is set, the starter serves POST on it, on Spring MVC and on WebFlux, under the pipeline like every route (STA-4: a document must permit an anonymous POST of it; nothing is exempted from the filter), and never on a gateway. Its body is exactly {\"accessToken\",\"refreshToken\"} as application/json, at most 32 KiB; anything else is 400 invalid-request. It answers 200 application/json, the CompositeToken written by CoSec's one mapper; 401 token-expired, token-revoked or token-invalid for a refusal of the pair; 503 unavailable when the revocations or the session store cannot answer (nothing issued, nothing spent: IDN-14, IDN-19); 500 internal-error for any other error, never 401. Every answer carries Cache-Control: no-store, a problem body is ProblemEncoder's and carries nothing of the request but its request id, and no log line of CoSec carries a token. A path set where the route cannot be served fails startup (STA-1).",
+  "level": "pipeline",
+  "pending": null,
+  "guards": [
+    "jwt:LoginRoutesTest#a refresh answers a new pair of the same session",
+    "jwt:LoginRoutesTest#the pair is written as CompositeTokenJsonTest pins it, whatever the tokens hold",
+    "jwt:LoginRoutesTest#a body that is not exactly the pair is invalid-request, and nothing of it is told back",
+    "jwt:LoginRoutesTest#each failure answers its own type",
+    "jwt:LoginRoutesTest#a session store that cannot answer is unavailable, and spends nothing",
+    "spring-boot:ServedLoginRoutesTest#a refresh answers a new pair, not to be stored",
+    "spring-boot:ServedLoginRoutesTest#a body that is not the pair is invalid-request, and nothing of it comes back",
+    "spring-boot:ServedLoginRoutesTest#a pair presented again is answered as IDN-16 says",
+    "spring-boot:ServedLoginRoutesTest#revocations that cannot be read are unavailable, on the refresh's own read, and spend nothing",
+    "spring-boot:ServedLoginRoutesTest#a session store that cannot answer is unavailable, a bug is an error, and neither ends the session",
+    "spring-boot:ServedLoginRoutesTest#only POST is served, and a preflight is the CORS filter's",
+    "spring-boot:ServedLoginRoutesTest#with no statement for the route, CoSec refuses it and the operator is told",
+    "spring-boot:LoginRoutesStartupTest#a gateway host with a path set fails startup",
+    "spring-boot:LoginRoutesStartupTest#a path that is not one plain absolute path fails startup",
+    "jwt:ClientContractTest#the served refresh route answers as the contract says"
+  ]
+}

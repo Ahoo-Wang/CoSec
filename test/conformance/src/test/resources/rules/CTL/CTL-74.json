@@ -1,0 +1,12 @@
+{
+  "id": "CTL-74",
+  "source": "RFC 0007 §6.5 (review of 2026-11-21's merges, R3-11: the size of a status; maintainer's coordinator, 2026-11-22)",
+  "statement": "An instance's status is small: its instance, when, its format level, whether it shadows and the windows it acknowledges, and no document it holds. Liveness, the acknowledgement of a shadow window and the window's closing path read only statuses and never an instance's resident documents, so what they read per instance does not grow with the documents it holds.",
+  "level": "build",
+  "pending": null,
+  "guards": [
+    "cocache:StatusSplitTest#what the acknowledgement reads does not grow with the documents an instance holds",
+    "control:ShadowAcknowledgementTest#the closing path reads no resident record",
+    "document:ShadowCodecTest#a status of 8_0_0-beta_5 reads, its documents ignored"
+  ]
+}

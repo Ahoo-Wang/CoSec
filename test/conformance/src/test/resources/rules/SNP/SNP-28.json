@@ -1,0 +1,15 @@
+{
+  "id": "SNP-28",
+  "source": "RFC 0014 R1 on stored records and G5 (the coordinator's ruling of 2026-11-24, after the red-team review CE-9, CE-10, CE-15); RFC 0014 §5 (sentences proposed in the PR)",
+  "statement": "Every member of each kind of stored record is registered in one place beside its codec (StoredMembers): what a reader takes its absence for, whether a reader that ignored it would decide more widely, and whether a reader that dropped it when it rewrote the record would leave it wider, the two stated apart. The codec writes exactly the registered members, and an absent member reads as registered. A member added after 8.0 whose being ignored or dropped would widen anything is added only with crit (SNP-27), never as one an older reader may ignore or drop.",
+  "level": "build",
+  "guards": [
+    "cocache:TokenFamilyMembersTest#the registry names every member the codec writes, and only those",
+    "cocache:TokenFamilyMembersTest#each absent member reads as the registry says",
+    "cocache:TokenFamilyMembersTest#whether ignoring a member widens, and whether dropping it does, are each stated",
+    "cocache:StoredRecordMembersTest#every kind of record has a registry, and each registry names every member its codec writes, and only those",
+    "cocache:StoredRecordMembersTest#each absent member reads as the registry says",
+    "cocache:StoredRecordMembersTest#whether ignoring a member widens, and whether dropping it does, are each stated"
+  ],
+  "pending": null
+}

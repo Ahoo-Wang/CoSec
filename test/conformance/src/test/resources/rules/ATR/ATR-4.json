@@ -1,0 +1,12 @@
+{
+  "id": "ATR-4",
+  "source": "RFC 0006 §5.4.1",
+  "statement": "A policy that reads an external attribute that neither a registered AttributeProvider nor the platform document's attributes declares does not compile.",
+  "level": "pipeline",
+  "guards": [
+    "document:ExternalAttributeDocumentTest#aDeclaredExternalAttributeCompiles",
+    "document:ExternalAttributeDocumentTest#anUndeclaredExternalAttributeDoesNotCompile",
+    "document:PolicyDocumentCompilerTest#the platform document sets what every document compiles against"
+  ],
+  "pending": null
+}

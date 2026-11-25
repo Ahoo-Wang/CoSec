@@ -1,0 +1,23 @@
+{
+  "id": "CTL-10",
+  "source": "RFC 0007 §6.4, Q1; Design D2 (saas-shadow-staged-design.md §5, §9 decision 1)",
+  "statement": "A staged change's shadow window closes only when the instances' samples that compared (not BASE_MISMATCH) reach the minimum after the minimum duration and every instance with a status in the last minute that takes part in shadowing acknowledges the window in that status (an instance that sends no acknowledgements, an older version or one holding no staged list, acknowledges nothing; an instance whose status says it does not shadow, its candidate source not CoSec's own, is not waited for, and still counts for propagation), or at the maximum duration as insufficient whatever the acknowledgements; a stage makes the staged list kept, so a window staged on a store no startup task or shadow pass ran on is acknowledged too; an acknowledgement adds no sample, statuses that cannot be read keep the window open, and a change still shadowing never publishes. While the window is open, the change's answer says how many live instances acknowledge it and which do not (`waitingFor`: at most twenty ids and the count of the rest).",
+  "level": "control",
+  "guards": [
+    "control:ShadowWindowTest#two instances sample a window that closes from their reports, and the publisher acknowledges it",
+    "control:ShadowWindowTest#a window without enough samples closes at its longest as insufficient",
+    "control:ShadowAcknowledgementTest#an instance that does not shadow is not waited for, an older version is",
+    "control:ShadowAcknowledgementTest#a window with enough samples stays open while a live instance has not acknowledged it",
+    "control:ShadowAcknowledgementTest#an instance whose status sends no windows acknowledges nothing",
+    "control:ShadowAcknowledgementTest#an instance whose status is older than a minute is not waited for",
+    "control:ShadowAcknowledgementTest#the longest window closes insufficient whatever the acknowledgements",
+    "control:ShadowAcknowledgementTest#a CANDIDATE_ERROR blocks at once though no instance acknowledges",
+    "control:ShadowAcknowledgementTest#an acknowledgement adds no sample",
+    "control:ShadowAcknowledgementTest#statuses that cannot be read keep the window open",
+    "control:ControlAnswersTest#an open window's answer names at most twenty instances it waits for, and counts the rest - CTL-10",
+    "document:ShadowCodecTest#a status keeps the windows its instance acknowledges, and one without them decodes as none sent",
+    "runtime:CompileOnSightTest#the status acknowledges the windows the instance compiled, and none without a list",
+    "runtime:CompileOnSightTest#a reporter without CoSec's candidate source says its instance does not shadow"
+  ],
+  "pending": null
+}

@@ -1,0 +1,12 @@
+{
+  "id": "DOC-10",
+  "source": "RFC 0005 §3.2 (usability review before RC1, UD-2)",
+  "statement": "No attribute reference of a document resolves resource.attributes.<name> (a condition operand on either side, a rate limit key): nothing on the request path, in a check, or in the control plane's simulate and explain gives a resource attributes, so a DENY on one would deny nothing. The message says to put facts about a resource in its id and read them with a pattern variable. The policy test kit refuses a scenario that sets request.resource.attributes, for the same reason.",
+  "level": "engine",
+  "guards": [
+    "model:ConditionCheckerTest#resource attributes are refused wherever they are referred to",
+    "engine:PolicyCompilerTest#resource attributes do not compile",
+    "testkit:StrictInputTest#a scenario that sets resource attributes is refused"
+  ],
+  "pending": null
+}

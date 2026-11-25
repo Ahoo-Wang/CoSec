@@ -1,0 +1,16 @@
+{
+  "id": "PIP-33",
+  "source": "Coordinator's brief for 8.0.0-beta.6, 2026-11-21 (the properties review, items 13 to 21 and 28; what can be computed is not configured); RFC 0006 Q25, §5.3.2",
+  "statement": "Every stage's timeout is a share of the one deadline an operator states, `cosec.pipeline.timeout`, and the starter has no property for any of them: the authenticator 20 %, the membership provider (and the fill of the membership cache) 10 %, an attribute provider that sets no timeout of its own 6 %, the rate limiter 10 %, each read of CoSec's own revocation reader 30 % of the authentication's, a REQUIRED decision listener 20 % (`OBS-10`); each share is a named constant and never below a millisecond, and at the default deadline of 5 s each is the default its property had. A provider's or a reader's own bound (an `AttributeProvider` with its own timeout, an application's `RevocationReader`) stays its own. A key that once set one (`cosec.pipeline.authentication-timeout`, `cosec.authorization.membership.timeout`, `cosec.authorization.attributes.timeout`, `cosec.authorization.rate-limit.timeout`, `cosec.authentication.revocation.read-timeout`) fails startup as a key CoSec does not read, saying it is no longer a property and what replaced it, as do `cosec.authorization.snapshot.local-max-age` (3 revalidate intervals) and `cosec.authorization.membership.unknown-ttl` (a constant, 5 s). The starter says once at startup what each came to and from what.",
+  "level": "startup",
+  "pending": null,
+  "guards": [
+    "runtime:StageBudgetsTest#at the default deadline every share is the default it replaced",
+    "runtime:StageBudgetsTest#the pipeline's options default to the shares of their timeout",
+    "runtime:StageBudgetsTest#a token's two revocation reads end inside the authentication budget",
+    "runtime:StageBudgetsTest#a share of a tiny deadline is never zero",
+    "spring-boot:DerivedTimeoutsTest#the values follow the deadlines an operator states",
+    "spring-boot:DerivedTimeoutsTest#the startup line names each value and what it came from",
+    "spring-boot:UnknownPropertiesTest#a removed key is said to be no longer a property, with what replaced it"
+  ]
+}

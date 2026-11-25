@@ -1,0 +1,22 @@
+{
+  "id": "SNP-25",
+  "source": "RFC 0014 R5 (mixed-version compatibility; maintainer's decisions of 2026-11-24 through the coordinator)",
+  "statement": "Every CoSec process that reads the shared store through `cosec-cocache` writes its own status, whatever its pipeline mode and whether it shadows (a data-plane instance, a gateway, a control-plane host, an IAM service behind a gateway), with the CoSec release it runs, from the resource the build writes (`META-INF/cosec/release`, kept in a repackaged jar). It writes the first status as it starts, before its snapshot source reads a document, then every 10 seconds; with shadowing on, the shadow reporter writes it once a cycle after its reports, under the one instance id the reports use, and without, `shadows: false` and no windows, so no shadow window waits for it. A status key lives exactly an hour after its last write: the readers of the store are the statuses of the last hour (`GET /instances`), while an instance is live, for a window and `propagation`, only with a status from the last minute; the writers fix the hour, the upper bound of any reader set a later release may choose. A status without `release`, of a release before it, reads as an unknown release, which nothing in 8.0 counts or waits on. A status write that fails never stops the instance nor its start: it is logged once at ERROR, naming the keys its Redis user must be allowed to write, then at most once a minute, counted (`cosec.instance.status.failed`) and shown on the `cosecInstanceStatus` health indicator, which stays UP. A process without `cosec-cocache` writes none: the control plane cannot see it as a reader, and counts it nowhere (RFC 0014 §4).",
+  "level": "build",
+  "guards": [
+    "spi:InstanceStatusReleaseTest#the release is the version of the build",
+    "spi:InstanceStatusReleaseTest#the release reads from a repackaged jar without a manifest",
+    "document:ShadowCodecTest#a status names its release, and one without it reads as an unknown release",
+    "runtime:InstanceReporterTest#an instance that does not shadow reports its status and release, and no window",
+    "runtime:InstanceReporterTest#the loop reports on its own, and stays quiet while the shadow reporter drives it",
+    "runtime:InstanceReporterTest#a write that fails is counted and never thrown",
+    "cocache:StatusReadingsTest#a status is live for a minute and a reader for an hour",
+    "cocache:StatusReadingsTest#a status's key lives exactly an hour after its last write",
+    "spring-boot:InstanceStatusWiringTest#an instance that does not shadow reports, before its snapshot source reads a document",
+    "spring-boot:InstanceStatusWiringTest#a service behind a gateway reports, though it reads no document",
+    "spring-boot:InstanceStatusWiringTest#with shadowing on, the status and the shadow reports are one instance's",
+    "spring-boot:InstanceStatusWiringTest#its health names the instance and the release, and stays up",
+    "spring-boot:InstanceStatusWiringTest#without a shared store nothing reports"
+  ],
+  "pending": null
+}

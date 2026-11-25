@@ -1,0 +1,12 @@
+{
+  "id": "OBL-4",
+  "source": "RFC 0006 §8.4; #1229; round-2 review L1 and M3",
+  "statement": "The Redis rate limiter keeps each bucket in one key, `<prefix>:<rule>:<bucket>`, a hash of the window it counts in and that window's and the previous window's counts, and its script takes the time from Redis: it touches only the key it declares, so it runs on a Redis Cluster as on one node, and instances whose clocks differ count in the same window. A window ahead of Redis's clock keeps counting, never restarts. Every count leaves the key with an expiry of two windows, whatever the key held before. Different buckets are different keys, and spread over the slots.",
+  "level": "build",
+  "guards": [
+    "cocache:ReactiveRedisRateLimiterTest#aBucketIsOneKeyThatEveryCountGivesAnExpiry",
+    "cocache:ReactiveRedisRateLimiterTest#theWindowIsRedissNotTheCallers",
+    "cocache:ReactiveRedisRateLimiterTest#bucketsSpreadOverTheCluster"
+  ],
+  "pending": null
+}

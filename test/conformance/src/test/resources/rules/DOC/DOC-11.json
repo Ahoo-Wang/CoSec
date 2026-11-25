@@ -1,0 +1,12 @@
+{
+  "id": "DOC-11",
+  "source": "RFC 0004 §4.2, RFC 0009 (IDN-12) (usability review before RC1, UD-3)",
+  "statement": "A subject.id literal beginning with ( (in eq, in or prefix, in any direction) and a principal binding whose principal id begins with ( do not compile. The anonymous principal has no subject.id in a document and matches no principal binding (BND-4), and no signed-in principal has a reserved id (IDN-12), so such a comparison never holds (and under a not holds for every anonymous request), and such a binding never applies. The message names subject.authenticated. Tenant ids beginning with ( stay valid.",
+  "level": "engine",
+  "guards": [
+    "model:ConditionLintsTest#a subject id literal beginning with a parenthesis refuses in every direction",
+    "engine:PolicyCompilerTest#a reserved subject id literal does not compile",
+    "document:PolicyDocumentCompilerTest#no principal binding names a reserved id"
+  ],
+  "pending": null
+}

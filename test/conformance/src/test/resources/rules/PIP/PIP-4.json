@@ -1,0 +1,12 @@
+{
+  "id": "PIP-4",
+  "source": "RFC 0006 §10.2",
+  "statement": "No failure or timeout of any SPI produces a Permit (P13).",
+  "level": "pipeline",
+  "guards": [
+    "runtime:PipelineTest#failingLateOrWrongMembershipsAre503",
+    "runtime:PipelineTest#snapshotSourceFailureIs503",
+    "runtime:PipelineTest#authenticatorTimeoutIs503"
+  ],
+  "pending": null
+}

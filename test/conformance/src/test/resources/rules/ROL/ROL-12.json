@@ -1,0 +1,12 @@
+{
+  "id": "ROL-12",
+  "source": "RFC 0012 §7.5",
+  "statement": "A change to an app document that defines a system role whose id another app's head already defines carries a warning (REFERENCES) naming the role and the other apps, never a refusal: a membership is role@space with no app in it, so a member whose roles are not issued per app holds the role in every app that defines its id. The check reads the app list and those apps' heads, never a tenant document.",
+  "level": "control",
+  "guards": [
+    "control:SharedRoleIdTest#an app that defines a system role another app defines is warned, naming the role and the app",
+    "control:SharedRoleIdTest#an app whose role ids no other app defines is not warned",
+    "control:SharedRoleIdTest#an app that defines a role another app defines still publishes, keeping the warning"
+  ],
+  "pending": null
+}

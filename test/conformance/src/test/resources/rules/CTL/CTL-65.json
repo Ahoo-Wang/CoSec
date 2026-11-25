@@ -1,0 +1,19 @@
+{
+  "id": "CTL-65",
+  "source": "RFC 0007 §10.2 (control-server-design.md §0.10, PR 3: the control-plane SDK)",
+  "statement": "Every call through the control plane's facade is decided by the pipeline for the principal its ControlCaller states, by the policies, and recorded as that principal's step, by the route's own code path, with no path around it: the same call through the route and through the facade answers the same and records the same; the facade reaches exactly the routes the service profile serves (CTL-58), one definition for the facade and the service port, and the change flow of a tenant's or an app's document, analyzed whoever the caller states (no trust root through it, CTL-81), and no route on the platform document or of a platform document's change; a call through it is recorded via.method: in-process (CTL-57); and a ControlCaller made of a security context CoSec's gate or pipeline did not make is refused when the call is made, by the implementation, before the control plane is asked (as PIP-29). The facade's interface, ControlCaller and ControlRefusedException are cosec-control-sdk's, a module with no runtime and no control plane; the in-process implementation is cosec-control's.",
+  "level": "control",
+  "guards": [
+    "control:ControlServiceTest#each call of the narrow set answers and records through the facade as through its route - CTL-65",
+    "control:ControlServiceTest#a refusal through the facade is the route's problem, and records nothing - CTL-65",
+    "control:ControlServiceTest#no route outside the narrow set is reachable through the facade, nor any on the platform document - CTL-65",
+    "control:ControlServiceTest#a caller is taken only from a context CoSec made - CTL-65",
+    "control:ControlServiceTest#the facade's change states are the control plane's, in its order - CTL-65",
+    "control:ControlServiceTest#a service caller acts as its platform principal, admitted as the gate admits a forwarded identity - CTL-65",
+    "runtime:IdentityGateTest#admit holds an identity to what a forwarded header is held to",
+    "control:ControlServiceTest#the facade reaches exactly the routes the service port serves, route by route - CTL-65",
+    "control:ControlServiceTest#a call through the facade is recorded as made in process - CTL-57, CTL-65",
+    "control:AppDocumentServiceTest#a service proposes and checks an app document's change, on the port and through the facade - CTL-58, CTL-65"
+  ],
+  "pending": null
+}

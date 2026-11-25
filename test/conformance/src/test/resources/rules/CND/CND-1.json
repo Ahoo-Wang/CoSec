@@ -1,0 +1,11 @@
+{
+  "id": "CND-1",
+  "source": "RFC 0005 §3.4, Q7",
+  "statement": "An absent attribute equals no value, not another absent one and not the empty string; exists is false for it.",
+  "level": "engine",
+  "guards": [
+    "model:ConditionEvaluationTest#absent is equal to nothing",
+    "model:ConditionEvaluationTest#exists sees present values, empty ones included"
+  ],
+  "pending": null
+}

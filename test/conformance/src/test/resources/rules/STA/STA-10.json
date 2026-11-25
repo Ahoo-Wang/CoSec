@@ -1,0 +1,19 @@
+{
+  "id": "STA-10",
+  "source": "RFC 0007 §10.2 (maintainer decision 2026-11-21: the control-plane host as an image, \"实现排在 beta.6\", merged into beta.5)",
+  "statement": "`cosec-control-server`, the control plane as an image (`platform/control-server`), is the starter with the control plane and nothing else: it decides with policies and takes its caller from the `CoSec-Identity` header (`cosec.pipeline.caller=forwarded-identity`, `STA-9`), so it starts only under the operator's statement of what can reach it, verifies no credential, and issues no token. It refuses to start with `cosec.control.enabled=false` (an application that is up and serves nothing: the gateway image is the read-only one), and with what comes to the same (DR1-F-19): `cosec.enabled=false`, `cosec.control.http.enabled=false` (no control route, the service port's included), `cosec.pipeline.mode=gateway` (no control plane is wired) and `cosec.pipeline.caller=credential` (every call refused as anonymous), each as the starter binds it; `cosec.jwt.enabled=true`, `cosec.api-key.enabled=true` or `cosec.authentication.login.enabled=true` (verification or a login that nothing on this host uses). Its probes are on the management port, outside CoSec, and its readiness group includes the control store's format indicator (`cosecControlStoreFormat`): a store not yet converted (`cosec-migrate repair-references`) leaves the instance unready, visible and named, and is never a startup refusal. It runs with `cosec.authorization.shadow.enabled=false`: it writes an instance status that does not shadow (`shadows: false`, `SNP-25`), as every reader of the store does, so a shadow window never waits for a control host, and `propagation` counts the documents it holds.",
+  "level": "startup",
+  "pending": null,
+  "guards": [
+    "control-server:ControlServerRefusalsTest#the image's own defaults, and nothing written, are accepted",
+    "control-server:ControlServerRefusalsTest#a control server with the control plane off is an empty application that is up, so it is refused",
+    "control-server:ControlServerRefusalsTest#settings that leave the control server serving nothing are refused like the control plane off",
+    "control-server:ControlServerRefusalsTest#credential verification is refused because the host believes the identity it is sent",
+    "control-server:ControlServerTest#it does not start until the operator states what can reach it",
+    "control-server:ControlServerTest#it starts under the statement, with the control plane wired and nothing that verifies a credential",
+    "control-server:ControlServerTest#a call with no identity is refused, and a credential is not an identity",
+    "control-server:ControlServerTest#the probes are on the management port, and the control store's format joins the readiness group",
+    "control-server:ControlServerTest#a control server reports a status that does not shadow, and takes no part in a shadow window",
+    "control-server:ControlServerTest#credential verification is refused whichever way it is asked for"
+  ]
+}

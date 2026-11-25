@@ -1,0 +1,7 @@
+{
+  "id": "ROL-7",
+  "source": "RFC 0012 §5.3, §6.2",
+  "statement": "Role ids are validated, a derived binding id that collides does not compile, and `role:` is reserved to derived bindings.",
+  "level": "engine",
+  "pending": null
+}

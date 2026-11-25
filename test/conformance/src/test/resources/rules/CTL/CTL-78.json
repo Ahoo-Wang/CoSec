@@ -1,0 +1,16 @@
+{
+  "id": "CTL-78",
+  "source": "RFC 0007 §10.2 (control-typed-api decisions of 2026-11-21: validation before an IAM stores its event; check shares propose's path)",
+  "statement": "A check (`POST /changes:check`, `POST /documents/{key}:check`, `ControlService.check`/`checkApply`, `ControlClient.check`) answers what the proposal or the apply it stands for would: the same state, findings, escalations and base, by the proposal's own function, every step of it but the last. It answers no candidate: the candidate a proposal checks names the change that confirms a lapsing DENY, so a check's would be another document. It needs exactly what the proposal needs and is refused alike (a caller who may not propose may not check, so a check tells no more about a document than the proposal would; a stale base is the same conflict; the service profile serves it for a tenant's or an app's document, never the platform's, as CTL-58 lists). It stores nothing, takes no staging slot, takes no change id and writes no change event; the request itself is decided and recorded as any call of the control API.",
+  "level": "build",
+  "pending": null,
+  "guards": [
+    "control:ChangeCheckTest#a check answers what the proposal would, clean, failing and escalating alike - CTL-78",
+    "control:ChangeCheckTest#a check of an apply answers what the apply would - CTL-78",
+    "control:ChangeCheckTest#a check stores nothing, takes no slot and writes no change event - CTL-78",
+    "control:ChangeCheckTest#a caller who may not propose may not check, and is refused alike - CTL-78",
+    "control:ClientContractTest#a check's answer holds exactly the members of its contract file - CTL-78",
+    "control-sdk:TypedWireTest#a check's answer reads every member of its contract file - CTL-78",
+    "control:NomatchConfirmationTest#a check answers what the proposal finds, never its candidate, which names the confirming change - CTL-78"
+  ]
+}

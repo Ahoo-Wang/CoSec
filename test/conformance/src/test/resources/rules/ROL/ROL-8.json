@@ -1,0 +1,7 @@
+{
+  "id": "ROL-8",
+  "source": "RFC 0012 §6.3",
+  "statement": "A document whose roles derive more bindings than the limit does not compile.",
+  "level": "engine",
+  "pending": null
+}

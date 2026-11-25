@@ -1,0 +1,10 @@
+{
+  "id": "SCP-8",
+  "source": "RFC 0004 §4.6 (PR-1, 2026-10-25)",
+  "statement": "The app is checked before the space: a request failing both is Rejected(APP_MISMATCH).",
+  "level": "engine",
+  "guards": [
+    "model:ScopeResolverTest#the app is checked before the space"
+  ],
+  "pending": null
+}

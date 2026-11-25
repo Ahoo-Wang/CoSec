@@ -1,0 +1,12 @@
+{
+  "id": "MIX-12",
+  "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 12",
+  "statement": "A staged candidate record is ignorable with must-understand (SNP-27, SNP-28); its document stays strict (SNP-12).",
+  "level": "build",
+  "guards": [
+    "compat:RecordCompatTest#each version reads and writes back the record the other wrote, unchanged",
+    "compat:RecordCompatTest#a later member without crit is dropped by a rewrite, which leaves the same record",
+    "compat:RecordCompatTest#a record whose crit names a member a version does not know is refused by it"
+  ],
+  "pending": null
+}

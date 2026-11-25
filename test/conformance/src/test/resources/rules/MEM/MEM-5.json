@@ -1,0 +1,14 @@
+{
+  "id": "MEM-5",
+  "source": "DR1-D-2 (coordinator's ruling, 2026-11-23); RFC 0006 §5.5.2",
+  "statement": "The memberships a MembershipLoader answered are held by the process that loaded them, at most cosec.authorization.membership.ttl from the answer; no membership is read from Redis, or from any store another process can write, as the provider's answer, and none is written there. Only invalidation frames, which carry keys and no memberships, cross between instances, and a frame can only make an instance load again.",
+  "level": "build",
+  "guards": [
+    "cocache:MembershipsStayLocalTest#aRecordInRedisIsNeverReadAndNoneIsWritten",
+    "cocache:MembershipsStayLocalTest#anInvalidationOnOneInstanceReachesTheOther",
+    "spring-boot:MembershipsStayLocalStarterTest#a membership record in Redis is never the provider's answer, and none is written",
+    "cocache:LocalMembershipsTest#concurrent misses of one key share one load, and it answers them all",
+    "cocache:LocalMembershipsTest#an invalidation during a load answers its waiters and keeps nothing"
+  ],
+  "pending": null
+}

@@ -1,0 +1,12 @@
+{
+  "id": "CTL-32",
+  "source": "RFC 0007 §9.1, §7.6",
+  "statement": "A boundary is not bound: a tenant or app binding that names a platform boundary is refused when it is checked (422 REFERENCES), as the data plane would find no policy of that id, and the grant analysis reads a boundary as no policy at all.",
+  "level": "control",
+  "guards": [
+    "control:BoundaryReferencesTest#a tenant does not bind a platform boundary",
+    "control:BoundaryReferencesTest#an app does not bind a platform boundary either",
+    "control:BoundaryReferencesTest#a grant analysis reads a boundary as no policy at all"
+  ],
+  "pending": null
+}

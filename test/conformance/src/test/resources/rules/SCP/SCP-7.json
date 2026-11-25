@@ -1,0 +1,9 @@
+{
+  "id": "SCP-7",
+  "source": "RFC 0004 §4.6 (round-1 review, 2026-10-26; RC1-15)",
+  "statement": "A declared app that cannot be an app id (blank, *, containing ':' or a control character, or longer than 128 characters: the rule of a tenant id) is Rejected(APP_MISMATCH), with or without a host app. An app document's key (SnapshotKey.App) takes only such an id, so the control plane takes no app the data plane could never read: analyze refuses one with 400, and a candidate document with a binding in such an app, wherever it is, is a V2 finding (400) at the binding's app, so a document that holds one must remove it in its next change, and a change that only removes it is valid. The control plane skips such an app wherever it would build a key from a document (back-references, their repair, the checks, the grant analysis), and a stored record that names one (an open change of such an app, an instance status entry, an app list entry, a back-reference set's member) is skipped alone, never stopping maintenance or a write; the control API answers such a change 409.",
+  "level": "engine",
+  "guards": [],
+  "pending": null,
+  "superseded": "SCP-10"
+}

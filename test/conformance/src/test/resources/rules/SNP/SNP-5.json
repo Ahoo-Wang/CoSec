@@ -1,0 +1,11 @@
+{
+  "id": "SNP-5",
+  "source": "RFC 0003 §4.5",
+  "statement": "A tenant configured to fail closed on lag (`cosec.authorization.snapshot.fail-closed.tenants`, where `*` names every tenant) is not decided on when the oldest document its evaluation reads was last confirmed by the store longer ago than `fail-closed.max-lag`: the request is indeterminate (503) unless a DENY matches. Other tenants, and views within the bound, are decided as usual.",
+  "level": "pipeline",
+  "guards": [
+    "runtime:DocumentSnapshotViewsTest#a fail-closed tenant past its lag bound is unresolved, others decide",
+    "runtime:DocumentSnapshotViewsTest#with a star every tenant past its lag bound is unresolved"
+  ],
+  "pending": null
+}

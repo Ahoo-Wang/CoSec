@@ -1,0 +1,13 @@
+{
+  "id": "CTL-63",
+  "source": "G2e finding (routes.json of #1792): :skip-shadow and :rebase wrote no change event; RFC 0007 §10.5",
+  "statement": "A step that changes a change's record writes a change event when it does: skipping a shadow window writes `SHADOW_SKIPPED`, with why in its note, whether or not the change is ever published, and a rebase writes `REBASED`; a refused step changes nothing and writes nothing.",
+  "level": "control",
+  "guards": [
+    "control:StepEventsTest#a skipped window is recorded when it is skipped, with its reason, whether or not the change publishes - CTL-63",
+    "control:StepEventsTest#a rebase is recorded when it rebases - CTL-63",
+    "control:StepEventsTest#a refused skip records nothing - CTL-63",
+    "control:ClientContractTest#each route that moves a change writes the change kinds of its contract file"
+  ],
+  "pending": null
+}

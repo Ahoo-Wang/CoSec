@@ -1,0 +1,10 @@
+{
+  "id": "CTL-29",
+  "source": "RFC 0007 §9.4, #1224",
+  "statement": "The control plane refuses a change of a platform policy while a tenant document holds a copy of it (422), naming the tenant, so the two layers never hold one id with two contents; removing the copy, or the platform's policy, is not refused.",
+  "level": "control",
+  "guards": [
+    "control:SharedPolicyCopyTest"
+  ],
+  "pending": null
+}

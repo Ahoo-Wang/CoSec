@@ -1,0 +1,19 @@
+{
+  "id": "CTL-8",
+  "source": "RFC 0007 §7.1, §7.2",
+  "statement": "Every control-plane write is checked target by target with the control plane's own policies, through the same engine, before anything is recorded: cosec:write on each entry, cosec:grant on each scope a binding grants in, and the step's own action on the document. Anything but a permit refuses it: 403, or 503 when it cannot be decided. The targets of one change are decided on one confirmation of the control documents, confirmed again once they are decided: a document that moved meanwhile has them decided again, so an operator revoked during a change is refused as by a confirmation before each target, and documents that cannot be confirmed again, or keep moving, refuse it (503).",
+  "level": "control",
+  "guards": [
+    "control:ControlAuthorizationTest#nobody writes without the right, and nothing is recorded",
+    "control:ControlAuthorizationTest#an undecidable check, a failed confirmation and a failing analysis all refuse",
+    "control:ChangeBatchAuthorizationTest#an operator revoked during the decisions of a change is refused - #1218",
+    "control:ChangeBatchAuthorizationTest#a document that moved during the decisions has them taken again - #1218",
+    "control:ChangeBatchAuthorizationTest#documents that cannot be confirmed at the end refuse the change - #1218",
+    "control:ChangeBatchAuthorizationTest#documents that keep moving refuse the change - #1218",
+    "control:EntryIdsTest#an id that would add a segment to its resource is refused",
+    "control:EntryIdsTest#a permission policy keeps the slash its id has",
+    "control:EntryIdsTest#a permission policy's id has no slash past its app, nor a catalog permission's",
+    "control:EntryIdsTest#a catalog permission with a slash from before stays, and only one the change adds is refused"
+  ],
+  "pending": null
+}

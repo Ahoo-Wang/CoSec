@@ -1,0 +1,14 @@
+{
+  "id": "SNP-1",
+  "source": "RFC 0003 §6",
+  "statement": "Every document one evaluation reads comes from a single revision (P7).",
+  "level": "timing",
+  "properties": [
+    "runtime:SnapshotConsistencyPropertyTest#everyEvaluationReadsOneRevisionPerDocument"
+  ],
+  "pending": null,
+  "guards": [
+    "runtime:DocumentSnapshotViewsTest#a view decides with the revisions it was built from",
+    "runtime:SuspendingSnapshotSourceTest#theViewWithTheAppIsOneReadWhole"
+  ]
+}

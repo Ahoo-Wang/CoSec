@@ -1,0 +1,15 @@
+{
+  "id": "CTL-2",
+  "source": "RFC 0007 §5.4",
+  "statement": "The revision record is written before the head, and the head carries its parent. The head write is the commit point: a store's own timeout after it is a failure of what follows the write, never the publish's outcome or the caller's cancellation, and so is a change that kept moving while it was settled: either is a 503 saying the revision is written and publishing the change again settles it, never a 409 (DR1-E-7).",
+  "level": "control",
+  "guards": [
+    "control:RevisionsTest",
+    "cocache:RevisionChainTest",
+    "control:CommittedRevisionTest#a store timeout indexing a written head still answers published - #1263",
+    "control:CommittedRevisionTest#a store timeout settling a published change says it is written, and a retry settles it - #1263",
+    "control:PublishedNotExpiredTest#a publish whose settling kept conflicting after the head write answers 503, written",
+    "control:CommittedRevisionTest#a caller cancelled before the head write is cancelled and writes no head - #1263"
+  ],
+  "pending": null
+}

@@ -1,0 +1,16 @@
+{
+  "id": "CTL-12",
+  "source": "RFC 0007 §6.3, §6.4; Design D2 (saas-shadow-staged-design.md §4, §9 decision 2, condition 2)",
+  "statement": "A candidate that an instance cannot compile or evaluate (CANDIDATE_ERROR) closes the window at once, and the change never publishes. An instance that reads the staged list compiles each window's candidate when it first sees the window, whatever its traffic, and one that does not compile is CANDIDATE_ERROR in that cycle's report; it compiles on the reporter's coroutine, one candidate at a time, never on the snapshot source's compile pool, so windows staged while documents load cold make no load fail; and for at most one report interval per cycle, checked between candidates, the longest waiting first, so the reports and the status are written every cycle and every window is compiled within a few cycles of its staging.",
+  "level": "control",
+  "guards": [
+    "control:ShadowWindowTest#a candidate an instance cannot compile closes the window at once and never publishes",
+    "runtime:CompileOnSightTest#a window is compiled when the instance first sees it, once, with no request sampled",
+    "runtime:CompileOnSightTest#a candidate that does not compile is a CANDIDATE_ERROR in the same cycle's report, counted once",
+    "runtime:CompileOnSightTest#a window listed before its candidate is written is compiled on the next cycle",
+    "runtime:CompileOnSightTest#a new window of a document is compiled though the old one is still held",
+    "runtime:CompileOnSightTest#a hundred windows staged while documents load cold fail no load, and none compiles on the source's pool",
+    "runtime:CompileOnSightTest#a cycle compiles for one interval at most, the status is written every cycle, and every window in the end"
+  ],
+  "pending": null
+}

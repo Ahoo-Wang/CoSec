@@ -1,0 +1,10 @@
+{
+  "id": "APR-2",
+  "source": "RFC 0007 §7.5, Q10",
+  "statement": "An approval is valid for cosec.control.approval.expire-after (72 hours); an expired one publishes nothing and the change awaits approval again.",
+  "level": "control",
+  "guards": [
+    "control:ControlAuthorizationTest#an expired approval publishes nothing and asks again"
+  ],
+  "pending": null
+}

@@ -1,0 +1,10 @@
+{
+  "id": "SCP-1",
+  "source": "RFC 0004 §4.6",
+  "statement": "A declared non-empty space the principal has no role in is Rejected(SPACE_NOT_MEMBER); it never falls back to the default space (C3).",
+  "level": "engine",
+  "properties": [
+    "model:ScopeResolverPropertyTest#P11 a resolved scope only narrows"
+  ],
+  "pending": null
+}

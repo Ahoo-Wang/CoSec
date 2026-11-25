@@ -1,0 +1,11 @@
+{
+  "id": "IDN-30",
+  "source": "RFC 0006 §5.3; RC1-25 (review round 1, R1A-8)",
+  "statement": "A token never passes for another kind of credential: a verified token whose `attributes` hold one CoSec sets for another credential (`apiKeyId`, which names the API key a request was authenticated with) is rejected as `TOKEN_INVALID`, so an ALLOW written for one key never permits a token that claims to be it, and `JwtTokenConverter` issues no such token.",
+  "level": "pipeline",
+  "pending": null,
+  "guards": [
+    "runtime:TokenAuthenticatorTest#aTokenWithAReservedAttributeIsInvalid",
+    "jwt:JwtTokenConverterTest#aReservedAttributeIsNotIssued"
+  ]
+}

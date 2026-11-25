@@ -1,0 +1,21 @@
+{
+  "id": "PIP-7",
+  "source": "AGENTS.md (Fail closed); RFC 0006 §5.3.2",
+  "statement": "Only verifying a request's token may count it as not revoked while the revocation store cannot be read (the reader throws RevocationUnavailableException; CoSec's own reader does so for each read that does not end within 30 % of the authentication timeout (`PIP-33`), so that twice it is less than the authentication timeout for every `cosec.pipeline.timeout` of 20 ms or more, and an application's reader that never answers is cut at the authentication timeout and is a 503: the documented exception to failing closed, which cosec.authentication.revocation.fail-closed turns off); a reader never answers \"not revoked\" for a read that failed, and any other error the revocation check reports fails the request with 503, never accepts the token.",
+  "level": "pipeline",
+  "guards": [
+    "cocache:CoCacheRevocationReaderTest#anUnreadableStoreIsUnavailable",
+    "runtime:TokenAuthenticatorTest#anUnavailableRevocationStoreAcceptsTheTokenItVerifies",
+    "runtime:TokenAuthenticatorTest#otherFailuresPropagate",
+    "runtime:RevocationHangPipelineTest#a custom reader that never answers is a 503 at the authentication timeout, whatever fail-closed says",
+    "cocache:CoCacheRevocationReaderBudgetTest#a token read Redis never answers is unavailable once the budget is spent, and the shared lookup stays open",
+    "cocache:CoCacheRevocationReaderBudgetTest#a subject read Redis never answers is unavailable once the budget is spent",
+    "spring-boot:RevocationReadBudgetTest#a hanging Redis accepts the token within the reader's budget",
+    "spring-boot:RevocationReadBudgetTest#with fail-closed a hanging Redis fails the check within the reader's budget",
+    "cocache:CacheTtlPolicyTest#revocationTablesReadForTheWholeCommandTimeout",
+    "cocache:CacheTtlPolicyTest#revokedSubjectCacheIsConfiguredLikeRevokedTokens",
+    "cocache:CoCache6ValuesTest#aRevocationCoCache6WroteIsAnErrorNeverNotRevoked",
+    "runtime:StageBudgetsTest#a token's two revocation reads end inside the authentication budget"
+  ],
+  "pending": null
+}

@@ -1,0 +1,10 @@
+{
+  "id": "BND-3",
+  "source": "RFC 0004 §7.1 (#1029)",
+  "statement": "The platform document accepts no role bindings, and an app document accepts only role bindings.",
+  "level": "engine",
+  "guards": [
+    "engine:CompiledDocumentTest#each kind of document binds only the subjects the candidate order reads from it"
+  ],
+  "pending": null
+}

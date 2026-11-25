@@ -1,0 +1,14 @@
+{
+  "id": "ATR-1",
+  "source": "RFC 0006 §5.4.3",
+  "statement": "An external attribute that cannot be fetched never turns a Deny or Indeterminate into a Permit (P9'), except a DENY whose onMissing nomatch the control plane confirmed (ATR-6), which lapses by design.",
+  "level": "pipeline",
+  "properties": [
+    "engine:ExternalAttributesPropertyTest#unavailableAttributesNeverPermitAndThePlanIsComplete"
+  ],
+  "guards": [
+    "engine:ExternalAttributesTest",
+    "runtime:ExternalAttributesPipelineTest"
+  ],
+  "pending": null
+}

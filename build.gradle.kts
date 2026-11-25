@@ -246,7 +246,7 @@ subprojects {
 }
 
 /*
- * RFC 0008 §3.5: the property tests the rule registry (test/conformance/src/test/resources/rules/<FAMILY>.json) names, with
+ * RFC 0008 §3.5: the property tests the rule registry (test/conformance/src/test/resources/rules/<FAMILY>/<ID>.json) names, with
  * -PpropertyIterations random cases each (default 1,000,000). Not part of check, which runs them with their own fixed
  * counts. A test reads the count from the system property cosec.property.iterations.
  */
@@ -259,12 +259,14 @@ val ruleRegistry = project(":conformance").layout.projectDirectory.dir("src/test
 
 @Suppress("UNCHECKED_CAST")
 val registeredProperties = ruleRegistry.asFile.listFiles().orEmpty()
-    .filter { it.name.endsWith(".json") && it.name != "_meta.json" }
+    .filter { it.isDirectory }
     .sortedBy { it.name }
     .flatMap { family ->
-        // Tracked file reads, so the configuration cache is invalidated when the registry changes.
-        val text = providers.fileContents(ruleRegistry.file(family.name)).asText.get()
-        (groovy.json.JsonSlurper().parseText(text) as Map<String, Any?>)["rules"] as List<Map<String, Any?>>
+        family.listFiles().orEmpty().filter { it.name.endsWith(".json") }.sortedBy { it.name }.map { rule ->
+            // Tracked file reads, so the configuration cache is invalidated when the registry changes.
+            val text = providers.fileContents(ruleRegistry.file("${family.name}/${rule.name}")).asText.get()
+            groovy.json.JsonSlurper().parseText(text) as Map<String, Any?>
+        }
     }
 registeredProperties
     .flatMap { (it["properties"] as List<String>?).orEmpty() }

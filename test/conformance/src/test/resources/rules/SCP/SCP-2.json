@@ -1,0 +1,16 @@
+{
+  "id": "SCP-2",
+  "source": "RFC 0004 §4.6 (RC1-6)",
+  "statement": "A host with an app serves only credentials that declare that app: another one, or none, is Rejected(APP_MISMATCH) (SCP-11); without a host app the credential's app applies. On a gateway the host app of a route's requests is the route's metadata cosec-app-id, ahead of cosec.authorization.scope.app-id; a cosec-app-id that is not a string (a number, a boolean, a list or a map is not read as its text) or cannot be an app id (SCP-10) fails the request as an unmodelled error (500), never leaves it without a host app.",
+  "level": "engine",
+  "properties": [
+    "model:ScopeResolverPropertyTest#the app and tenant follow the host and the credential"
+  ],
+  "pending": null,
+  "guards": [
+    "gateway:PipelineGatewayFilterTest#two routes of different apps are each their own app",
+    "runtime:RouteAppTest#the route's app is the host app, ahead of the configured one",
+    "runtime:RouteAppTest#a route app that cannot be an app id fails the request closed, and says why",
+    "runtime:RouteAppTest#a route app that is not a string fails the request closed, and says to quote it"
+  ]
+}

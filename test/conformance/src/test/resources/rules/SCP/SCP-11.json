@@ -1,0 +1,20 @@
+{
+  "id": "SCP-11",
+  "source": "RFC 0012 §3.5",
+  "statement": "Tokens and API keys declare the app they belong to (aud, one value). A host with an app serves only credentials declaring that app: another one, or none, is Rejected(APP_MISMATCH). Without a host app the credential's app applies, and a credential declaring none is in no app and reads no app document. An anonymous request has no credential, so its app is the host's. A forwarded gateway identity is the credential behind a gateway and is checked the same way. A request cannot declare an app: CoSec-App-Id is not read. A token whose aud is not one string that can be an app id is invalid, on every path that verifies one.",
+  "level": "engine",
+  "pending": null,
+  "guards": [
+    "model:ScopeResolverTest#a credential is served only by a host of its app",
+    "model:ScopeResolverTest#an anonymous subject is in the host's app and no other",
+    "model:ScopeResolverPropertyTest#the app and tenant follow the host and the credential",
+    "jwt:JwtTokenVerifierTest#audIsOneAppOrTheTokenIsInvalid",
+    "jwt:JwtTokenConverterTest#theAppIsIssuedAsTheAudience",
+    "runtime:IdentityGateTest#an identity that names no app is refused by a host with one",
+    "runtime:AuthorizationCheckerTest#decidesInTheDefaultSpaceOfAnotherApp",
+    "cocache:StoredFormatTest#a stored api key has exactly its fields",
+    "login:SwitchTenantAuthenticationTest#the new token keeps the app of the previous one",
+    "spi:VerifiedTokenTest#anAppThatCannotBeAnAppIdIsRefused",
+    "runtime:ApiKeyAuthenticatorTest#theAppOfAKeyIsTheAppOfItsPrincipal"
+  ]
+}

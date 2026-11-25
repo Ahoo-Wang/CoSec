@@ -1,0 +1,21 @@
+{
+  "id": "CTL-80",
+  "source": "RFC 0007 §10.2, §6.6 (control-typed-api decisions of 2026-11-21: a service that calls the control plane tells read-again from wait from stop without reading a message)",
+  "statement": "Every 409 the control API answers names which conflict it is, in the problem's `conflict` member, one of a closed set (`contract/control/vocabularies.json`): BASE_MOVED (the document's head is not the change's base: read it again, propose again or rebase), SLOT_HELD (another change holds the document's staging slot, which the problem's `heldBy` names wherever `detail` names it, so nothing more is told: wait for it, or abandon it), STATE (the change's state does not admit the step), CANDIDATE_MOVED (the candidate named is not the change's), WINDOW_OPEN (the shadow window is still open), WINDOW_BLOCKED (the window closed blocked: the change never publishes), CONTENDED (concurrent writes kept changing the record: the same call may succeed), EXISTS (something of that id already stands where the step needs something else: a change of that id, a binding break-glass would create, or a binding a break-glass revoke names that break-glass did not write), OPEN_LIMIT (the document holds as many open changes as it may, the oldest of which `heldBy` names: abandon one, or wait for it to expire, CTL-83). No other status carries the member, and no 409 is answered without it; `detail` still explains the case to a person and is no contract. No conflict but SLOT_HELD and OPEN_LIMIT carries `heldBy` (`contract/control/conflict.json`). The typed write call (`proposeAndPublishWithoutShadow`) abandons the holder only when it is a change of the same author left CHECKED, SHADOWING or READY, with no approval and no shadow window, open or closed (what a person or live traffic gave is never thrown away to free a slot, DR1-F-15), and not updated for at least the write's patience, by the control plane's times (the holder's updatedAt against the createdAt of the change the write just proposed): a writer that died holds the document for one patience. It waits for any other holder, so concurrent writers of one principal wait for each other and both publish.",
+  "level": "control",
+  "pending": null,
+  "guards": [
+    "control:ConflictKindTest#a 409 names its conflict, and only a 409 does",
+    "control:ConflictKindTest#a proposal on a base that is not the head is BASE_MOVED",
+    "control:ConflictKindTest#a change that wants a held slot is SLOT_HELD naming its holder, and a step its state does not admit is STATE",
+    "control:ConflictKindTest#no other status carries a conflict",
+    "control:ClientContractTest#the closed sets of the control API are those of their contract file",
+    "control:ClientContractTest#a conflict's problem holds exactly the members of its contract file - CTL-80",
+    "control:TypedClientTest#a write takes the slot a change of its own author left a patience ago - CTL-80",
+    "control:TypedClientTest#a write waits for a slot another author holds, and abandons only its own change - CTL-80",
+    "control-sdk:PublishWithoutShadowTest#a slot its own author left a patience ago is abandoned and taken",
+    "control-sdk:PublishWithoutShadowTest#a slot another author holds, one waiting for a person, approved or shadowed, or a live writer of its own, is waited for",
+    "control:TypedClientTest#a write waits for a slot its own author holds within the patience, never abandoning it - CTL-80",
+    "control:TypedClientTest#two writes of one principal on one document at once both publish - CTL-80"
+  ]
+}

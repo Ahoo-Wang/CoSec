@@ -1,0 +1,10 @@
+{
+  "id": "ALG-4",
+  "source": "RFC 0004 §6.1",
+  "statement": "An ALLOW that fails counts as no match (C1a).",
+  "level": "engine",
+  "properties": [
+    "engine:EnginePropertyTest#the decision is that of the pseudocode"
+  ],
+  "pending": null
+}

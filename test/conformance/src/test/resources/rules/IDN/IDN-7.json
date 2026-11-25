@@ -1,0 +1,11 @@
+{
+  "id": "IDN-7",
+  "source": "RFC 0006 §7.3 (RC1-49)",
+  "statement": "A gateway forwards the verified CoSec-Identity only to a route that receives it: one whose metadata cosec-identity is exactly true, or one without that metadata whose URI is a registered service (lb://, lb:ws://). Metadata false, or any other value, keeps it from the route whatever its URI, and so does a request no route marks: such a route's backend receives no identity.",
+  "level": "pipeline",
+  "pending": null,
+  "guards": [
+    "gateway:PipelineGatewayFilterTest#only a load-balanced route, or one marked true, receives the identity",
+    "runtime:IdentityForwardingTest#a request no route marks as receiving the identity forwards none"
+  ]
+}

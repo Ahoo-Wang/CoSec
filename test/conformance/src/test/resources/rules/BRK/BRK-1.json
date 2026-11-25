@@ -1,0 +1,10 @@
+{
+  "id": "BRK-1",
+  "source": "RFC 0004 §4.8",
+  "statement": "A break-glass principal is bound by every DENY (C2).",
+  "level": "engine",
+  "guards": [
+    "engine:EngineTest#root is a break-glass binding that permits everything but every deny"
+  ],
+  "pending": null
+}

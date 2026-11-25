@@ -1,0 +1,12 @@
+{
+  "id": "SNP-2",
+  "source": "RFC 0003 §4.4",
+  "statement": "For one key, installs happen in the order loads started (P6).",
+  "level": "timing",
+  "properties": [
+    "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily",
+    "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConverge",
+    "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder"
+  ],
+  "pending": null
+}

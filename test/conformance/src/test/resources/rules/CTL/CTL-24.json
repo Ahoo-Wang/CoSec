@@ -1,0 +1,11 @@
+{
+  "id": "CTL-24",
+  "source": "RFC 0007 §10.2; RC1-39 (D2, coordinator 2026-11-07)",
+  "statement": "A control API 400's detail carries only the messages of the control plane's own request checks, or names the request field that does not parse; never an exception's message or a class name. A stored document or record the control plane cannot decode is a 500 without detail.",
+  "level": "build",
+  "guards": [
+    "control:ControlHttpTest#a field that does not parse is a 400 that names it, never an exception's message",
+    "control:ControlHttpTest#a stored document that does not decode is a 500 without detail, logged with its key"
+  ],
+  "pending": null
+}
