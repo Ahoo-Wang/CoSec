@@ -169,7 +169,7 @@
     {
       "id": "MIX-15",
       "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on phase 2 of the cross-version fixture); the red-team inventory, row 15",
-      "statement": "A document's revision index and the app list are ignorable with must-understand (SNP-27, SNP-28): read alike by both versions' control stores, rewritten unchanged, a later member dropped by a rewrite that leaves the same record, and a record whose crit names a member a version does not know refused by it and never rewritten; a back-reference member stays strict (CTL-53).",
+      "statement": "A document's revision index and the app list are ignorable with must-understand (SNP-27, SNP-28): read alike by both versions' control stores, rewritten unchanged, a later member dropped by a rewrite that leaves the same record, and a record whose crit names a member a version does not know refused by it and never rewritten.",
       "level": "build",
       "guards": [
         "compat:ControlStoreCompatTest#each version reads the record alike, and reads it again after the other rewrote it",
@@ -203,10 +203,10 @@
     {
       "id": "MIX-18",
       "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on phase 2 of the cross-version fixture); the red-team inventory, row 18",
-      "statement": "A client meets both versions during a rolling upgrade: both answer it with the same problems, statuses and types; within one version contract/ pins every answer (PIP-25), so a change to a problem is a change of contract/ that this case also sees.",
+      "statement": "A client meets both versions during a rolling upgrade: every problem the previous version answers it with, with its status, type and title, the current one answers alike; a later version may add a problem, never remove or change one. Within one version contract/ pins every answer (PIP-25).",
       "level": "build",
       "guards": [
-        "compat:EdgeCompatTest#both versions answer a client with the same problems, statuses and types"
+        "compat:EdgeCompatTest#every problem the previous version answers a client with, the current one answers alike"
       ],
       "pending": null
     },

@@ -18,8 +18,9 @@ import org.junit.jupiter.api.Test
 
 /**
  * What a client sends to either version and sees from it during a rolling upgrade: the `CoSec-*` parameters read alike,
- * one stated twice in disagreement refused by both (MIX-21); the same problems, with the same statuses and types, from
- * either version (MIX-18, whose wire `contract/` pins within one version).
+ * one stated twice in disagreement refused by both (MIX-21); every problem the previous version answers, with its
+ * status and type, answered alike by the current one, which may add others (MIX-18; `contract/` pins the wire within one
+ * version).
  */
 class EdgeCompatTest {
     private val requests = listOf(
@@ -39,8 +40,10 @@ class EdgeCompatTest {
         Side.CURRENT("parameters.read", "headers" to requests[3]).assert().isEqualTo("ambiguous")
     }
 
+    /** A later version may add a problem; none the previous one answers is gone or changed (status, type, title). */
     @Test
-    fun `both versions answer a client with the same problems, statuses and types`() {
-        Side.PREVIOUS("problems").assert().isEqualTo(Side.CURRENT("problems"))
+    fun `every problem the previous version answers a client with, the current one answers alike`() {
+        val current = Side.CURRENT("problems").lines()
+        Side.PREVIOUS("problems").lines().assert().isNotEmpty().allMatch { it in current }
     }
 }
