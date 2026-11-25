@@ -18,7 +18,7 @@ springdoc = "3.2.1"
 # testing
 # The previous release of CoSec (RFC 0014 T): test/compat loads it beside the current build, in a class loader of its own,
 # to read what the current version writes and the other way round. Moved to each release once it is published.
-cosec-previous = "8.0.0-beta.9"
+cosec-previous = "8.0.0-rc.1"
 junit = "6.1.3"
 fluent-assert = "1.2.1"
 mockk = "1.14.12"
