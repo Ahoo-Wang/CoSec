@@ -27,18 +27,28 @@ package me.ahoo.cosec.cocache
 internal enum class FrozenLayout(val what: String, val ifChanged: IfChanged) {
     /**
      * `<s>:rate-limiter:<ruleId>:<bucket>` ([CoSecCacheSpecs.rateLimiterPrefix],
-     * `ReactiveRedisRateLimiter.keyOf`), the bucket `me.ahoo.cosec.engine.CompiledRateLimit.keyedBucket`'s (`k:`, `e:`,
-     * `h:`), and what `redis-rate-limiter.lua` stores: the hash fields `w` (the window's number, `floor(now / window)` on
+     * `ReactiveRedisRateLimiter.keyOf`): the rule id `me.ahoo.cosec.engine.CompiledRateLimit.counterId`'s
+     * (`platform/<id>`, `app:<owner>/<id>`, `tenant:<owner>/<id>`), the bucket `CompiledRateLimit.keyedBucket`'s (`k:`,
+     * `e:`, `h:`) or, for a rule without a key, `CompiledRateLimit.SHARED_BUCKET` (`global`); the script's arguments, the
+     * quota per window and the window in milliseconds (`RateLimitSpec.limitPerWindow`, `windowMillis`); and what
+     * `redis-rate-limiter.lua` stores: the hash fields `w` (the window's number, `floor(now / window)` on
      * Redis's `TIME`), `c` and `p` (this window's count and the last's), expiring after two windows. Two releases that
      * count one client apart give it a quota from each.
      */
     RATE_LIMIT_COUNTERS("a rate limit counter: its key, its bucket and the fields its script stores", IfChanged.WIDENS),
 
-    /** `<s>:token:revoked:<jti>` ([RevokedTokenCache.key]): a revocation one release writes and the other cannot find lets its token through. */
-    REVOKED_TOKEN("the key of a token's revocation", IfChanged.WIDENS),
+    /**
+     * `<s>:token:revoked:<jti>` ([RevokedTokenCache.key]), holding JSON `true`: a revocation one release writes and the
+     * other cannot find, or reads as anything else, lets its token through.
+     */
+    REVOKED_TOKEN("the key of a token's revocation and its value", IfChanged.WIDENS),
 
-    /** `<s>:token:subject:revoked:<n>:<tenant>:<principal>` ([RevokedSubjectCache.key]), holding the time before which every token is revoked. */
-    REVOKED_SUBJECT("the key of a principal's revocation", IfChanged.WIDENS),
+    /**
+     * `<s>:token:subject:revoked:<n>:<tenant>:<principal>` ([RevokedSubjectCache.key]), holding the time before which
+     * every token is revoked, in epoch milliseconds: a release that wrote seconds would revoke, on the other, nothing
+     * issued after 1970.
+     */
+    REVOKED_SUBJECT("the key of a principal's revocation and its value", IfChanged.WIDENS),
 
     /**
      * `<s>:api-key:<sha256>` ([CoSecCacheSpecs.apiKeyPrefix], [RedisApiKeyStore.redisKey], the lower-case hex SHA-256
@@ -155,8 +165,10 @@ internal enum class FrozenLayout(val what: String, val ifChanged: IfChanged) {
     LEGACY_LISTS("the keys and the bare value of the lists before 8.0.0-beta.5", IfChanged.REFUSES),
 
     /**
-     * `<s>:control:lease:<name>` (`shadow-windows`, `reclaim-pass`): the exclusion a lease exists for is lost, and two
-     * replicas close the same shadow windows, or reclaim the same revisions, at once.
+     * `<s>:control:lease:<name>`: `shadow-windows` and `reclaim-pass` (`ControlMaintenance`), `reclaim:<doc>` for each
+     * document whose revision records are deleted (`Retention`, `SnapshotKey.toString()`, `CTL-26`), and
+     * `repair-references` (`cosec-migrate`'s `ReferenceRepair.LEASE`). The exclusion a lease exists for is lost: two
+     * replicas close the same shadow windows, reclaim the same revisions or document at once, or two repairs run.
      */
     CONTROL_LEASES("the key of a control-plane lease", IfChanged.WIDENS),
 

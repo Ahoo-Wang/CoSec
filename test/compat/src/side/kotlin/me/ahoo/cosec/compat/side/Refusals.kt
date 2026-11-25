@@ -20,13 +20,14 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.identity.IdentityFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 
-/** What a refusal is, in words both versions share: its kind, and the reason a version names. */
+/** What a refusal is, in words both versions share: its kind, and the reason a version names (`format:later`, `format:malformed`). */
 internal object Refusals {
     fun of(error: Throwable): String {
         // A store's cache wraps what its codec refused: the codec's refusal is the answer.
         val causes = generateSequence(error) { it.cause }.take(DEPTH).toList()
         causes.firstNotNullOfOrNull { it as? IdentityFormatException }?.let { return "identity:${it.reason.name}" }
-        if (causes.any { it is SnapshotFormatException }) return "format"
+        // A stored record a later version wrote, apart from one that is not a record (SNP-27): what the reader told.
+        if (causes.any { it is SnapshotFormatException }) return "format:" + RefusalReasons.of(error)
         return "${error.javaClass.simpleName}: ${error.message?.take(200)}"
     }
 
