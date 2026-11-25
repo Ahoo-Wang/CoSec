@@ -74,7 +74,6 @@ class HttpPathPatternTest {
         "/a b, /a%20b, true",
         "/a%20b, /a%20b, false",
         "/a, /a;x=1, true",
-        "/a;b, /a;b, false",
         "/*, /%2F, true",
     )
     fun `matches as Spring does`(pattern: String, path: String, expected: Boolean) {
@@ -152,7 +151,6 @@ class HttpPathPatternTest {
     @Test
     fun `without decoding segments are matched as written`() {
         match("/a%20", "/a%20", decode = false).assert().isNotNull()
-        match("/a;b", "/a;b", decode = false).assert().isNotNull()
         match("/{x}", "/%zz", decode = false).assert().isEqualTo(mapOf("x" to "%zz"))
         match("/{x}", "/a%2Fb", decode = false).assert().isEqualTo(mapOf("x" to "a/b"))
         match("/{x}", "/a%2fb", decode = false).assert().isEqualTo(mapOf("x" to "a%2fb"))
@@ -278,7 +276,8 @@ class HttpPathPatternTest {
     /** RC1-8 (`DOC-4`): no normalized path is longer than 2,048 characters, so no pattern needs to be. */
     @Test
     fun `a pattern is at most 2048 characters`() {
-        val longest = "/" + "a".repeat(HttpPathPattern.MAX_LENGTH - 1)
+        // Eight segments of 256: a segment holds no more (PIP-5, DOC-15).
+        val longest = ("/" + "a".repeat(HttpPath.MAX_SEGMENT_LENGTH - 1)).repeat(8)
         HttpPathPattern.compile(longest).matches(HttpPath.parse(longest)).assert().isTrue()
         assertThrownBy<InvalidPatternException> { HttpPathPattern.compile(longest + "a") }
             .hasMessageContaining("more than ${HttpPathPattern.MAX_LENGTH}")

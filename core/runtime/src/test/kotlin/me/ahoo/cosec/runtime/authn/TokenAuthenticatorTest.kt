@@ -30,6 +30,7 @@ import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.DelegationUnsupportedException
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -71,10 +72,10 @@ class TokenAuthenticatorTest {
             subjects[tenant to principal]
     }
 
-    private val alice = VerifiedToken("jti-1", "alice", null, null)
+    private val alice = VerifiedToken("jti-1", "alice", null, null, PERSON)
 
     private fun VerifiedToken.with(tenant: String? = this.tenant, issuedAt: Instant? = this.issuedAt) =
-        VerifiedToken(id, principal, tenant, app, roles, policies, attributes, issuedAt, expiresAt, membershipMarker)
+        VerifiedToken(id, principal, tenant, app, kind, roles, policies, attributes, issuedAt, expiresAt, membershipMarker)
 
     private fun token(claims: VerifiedToken = alice, issuedAt: Instant? = this.issuedAt) = claims.with(
         issuedAt = issuedAt
@@ -91,6 +92,7 @@ class TokenAuthenticatorTest {
         Verifier(mapOf("t" to principal)),
         revocations,
         revocationSkew = skew,
+        acceptUnavailableRevocations = false,
     ).authenticate(Credentials(token, null))
 
     private suspend fun failure(block: suspend () -> Unit): IllegalStateException = try {
@@ -107,7 +109,11 @@ class TokenAuthenticatorTest {
     @Test
     fun withoutATokenTheRequestIsAnonymous() = runTest {
         val verifier = Verifier(emptyMap())
-        TokenAuthenticator(verifier, RevocationReader.NONE).authenticate(Credentials(null, "api-key"))
+        TokenAuthenticator(
+            verifier,
+            RevocationReader.NONE,
+            acceptUnavailableRevocations = false,
+        ).authenticate(Credentials(null, "api-key"))
             .assert().isSameAs(AuthnResult.Anonymous)
         verifier.seen.assert().isEmpty()
     }
@@ -120,6 +126,7 @@ class TokenAuthenticatorTest {
                 "alice",
                 null,
                 null,
+                PERSON,
                 roles = setOf("admin", "editor@team-a"),
                 policies = setOf("p1"),
                 attributes = mapOf("department" to "sales")
@@ -140,7 +147,7 @@ class TokenAuthenticatorTest {
     @Test
     fun theAppOfATokenIsTheAppOfItsPrincipal() = runTest {
         authenticate({
-            token(VerifiedToken("jti-1", "alice", null, "order"))
+            token(VerifiedToken("jti-1", "alice", null, "order", PERSON))
         }).principal().app.assert().isEqualTo(AppId("order"))
         authenticate({ token() }).principal().app.assert().isNull()
     }
@@ -165,13 +172,13 @@ class TokenAuthenticatorTest {
                 null.also { asked += principal.value }
         }
         val tokens = listOf<() -> VerifiedToken>(
-            { token(VerifiedToken("jti", "alice\uD800", null, null)) },
+            { token(VerifiedToken("jti", "alice\uD800", null, null, PERSON)) },
             { token(inTenant("beta\uD800")) },
             { token(inTenant("\uDC00beta")) },
-            { VerifiedToken("jti\uD800", "alice", null, null, issuedAt = issuedAt) },
-            { token(VerifiedToken("jti-1", "alice", null, null, roles = setOf("admin\uDC00"))) },
-            { token(VerifiedToken("jti-1", "alice", null, null, roles = setOf("admin@team\uD800"))) },
-            { token(VerifiedToken("jti-1", "alice", null, null, policies = setOf("p\uD800"))) },
+            { VerifiedToken("jti\uD800", "alice", null, null, PERSON, issuedAt = issuedAt) },
+            { token(VerifiedToken("jti-1", "alice", null, null, PERSON, roles = setOf("admin\uDC00"))) },
+            { token(VerifiedToken("jti-1", "alice", null, null, PERSON, roles = setOf("admin@team\uD800"))) },
+            { token(VerifiedToken("jti-1", "alice", null, null, PERSON, policies = setOf("p\uD800"))) },
         )
         for (token in tokens) {
             authenticate(token, revocations).reason().assert().isEqualTo(AuthnResult.RejectReason.TOKEN_INVALID)
@@ -181,7 +188,7 @@ class TokenAuthenticatorTest {
         // A surrogate pair is one character like any other.
         val paired =
             authenticate({
-                token(inTenant("beta\uD83D\uDE00", VerifiedToken("jti-1", "alice\uD83D\uDE00", null, null)))
+                token(inTenant("beta\uD83D\uDE00", VerifiedToken("jti-1", "alice\uD83D\uDE00", null, null, PERSON)))
             }, revocations)
         paired.principal().tenant.assert().isEqualTo(TenantId("beta\uD83D\uDE00"))
         asked.assert().containsExactly("jti-1", "alice\uD83D\uDE00")
@@ -203,7 +210,11 @@ class TokenAuthenticatorTest {
      */
     @Test
     fun onlyCoSecsOwnVerifierMayUseBreakGlass() = runTest {
-        val own = TokenAuthenticator(OwnVerifier(mapOf("t" to { token() })), RevocationReader.NONE)
+        val own = TokenAuthenticator(
+            OwnVerifier(mapOf("t" to { token() })),
+            RevocationReader.NONE,
+            acceptUnavailableRevocations = false,
+        )
             .authenticate(Credentials("t", null))
         own.principal().breakGlass.assert().isTrue()
         own.principal().credential!!.method.assert().isEqualTo(Identity.Method.JWT)
@@ -218,30 +229,35 @@ class TokenAuthenticatorTest {
             PrincipalId("svc"),
             TenantId("acme"),
             null,
-            credential = Identity.Credential(Identity.Method.API_KEY, "k1", null),
+            credential = Identity.Credential(Identity.Method.API_KEY, Identity.Credential.Kind.WORKLOAD, "k1", null),
         ).apiKey.assert().isTrue()
         AuthenticatedPrincipal(
             PrincipalId("alice"),
             TenantId("acme"),
             null,
-            credential = Identity.Credential(Identity.Method("ldap"), "s1", null),
+            credential = Identity.Credential(Identity.Method("ldap"), PERSON, "s1", null),
         ).apiKey.assert().isFalse()
         AuthenticatedPrincipal(
             PrincipalId("alice"),
             TenantId("acme"),
             null,
-            credential = Identity.Credential(Identity.Method("ldap"), "s1", null),
+            credential = Identity.Credential(Identity.Method("ldap"), PERSON, "s1", null),
         ).breakGlass.assert().isFalse()
         assertThrownBy<IllegalArgumentException> {
             AuthenticatedPrincipal(
                 PrincipalId("alice"),
                 TenantId("acme"),
                 null,
-                credential = Identity.Credential(Identity.Method.JWT, "s1", null),
+                credential = Identity.Credential(Identity.Method.JWT, PERSON, "s1", null),
             )
         }
         assertThrownBy<IllegalArgumentException> {
-            TokenAuthenticator(Verifier(emptyMap()), RevocationReader.NONE, method = "jwt")
+            TokenAuthenticator(
+                Verifier(emptyMap()),
+                RevocationReader.NONE,
+                method = "jwt",
+                acceptUnavailableRevocations = false,
+            )
         }
     }
 
@@ -249,10 +265,10 @@ class TokenAuthenticatorTest {
     @Test
     fun aTokenWithAReservedAttributeIsInvalid() = runTest {
         val forged =
-            VerifiedToken("jti-1", "alice", null, null, attributes = mapOf(ApiKey.API_KEY_ID_ATTRIBUTE to "k1"))
+            VerifiedToken("jti-1", "alice", null, null, PERSON, attributes = mapOf(ApiKey.API_KEY_ID_ATTRIBUTE to "k1"))
         authenticate({ token(forged) }).reason().assert().isEqualTo(AuthnResult.RejectReason.TOKEN_INVALID)
         authenticate(
-            { token(VerifiedToken("jti-1", "alice", null, null, attributes = mapOf("department" to "sales"))) }
+            { token(VerifiedToken("jti-1", "alice", null, null, PERSON, attributes = mapOf("department" to "sales"))) }
         )
             .principal().attributes.assert().containsEntry("department", "sales")
     }
@@ -264,7 +280,7 @@ class TokenAuthenticatorTest {
 
     @Test
     fun theProviderMarkerAsksTheProvider() = runTest {
-        val marked = VerifiedToken("jti-1", "alice", null, null, membershipMarker = MembershipClaims.PROVIDER)
+        val marked = VerifiedToken("jti-1", "alice", null, null, PERSON, membershipMarker = MembershipClaims.PROVIDER)
         authenticate(
             { token(marked) }
         ).principal().membershipSource.assert().isSameAs(MembershipSource.Provider.UNCAPPED)
@@ -279,12 +295,15 @@ class TokenAuthenticatorTest {
                 "alice",
                 null,
                 null,
+                PERSON,
                 roles = setOf("admin"),
                 membershipMarker = MembershipClaims.PROVIDER
             )
         val source = authenticate({ token(marked) }).principal().membershipSource
         (source as MembershipSource.Unusable).reason.assert().contains("also claims roles or policies")
-        authenticate({ token(VerifiedToken("jti-1", "alice", null, null, membershipMarker = "other")) }).principal()
+        authenticate(
+            { token(VerifiedToken("jti-1", "alice", null, null, PERSON, membershipMarker = "other")) }
+        ).principal()
             .membershipSource.assert().isInstanceOf(MembershipSource.Unusable::class.java)
     }
 
@@ -341,6 +360,7 @@ class TokenAuthenticatorTest {
                 Verifier(emptyMap()),
                 RevocationReader.NONE,
                 revocationSkew = java.time.Duration.ofSeconds(-1),
+                acceptUnavailableRevocations = false,
             )
         }
     }
@@ -370,7 +390,12 @@ class TokenAuthenticatorTest {
                 throw RevocationUnavailableException("down")
         }
         val unchecked = UncheckedRevocations()
-        TokenAuthenticator(Verifier(mapOf("t" to { token() })), unavailable, unchecked = unchecked)
+        TokenAuthenticator(
+            Verifier(mapOf("t" to { token() })),
+            unavailable,
+            unchecked = unchecked,
+            acceptUnavailableRevocations = true,
+        )
             .authenticate(Credentials("t", null)).principal().id.assert().isEqualTo(PrincipalId("alice"))
         // L6: counted, so an operator sees the tokens accepted without a check
         unchecked.count.assert().isEqualTo(1)

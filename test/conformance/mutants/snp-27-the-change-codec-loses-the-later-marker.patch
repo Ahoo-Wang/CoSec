@@ -1,0 +1,17 @@
+# Rule: SNP-27
+# Mutant: the change codec rewraps a refusal without its marker, so a change record a later version wrote reads as one that is malformed
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.stored.StoredRecordMembersTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeRequestCodec.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeRequestCodec.kt
+index a968715a8..b257d5fd3 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeRequestCodec.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeRequestCodec.kt
+@@ -223,7 +223,7 @@ object ChangeRequestCodec {
+     } catch (error: SnapshotFormatException) {
+         // The document format's codecs, which read a change's entries, quote what they read as they found it. A record
+         // a later version wrote keeps its marker, which quotes nothing (SNP-27).
+-        throw SnapshotFormatException(SnapshotKeyText.message(error.message.orEmpty()), StoredFormat.later(error))
++        throw SnapshotFormatException(SnapshotKeyText.message(error.message.orEmpty()))
+     } catch (error: JacksonException) {
+         throw SnapshotFormatException("A change request is malformed${error.at}.")
+     } catch (error: IllegalArgumentException) {

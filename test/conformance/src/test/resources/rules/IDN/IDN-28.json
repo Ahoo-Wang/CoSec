@@ -1,0 +1,11 @@
+{
+  "id": "IDN-28",
+  "source": "RFC 0009 §4.2, usability review UA-6",
+  "statement": "CoSec's tokens are signed: JwtTokenVerifier and JwtTokenConverter refuse Algorithm.none() when they are built, so no unsigned token is issued, and none is accepted as CoSec's own (and so eligible for break-glass, BRK-8).",
+  "level": "startup",
+  "pending": null,
+  "guards": [
+    "jwt:UnsignedAlgorithmTest#the verifier refuses Algorithm none",
+    "jwt:UnsignedAlgorithmTest#the converter refuses Algorithm none"
+  ]
+}

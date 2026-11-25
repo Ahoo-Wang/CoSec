@@ -1,0 +1,21 @@
+{
+  "id": "CTL-76",
+  "source": "RFC 0007 §10.2 (the typed layer, #1836, 2026-11-22; the kinds of conflict, CTL-80)",
+  "statement": "The control plane's typed objects say what the wire says. Each document entry the typed layer reads has exactly the document format's members (schema/), and an entry with a member it does not know does not read, since re-sending what was read would drop it, nor does a document whose schema is not 2, the format it reads (DR1-F-16); every tenant and app document of the wiki's samples reads and writes back as the same document; each kind of operation the typed layer writes is the operation the control plane reads, and reads back as written, as does every change body of the wiki's samples; every change the control plane's answer codec writes reads, its members those of contract/control/change.json, each read or named as left out; the closed sets are the wire's, and a value a later host adds keeps its text; and a refusal names which conflict a 409 is.",
+  "level": "build",
+  "guards": [
+    "control-sdk:TypedWireTest#each document entry reads exactly the members of the document format - CTL-76",
+    "control-sdk:TypedWireTest#every tenant and app document of the wiki reads and writes back as the same document - CTL-76",
+    "control-sdk:TypedWireTest#a document entry with a member this version does not know does not read - CTL-76",
+    "control-sdk:TypedWireTest#a change answer reads the members of its contract file, each read or named as left out - CTL-76",
+    "control-sdk:TypedWireTest#the closed sets are the wire's - CTL-76",
+    "control-sdk:TypedCodecTest#what does not read is a format error naming the member",
+    "control-sdk:PublishWithoutShadowTest#a refusal reads which conflict it is, and none for another status",
+    "control:TypedClientTest#each kind of operation reaches the control plane and comes back as it was written - CTL-76",
+    "control:TypedClientTest#every change body of the wiki reads and is written back as the control plane reads it - CTL-76",
+    "control:TypedClientTest#every change the control plane answers reads into a typed change - CTL-76",
+    "control:TypedClientTest#the typed calls read, propose, apply and publish over the in-process control plane - CTL-76",
+    "control-sdk:TypedWireTest#a document of a schema other than 2 does not read - CTL-76"
+  ],
+  "pending": null
+}

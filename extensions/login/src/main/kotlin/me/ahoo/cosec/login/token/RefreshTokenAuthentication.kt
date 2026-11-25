@@ -58,6 +58,8 @@ class RefreshTokenAuthentication<C : RefreshTokenCredentials>(
     /** The token's principal, tenant and app, with what its user holds now. */
     private fun current(token: VerifiedToken, now: TenantMembership) = TokenSubject(
         id = token.principal,
+        // The presented token's kind: the refresh's hook answers memberships, never whose the token is (IDN-46).
+        kind = token.kind,
         app = token.app,
         tenant = token.tenant,
         roles = now.roles,

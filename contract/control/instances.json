@@ -1,0 +1,50 @@
+{
+  "asOf" : {
+    "type" : "string",
+    "presence" : "always"
+  },
+  "instances" : {
+    "type" : "array",
+    "presence" : "always",
+    "items" : {
+      "type" : "object",
+      "members" : {
+        "at" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "formatLevel" : {
+          "type" : "integer",
+          "presence" : "always"
+        },
+        "instance" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "live" : {
+          "type" : "boolean",
+          "presence" : "always"
+        },
+        "release" : {
+          "type" : "string",
+          "presence" : "optional"
+        },
+        "shadows" : {
+          "type" : "boolean",
+          "presence" : "always"
+        }
+      }
+    }
+  },
+  "releases" : {
+    "type" : "object",
+    "presence" : "always"
+  },
+  "unreadable" : {
+    "type" : "array",
+    "presence" : "always",
+    "items" : {
+      "type" : "string"
+    }
+  }
+}

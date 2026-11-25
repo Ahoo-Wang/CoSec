@@ -1,0 +1,10 @@
+{
+  "id": "CTL-11",
+  "source": "RFC 0007 §6.4",
+  "statement": "A window that saw WIDENED, NARROWED or BECAME_INDETERMINATE requests, or closed with insufficient samples, publishes only when the publisher acknowledges exactly its window and counts.",
+  "level": "control",
+  "guards": [
+    "control:ShadowWindowTest#two instances sample a window that closes from their reports, and the publisher acknowledges it"
+  ],
+  "pending": null
+}

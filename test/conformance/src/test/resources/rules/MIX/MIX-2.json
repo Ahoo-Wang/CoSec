@@ -1,0 +1,13 @@
+{
+  "id": "MIX-2",
+  "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 2",
+  "statement": "CoSec's access token is ignorable: a verifier reads its named claims and ignores the others, except the claims whose presence refuses the token (cosec.token, act); a missing claim reads as its documented absence, never wider. A token one version issues, the other version verifies as the current verifier does. cosec.kind is such a claim, which both versions' issuers declare and both verifiers read alike (IDN-45, IDN-46); a token without it, as an earlier preview issued, or with a value neither version knows, a string or not, is a workload's to both verifiers, never a person's and never refused. A token whose JWS crit header names an extension is read by no version that does not understand it (IDN-47).",
+  "level": "build",
+  "guards": [
+    "compat:TokenCompatTest#each version verifies what the other issues as the current verifier does",
+    "compat:TokenCompatTest#each version reads the kind the other's issuer declared",
+    "compat:TokenCompatTest#a token without a kind, or with one neither version knows, is a workload's to both verifiers",
+    "compat:TokenCompatTest#a token whose crit names an extension is refused by a version that does not understand it"
+  ],
+  "pending": null
+}

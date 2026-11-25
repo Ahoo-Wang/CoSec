@@ -337,7 +337,8 @@ Every route that answers a change (`POST /changes`, `GET /changes/{id}`, each st
 and the break-glass request and approval) answers the same members: `id`, `key` (its document), `base` (`revision` and
 `digest`), `operations` (as you sent them), `author`, `note`, `kind`, `state`, `findings`, `candidate` (the digest of the
 candidate an approval is given for), `createdAt`, `updatedAt`; and, once there is one, `skipShadow` (the reason),
-`publishedRevision`, `escalations`, `approval` (`approver`, `at`, `candidate`, `covers`), `shadow` (`window`, the id
+`publishedRevision`, `escalations`, `approval` (`approver`, `at`, `candidate`, `covers`, and `kind`, `PERSON` or `WORKLOAD`, whose
+the approver's credential was, absent for an approval recorded before kinds, `APR-9`), `shadow` (`window`, the id
 a publisher acknowledges, `startedAt`, and once closed `closed`) and `confirmations`. While the window is open,
 `GET /changes/{id}` adds to `shadow` how many live instances acknowledge it (`acknowledged`) and which do not
 (`waitingFor`: `instances`, at most 20 ids, sorted, and `more`, how many others), read from the instances' statuses
@@ -498,8 +499,8 @@ The window closes:
 **Every live instance acknowledges the window before it passes** (`CTL-10`). An instance acknowledges a window in its
 status, written every report interval (10 seconds at the default), once it has read the window in the staged list and
 compiled its candidate (or reported `CANDIDATE_ERROR`). The window does not pass while an instance with a status in the
-last minute that takes part in shadowing has not (a host with shadowing off writes no status; one whose
-`CandidateSource` is your own says it does not shadow, and is not waited for), logging `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`, and
+last minute that takes part in shadowing has not (a host with shadowing off, and one whose `CandidateSource` is your
+own, say in their status that they do not shadow, and are not waited for), logging `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`, and
 `GET /changes/{id}` names those instances in `shadow.waitingFor`. An acknowledgement is not a sample: the samples still
 come from the reports. Two different waits, and what to do about each:
 
@@ -515,9 +516,9 @@ At `max-duration` the window closes *insufficient* whatever the acknowledgements
 
 **What "live" means.** A live instance is one with a status in the last minute. An instance cut off from Redis for
 longer writes none, so it is neither waited for nor counted as acknowledging, and when it reconnects it installs the
-published revision having compared nothing; a host with shadowing off writes no status at all. An instance whose
+published revision having compared nothing; a host with shadowing off writes a status that says it does not shadow. An instance whose
 status is stored but does not decode (a crash-looping version, a corrupt value, or a format this control host does not
-read during a rolling upgrade) is live, until its status reads or expires two minutes after its last write, and acknowledges nothing: the window waits for it and `shadow.waitingFor` names
+read during a rolling upgrade) is live for a minute after its last write, as any instance is (the life its status key has left tells when that was), and acknowledges nothing: the window waits for it and `shadow.waitingFor` names
 it, while every other status is read and `propagation` counts it as recent, holding no document (`CTL-73`).
 
 An instance that has reported on a window must keep reporting until it closes. One whose report is gone (it stopped
@@ -687,11 +688,11 @@ platform's: only a platform principal sets it (`403` otherwise), and only a plat
 abandons a change that sets one.
 
 A workload's credential is never the trust root, and never approves, whatever its principal holds (`IDN-34`): an API
-key, or a service's own identity (`ControlCaller.service`), whose credential is named `service`. CoSec tells its own API
-keys by where they were verified, and any credential named `api-key` or `service`, a gateway's forwarded identity's
-among them, counts as a workload's. A credential your own authenticator accepts is a person's to CoSec unless it names
-it `service`: give an authenticator of workloads neither `cosec:approve` nor `cosec:platform-admin`, or have it name its
-credential `service`.
+key, a service's own identity (`ControlCaller.service`), and any credential that does not declare itself a person's
+(`IDN-44`). The kind decides, never the credential's method: a token CoSec issued carries it (`cosec.kind`), a gateway
+forwards it (`auth.kind`), and anything but `person`, or nothing, reads as a workload's. A credential your own
+authenticator makes is what it declares ([Authenticators](../architecture/extending.md#authenticators)): declare a
+machine client's a workload's, and give an authenticator of workloads neither `cosec:approve` nor `cosec:platform-admin`.
 
 What the analysis does not see:
 
@@ -714,7 +715,10 @@ id (`403`), since publishing would not count its approval. The approval records 
 credential (its id, a token's `jti`, and when it was issued, its `iat`); when that token, or every token of the
 approver issued by then, is revoked before the change publishes, the approval no longer counts. An approval that
 records no credential id does not count either: one made before the upgrade to this version, one an older instance
-accepted, or one given with a credential that has no id; approve it again. A credential that does not say when it was
+accepted, or one given with a credential that has no id; approve it again. The approval also records whose the
+approver's credential was, as the host that recorded it read it (`kind`, `APR-9`), and counts at publish only when it
+says a person's: an approval recorded before 8.0.0-beta.9, or by a host still on it, says nothing and does not count,
+its `APPROVAL` finding saying `the approval does not say its approver was a person`; approve it again. A credential that does not say when it was
 issued, from an authenticator of yours that sets no `issuedAt`, loses its approvals to any revocation of its
 principal's tokens. Once the approver's access token has expired, `TokenRevoker.revoke` no longer takes it, so only
 `revokeSubject` takes its approvals back. Revocations are judged as the pipeline judges them, but a store that cannot
@@ -830,8 +834,8 @@ proposal does: the old revision's confirmation was given for another change. Whi
 ### Propagation {#propagation}
 
 `GET /documents/{key}/revisions/{revision}/propagation` tells how far a published revision has reached the instances,
-from the statuses they write every few seconds (with [shadow windows](../operations/configuration.md#shadow-windows)
-on). Publishing never waits for it.
+from the statuses they write every few seconds (every CoSec process with `cosec-cocache` writes one, `SNP-25`).
+Publishing never waits for it.
 
 ```json
 { "revision": 5, "installed": 3, "holding": 3, "recent": 50, "unknown": 0, "asOf": "2026-11-20T09:00:04Z" }
@@ -848,6 +852,33 @@ changes, before its next status, so the answer is at most one report interval be
 the resident records are each read at most every 5 seconds on a control host, so an answer may be that old: `asOf`
 says when they were read. A read that fails is a `503`, never an older answer (`CTL-62`). Deciding whether a shadow
 window passes reads only the small statuses, never a resident record (`CTL-74`).
+
+### The readers of the store {#instances}
+
+`GET /instances` lists every CoSec process that reported a status in the last hour (`CTL-89`, `SNP-25`): every one with
+`cosec-cocache` reports, whatever its pipeline mode and whether it shadows, with the CoSec release it runs. It is the
+newer side of a rolling upgrade seeing the older one: a later release reads from it which instances still run an
+earlier one. A platform operator's (a read of the platform document); the service port does not serve it.
+
+```json
+{
+  "instances": [
+    { "instance": "gateway-7c9f.k2", "release": "8.0.0-beta.9", "formatLevel": 1, "at": "2026-11-20T09:00:01Z", "live": true, "shadows": true },
+    { "instance": "iam-0.m4", "formatLevel": 1, "at": "2026-11-20T08:20:13Z", "live": false, "shadows": false }
+  ],
+  "unreadable": [],
+  "releases": { "8.0.0-beta.9": 1, "unknown": 1 },
+  "asOf": "2026-11-20T09:00:04Z"
+}
+```
+
+`live` is a status written in the minute before `asOf`, what a shadow window and `propagation` count; the others are
+instances that reported within the hour and may still serve on the documents they installed. `release` is absent for an
+instance whose status does not name one (a release before 8.0.0-beta.9), and `releases` counts it, with each instance
+in `unreadable` (its status does not decode), as `unknown`. A control host logs `Instances of <n> release(s) read this
+store in the last hour: ...` each time the releases change while more than one is there, and
+`cosec.control.instances.releases` is how many there were at the last read ([Observability](../operations/observability.md#metrics)).
+The statuses are read at most every 5 seconds, as for `propagation`.
 
 ## Access reviews
 
@@ -1011,7 +1042,7 @@ against the control host's providers.
 Where `PolicyTestKit` asserts what your documents decide, `PipelineFixture` runs the rest of the request around that
 decision: a real `Pipeline` over the compiler, snapshot source and engine every instance runs, from your documents. Use
 it when the code under test reads the permitted request's `SecurityContext`, or a handler's outcome depends on the
-status and problem CoSec answers. It is `@ExperimentalCoSecApi`, like the rest of the test kit.
+status and problem CoSec answers. It is `@ExperimentalCoSecApi`, like `PolicyTestKit`; only the kit's request contexts are stable ([Testing your application](#testing-your-application)).
 
 ```kotlin
 @file:OptIn(ExperimentalCoSecApi::class)
@@ -1064,7 +1095,10 @@ when the store is down.
 
 `IdentityHeader` writes the `CoSec-Identity` header a gateway forwards, for testing a service that runs behind a
 gateway (`cosec.pipeline.mode=gateway`) without one in front. It covers a subject, any `Identity`, or what a gateway
-forwards for a real token.
+forwards for a real token. `forSubject` states a person's token and `forWorkload`, with the same parameters, a
+workload's (`IDN-44`): a service, a machine, a login declared a workload's. A workload never approves a change, is never
+the control plane's trust root and has no break-glass, whatever its roles grant; test what a service behind the gateway
+refuses it with `forWorkload`.
 
 **Make a header per request.** A header is made at one moment and is good for a short time: a service refuses it once it
 is older than `cosec.pipeline.identity.max-age` (`60s` by default) plus `cosec.authentication.revocation.skew` (`5s`),
@@ -1091,8 +1125,8 @@ on with an anonymous context it did not ask for.
 ### Testing your application {#testing-your-application}
 
 A test of a handler, or of a function that reads the caller, needs a `SecurityContext` that CoSec's pipeline made: since
-`PIP-27` the readers answer nothing else, so a context built by hand reads as no context at all. The kit makes three, all
-`@ExperimentalCoSecApi`:
+`PIP-27` the readers answer nothing else, so a context built by hand reads as no context at all. The kit makes three.
+They are stable, like `IdentityHeader` and `CoSecTestBindings` below, so a test that uses only them needs no opt-in:
 
 | Form | Use it for | What the context carries |
 |---|---|---|
@@ -1122,7 +1156,7 @@ parameter), or pass it to `WebTestClient` and `MockMvc` as below. The samples ar
 `TestingYourWebFluxApplicationTest` and `TestingYourWebMvcApplicationTest`:
 
 ```kotlin
-@file:OptIn(ExperimentalCoSecApi::class)
+@file:OptIn(ExperimentalCoSecApi::class)   // for PipelineFixture and Pipeline.behindGateway: the rest is stable
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.testkit.IdentityHeader

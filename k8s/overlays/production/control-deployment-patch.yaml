@@ -23,7 +23,8 @@ spec:
               value: -Xms2g -Xmx2g -XX:MaxDirectMemorySize=256m -XX:MaxMetaspaceSize=256m
             # The control host's own Redis account, from the Secret cosec-control-redis-credentials, which you create: password
             # is required, username is for a Redis ACL user and may be left out. Never the gateways' account: it must not
-            # write the documents.
+            # write the documents. Besides <prefix>:control:*, an ACL user of it writes its own status, as every reader of the
+            # store does (SNP-25): <prefix>:shadow:status:*, <prefix>:shadow:resident:* and <prefix>:shadow:instances:*.
             - name: SPRING_DATA_REDIS_USERNAME
               valueFrom:
                 secretKeyRef:

@@ -1,11 +1,15 @@
 {
   "$id": "https://cosec.ahoo.me/schema/8.0/cosec-identity.schema.json",
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "additionalProperties": false,
+  "additionalProperties": {
+    "description": "A member a later 8.x version adds: a reader that does not know it ignores it, unless `crit` names it."
+  },
   "description": "The JSON of the `CoSec-Identity` header (base64url, no padding) a gateway sets on a permitted request: who the caller is, the scope the gateway decided in and what the caller is a member of. Never a credential, a policy's content or an attribute value. Passing this schema is necessary, not sufficient: the compiler also checks what JSON Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too.",
   "properties": {
     "auth": {
-      "additionalProperties": false,
+      "additionalProperties": {
+        "description": "A member a later 8.x version adds: a reader that does not know it ignores it, unless `crit` names it."
+      },
       "properties": {
         "capped": {
           "const": true,
@@ -30,6 +34,14 @@
           "minLength": 1,
           "type": "string"
         },
+        "kind": {
+          "description": "Whose credential it is (IDN-44): `person`, or a workload's for any other value or none, which never approves, is never the trust root and has no break-glass. `api-key` and `service` are a workload's: declared a person's, the header is refused. CoSec's writers always write it.",
+          "examples": [
+            "workload"
+          ],
+          "minLength": 1,
+          "type": "string"
+        },
         "method": {
           "description": "How the principal authenticated: `jwt`, `api-key` and `service` are CoSec's own, `api-key` and `service` a workload's credential, and an authenticator of another credential names its own.",
           "examples": [
@@ -41,7 +53,9 @@
           "type": "string"
         },
         "session": {
-          "additionalProperties": false,
+          "additionalProperties": {
+            "description": "A member a later 8.x version adds: a reader that does not know it ignores it, unless `crit` names it."
+          },
           "description": "The session of CoSec's own token (method jwt, with iat), which a tenant switch behind the gateway issues from. Absent for any other credential.",
           "properties": {
             "auth_time": {
@@ -108,14 +122,30 @@
       },
       "type": "object"
     },
+    "crit": {
+      "description": "The paths of the members a reader must understand (IDN-41): a reader that does not know one refuses the header (503) rather than read it without the member. Absent when there is none, as from every 8.0 writer: every member of 8.0 is one every 8.x reader knows.",
+      "items": {
+        "examples": [
+          "v",
+          "rid"
+        ],
+        "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "type": "array",
+      "uniqueItems": true
+    },
     "iat": {
       "description": "When the gateway made the header.",
       "minimum": 0,
       "type": "integer"
     },
     "memberships": {
-      "additionalProperties": false,
-      "description": "What the principal is a member of besides `roles` (IDN-39), empty when nothing: CoSec's writers always write it, and a host that decides on the identity refuses one without it.",
+      "additionalProperties": {
+        "description": "A member a later 8.x version adds: a reader that does not know it ignores it, unless `crit` names it."
+      },
+      "description": "What the principal is a member of besides `roles` (IDN-39), empty when nothing: CoSec's writers write it, but for a relay of an identity forwarded without it, which leaves it out (IDN-42); a host that decides on the identity refuses one without it.",
       "properties": {
         "attachments": {
           "description": "The ids of the policies the principal attaches, in the order its memberships name them.",
@@ -182,7 +212,9 @@
       "uniqueItems": true
     },
     "scope": {
-      "additionalProperties": false,
+      "additionalProperties": {
+        "description": "A member a later 8.x version adds: a reader that does not know it ignores it, unless `crit` names it."
+      },
       "description": "The scope the gateway decided in, resolved; empty strings for no app and the default space.",
       "properties": {
         "app": {

@@ -36,7 +36,6 @@ import java.net.http.HttpResponse
  * will not start without (`STA-9`). A call with an identity header, the 200 and the 403, is `aot-smoke.sh`'s: it runs
  * on the image with a platform document published through `cosec-migrate`, which the in-memory backend cannot do.
  */
-@OptIn(me.ahoo.cosec.annotations.ExperimentalCoSecApi::class)
 class ControlServerTest {
     private val http = HttpClient.newHttpClient()
     private var context: ConfigurableApplicationContext? = null
@@ -59,8 +58,12 @@ class ControlServerTest {
                 }
             )
             .run(
+                // One address for the binds and the requests (#1962): bound to every address on a port the system chose,
+                // a server shares that port with any process bound to one address on it, which then takes its connections.
+                "--server.address=127.0.0.1",
                 "--server.port=0",
                 "--cosec.control.http.service-port=0",
+                "--management.server.address=127.0.0.1",
                 "--management.server.port=0",
                 "--cocache.backend=memory",
                 "--cosec.authorization.snapshot.eviction-check=warn",
@@ -76,7 +79,7 @@ class ControlServerTest {
 
     private fun get(context: ConfigurableApplicationContext, port: String, path: String): HttpResponse<String> {
         val request = HttpRequest.newBuilder(
-            URI("http://localhost:${context.environment.getProperty(port)}$path")
+            URI("http://127.0.0.1:${context.environment.getProperty(port)}$path")
         ).build()
         return http.send(request, HttpResponse.BodyHandlers.ofString())
     }
@@ -106,7 +109,7 @@ class ControlServerTest {
         get(context, "local.server.port", path).statusCode().assert().isEqualTo(401)
         // A bearer token nobody verifies is no more than the missing header: the host believes the identity, not this.
         val request = HttpRequest.newBuilder(
-            URI("http://localhost:${context.environment.getProperty("local.server.port")}$path")
+            URI("http://127.0.0.1:${context.environment.getProperty("local.server.port")}$path")
         )
             .header("Authorization", "Bearer not-a-token").build()
         http.send(request, HttpResponse.BodyHandlers.ofString()).statusCode().assert().isEqualTo(401)
@@ -134,7 +137,7 @@ class ControlServerTest {
         val context = start("--cosec.pipeline.identity.only-trusted-callers-can-reach=true")
         val header = IdentityHeader.forSubject("plato", tenant = "(platform)", app = "cosec-control")
         fun status(port: String, path: String): Int {
-            val request = HttpRequest.newBuilder(URI("http://localhost:${context.environment.getProperty(port)}$path"))
+            val request = HttpRequest.newBuilder(URI("http://127.0.0.1:${context.environment.getProperty(port)}$path"))
                 .header(IdentityHeader.NAME, header).build()
             return http.send(request, HttpResponse.BodyHandlers.ofString()).statusCode()
         }
@@ -156,11 +159,13 @@ class ControlServerTest {
     }
 
     @Test
-    fun `a control server writes no instance status, and takes no part in a shadow window`() {
+    fun `a control server reports a status that does not shadow, and takes no part in a shadow window`() {
         val statement = "--cosec.pipeline.identity.only-trusted-callers-can-reach=true"
         val server = start(statement)
         server.containsBean("cosecShadowReporting").assert().isFalse()
         server.containsBean("cosecShadowListener").assert().isFalse()
+        // SNP-25: it reads the documents, so it is a reader of the store, and reports itself as one, not shadowing.
+        server.containsBean("cosecInstanceReporting").assert().isTrue()
         server.close()
         // The same names are there when shadow is switched on, so the absence above is the switch's and not a rename's.
         val shadowed = start(statement, "--cosec.authorization.shadow.enabled=true")

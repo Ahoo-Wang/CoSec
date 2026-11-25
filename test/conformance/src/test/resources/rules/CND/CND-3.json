@@ -1,0 +1,13 @@
+{
+  "id": "CND-3",
+  "source": "RFC 0005 §3.4",
+  "statement": "Evaluation is two-valued: not negates its operand, so not over a comparison with an absent attribute is true.",
+  "level": "engine",
+  "properties": [
+    "model:ConditionPropertyTest#A3 normalizing does not change decisions"
+  ],
+  "guards": [
+    "model:ConditionEvaluationTest#absent makes every comparison false and not negates it"
+  ],
+  "pending": null
+}

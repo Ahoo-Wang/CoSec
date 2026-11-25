@@ -16,7 +16,7 @@ CI 在每次推送到 `main`、`7.x` 和发布分支时、为每个版本标签�
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`，支持 `linux/amd64` 和 `linux/arm64`。网关服务是一个应用：只以
 镜像发布，从不作为库发布。
 
-**标签。** 分支推送以分支名为标签（`main`、`7.x`；名称中的 `/` 变为 `-`），拉取请求以 `pr-<编号>` 为标签，每晚的构建会刷新 `main`：这些标签随每次构建移动，所以不要在生产中运行它们。版本标签 `v8.0.0-beta.8` 发布 `8.0.0-beta.8`，它指向唯一的一个发布。预发布版本没有其他标签；稳定版本还会把 `<主版本>.<次版本>`（`8.0`）移到它最新的补丁版本。请固定确切的版本，或固定你测试过的镜像的摘要（`ahoowang/cosec-gateway@sha256:...`）：浮动标签可能在两次重启之间悄悄变化。[`k8s/`](#kubernetes) 里的清单在 `k8s/base/kustomization.yaml` 中固定了版本。
+**标签。** 分支推送以分支名为标签（`main`、`7.x`；名称中的 `/` 变为 `-`），拉取请求以 `pr-<编号>` 为标签，每晚的构建会刷新 `main`：这些标签随每次构建移动，所以不要在生产中运行它们。版本标签 `v8.0.0-rc.1` 发布 `8.0.0-rc.1`，它指向唯一的一个发布。预发布版本没有其他标签；稳定版本还会把 `<主版本>.<次版本>`（`8.0`）移到它最新的补丁版本。请固定确切的版本，或固定你测试过的镜像的摘要（`ahoowang/cosec-gateway@sha256:...`）：浮动标签可能在两次重启之间悄悄变化。[`k8s/`](#kubernetes) 里的清单在 `k8s/base/kustomization.yaml` 中固定了版本。
 
 - **JDK。** CoSec 的库以 Java 21 为目标，这也是基于它们的应用所需的版本。镜像本身是一个应用，运行在 JDK 25，即
   Alibaba Dragonwell 25（`dragonwell:25-ubuntu`）上，并带有 JDK 25 的 [AOT 缓存](#aot-cache)：它的运行时是 25，而不是 21。
@@ -122,7 +122,7 @@ cosec:
 实例只有在安装了平台文档，以及 [`prewarm-apps` 和 `prewarm-tenants`](./configuration.md#snapshot) 列出的每个文档
 （列表为空表示只有平台文档）之后才算就绪。在此之前它会对每个被路由的请求回答 `503`，所以 starter 把 Spring Boot 的
 就绪状态改为 `REFUSING_TRAFFIC`，文档安装后再改回 `ACCEPTING_TRAFFIC`。跟随 `/actuator/health/readiness` 的负载均衡器
-在此期间不会给它流量，前提是它能访问到那条路径：对 CoSec 来说它是普通请求，所以在应用的应用端口上需要一条语句允许它（[应用上的 actuator](../integration/web.md#actuator-on-an-application)）。存活状态不受缺失文档的影响：存活状态保持 `CORRECT`，缺少文档不是重启实例的理由。HTTP 存活探针则是另一回事：在应用的应用端口上，第一份文档发布之前它回答 `503`，WebFlux 应用的管理端口也一样，kubelet 会在 pod 能就绪之前就重启它。WebMvc 应用的存活探针指向它的管理端口（不经 CoSec），WebFlux 应用则在应用端口上用 `tcpSocket` 探针。
+在此期间不会给它流量，前提是它能访问到那条路径：对 CoSec 来说它是普通请求，所以在应用的应用端口上需要一条语句允许它（[应用上的 actuator](../integration/web.md#actuator-on-an-application)）。存活状态不受缺失文档的影响：存活状态保持 `CORRECT`，缺少文档不是重启实例的理由。HTTP 存活探针则是另一回事：在应用的应用端口上，第一份文档发布之前它回答 `503`，管道做判定的 WebFlux 应用的管理端口也一样，kubelet 会在 pod 能就绪之前就重启它。WebMvc 应用的存活探针指向它的管理端口（不经 CoSec），管道做判定的 WebFlux 应用则在应用端口上用 `tcpSocket` 探针。闸门是转发身份的 WebFlux 宿主（`gateway` 模式，或 `cosec.pipeline.caller=forwarded-identity`）可以在它的管理端口上用 HTTP 探测（[应用上的 actuator](../integration/web.md#actuator-on-an-application)）。
 
 有 Spring Boot Actuator 时，`cosecSnapshot` 健康指示器在这些文档安装后报告 `UP`，之前报告 `DOWN`，细节为 `platform`
 （`installed`、`invalid`、`failed`、`absent` 或 `loading`）、`prewarmed` 和 `missing`（尚未安装的文档），存储的文档在这里
@@ -172,9 +172,9 @@ docker run -d -p 127.0.0.1:8080:8080 \
 |---|---|---|
 | **8080** | 运维人员的 API，`/cosec/control/**`（`cosec.control.http.base-path`），[控制 API](../policies/testing.md#the-control-plane)的每条路由 | 网关的 pod |
 | **8082** | 服务 API（`cosec.control.http.service-port`），为直接调用控制面的服务准备的窄档：有哪些租户文档和应用文档（[`GET /documents?kind=`](../policies/testing.md#listing-documents)，授予服务的方式是在 `doc/tenant` 或 `doc/app` 上的 `cosec:read`）、租户文档和应用文档，以及它们的变更流程（[从代码修改策略](../integration/checks.md#changing-policies-from-your-code)）；其他每条路由在这里都是 `404` | 恰好是你点名的服务 |
-| **8081** | 管理端口：`/actuator/health/liveness`、`/actuator/health/readiness`、`/actuator/prometheus`；在 CoSec 之外。控制 API 在这里是 `404`，除 8080 和 8082 之外的任何端口都是（`CTL-69`） | 只有监控 |
+| **8081** | 管理端口：`/actuator/health/liveness`、`/actuator/health/readiness`、`/actuator/prometheus`；处于 CoSec 的身份闸门之下，闸门对不带 `CoSec-Identity` 的请求什么也不判定，所以探针能通过，但它在这里仍然拒绝畸形的身份头（[应用上的 actuator](../integration/web.md#actuator-on-an-application)）。控制 API 在这里是 `404`，除 8080 和 8082 之外的任何端口都是（`CTL-69`） | 只有监控 |
 
-CoSec 不对管理端口做授权，而 actuator 不在应用端口上：探针探测管理端口。管理端口不只是 actuator：Spring Boot 的管理服务器还会在那里提供应用自己的函数式路由，镜像没有这样的路由；CoSec 自己的路由，控制 API 在内，只在应用端口和服务端口上应答。服务端口就是应用自己的服务器换一个端口，带着它的 TLS、客户端认证和绑定地址：如果声明是靠应用端口上的双向 TLS 成立的，8082 上同样成立。把 8080 发布给网关，把 8082 发布给你点名的服务，永远不要发布 8081。
+CoSec 不对管理端口做授权，而 actuator 不在应用端口上：探针探测管理端口。探针在那里能通过，是因为这个宿主的闸门是转发身份的闸门，它对不带身份的请求什么也不判定；WebFlux 管道做判定的应用，不能在它的管理端口上用 HTTP 探测。管理端口不只是 actuator：Spring Boot 的管理服务器还会在那里提供应用自己的函数式路由，镜像没有这样的路由；CoSec 自己的路由，控制 API 在内，只在应用端口和服务端口上应答。服务端口就是应用自己的服务器换一个端口，带着它的 TLS、客户端认证和绑定地址：如果声明是靠应用端口上的双向 TLS 成立的，8082 上同样成立。把 8080 发布给网关，把 8082 发布给你点名的服务，永远不要发布 8081。
 
 **这个宿主的边缘不做任何决策。** 它的 Web 网关是身份网关，只读取声明的身份，不做别的决策：8080 和 8082 上的请求都不会经过 `http:` 决策、限流规则或决策事件。运维人员的请求在转发之前已由网关做出 `http:` 决策并执行限流；服务端口上的请求则没有任何一方做过。每个控制动作仍由策略针对调用方声明的主体决策，并记为它的一步。限制一个服务向服务端口请求多少的，是放行它的网络和这个服务自己：控制路由上的限流规则只在网关之后有效。
 
@@ -199,14 +199,14 @@ spring:
 
 服务通过 `HttpControlService`（`cosec-control-http`；当 `cosec.control.service-url` 为 `http://<host>:8082/cosec/control/v1` 时它就是 starter 的 `ControlService`）调用 8082 端口，它为每次调用写出 `CoSec-Identity` 请求头，写明它所代表的主体。控制面针对该主体决策，使用平台文档给它的绑定，变更会记录这个身份是被声明的。没有身份的请求是 `401`，而 bearer 令牌不是身份：宿主不校验任何令牌。
 
-**被转述的调用方保留它的属性**（`CTL-77`，DR1-F-1）。服务以它正在服务的用户身份行事时（`ControlCaller.of`），该用户的全部属性（令牌的声明）都随调用一同发出，每一项都是引擎读到的文本，所以读取属性的控制策略与进程内判定得一样：`subject.attributes.suspended` 上的 DENY 无论走哪条路都拒绝。成员关系也一同发出（`IDN-39`，DR2-F-1）：所有空间的角色，而不只是本次调用所在空间的，以及用户附加的策略的 id，所以附加到用户的 DENY、或读取用户在另一个空间所持角色（`subject.roles`）的 DENY，无论走哪条路也都拒绝。属性会到达宿主，由服务端口的网络策略保护；其中若有你不愿发到那里的内容，不要放进令牌。它们必须放得进请求头：合计 8 KB，单个字符串 1,024 个字符。放不下时调用在发出之前就失败，写明是哪个属性、多大，从不写出它的值；成员关系放不下时同样失败，并写明个数。调用绝不会不带它们而发出。服务以自己的身份行事时（`ControlCaller.service`）不声明任何属性。
+**被转述的调用方保留它的属性**（`CTL-77`，DR1-F-1）。服务以它正在服务的用户身份行事时（`ControlCaller.of`），该用户的全部属性（令牌的声明）都随调用一同发出，每一项都是引擎读到的文本，所以读取属性的控制策略与进程内判定得一样：`subject.attributes.suspended` 上的 DENY 无论走哪条路都拒绝。成员关系也一同发出（`IDN-39`，DR2-F-1）：所有空间的角色，而不只是本次调用所在空间的，以及用户附加的策略的 id，所以附加到用户的 DENY、或读取用户在另一个空间所持角色（`subject.roles`）的 DENY，无论走哪条路也都拒绝。属性会到达宿主，由服务端口的网络策略保护；其中若有你不愿发到那里的内容，不要放进令牌。它们必须放得进请求头：合计 6 KB（`IDN-43`），单个字符串 1,024 个字符。放不下时调用在发出之前就失败，写明是哪个属性、多大，从不写出它的值；成员关系放不下时同样失败，并写明个数。调用绝不会不带它们而发出。服务以自己的身份行事时（`ControlCaller.service`）不声明任何属性。
 
 **声明与策略是一件事。** 声明之所以属实，是因为网络，每个端口一条策略：网关的 pod 到 8080，点名的服务到 8082，监控到 8081。[`k8s/control/`](#kubernetes) 的清单把这个变量和三条策略一起设置，绝不只有其一。它们是控制手段，不是纵深防御：能连到宿主的工作负载可以声明任何主体，平台管理员也不例外，并且既是变更的作者又是批准者（[控制面信任什么](./topologies.md#what-the-control-plane-trusts)）。
 
 ### 存储、就绪和副本 {#control-plane-store}
 
 - **存储账户。** 宿主写入 `<s>:` 下的每个文档、变更和租约（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）：给它一个自己的 Redis 用户，这是唯一可以写它们的用户，网关用只读的。Redis 必须以 `maxmemory-policy noeviction` 运行，和网关一样。用无法向失效通道发布的用户启动宿主，会在启动时失败（[故障排查](./troubleshooting.md#startup-fails-on-a-redis-permission)）。
-- **不参与影子窗口。** 镜像中 `cosec.authorization.shadow.enabled` 为 `false`：副本不是窗口要等待的实例，它只对运维人员的请求决策，所以不会让窗口一直开着，也不会写报告。
+- **不参与影子窗口。** 镜像中 `cosec.authorization.shadow.enabled` 为 `false`：副本不是窗口要等待的实例，它只对运维人员的请求决策，所以不会让窗口一直开着，也不会写报告。它仍然写自己的状态（`shadows: false`），与存储的每个读方一样（`SNP-25`）：它的 Redis 用户除了 `<s>:control:*` 之外，还要写 `<s>:shadow:status:<instance>`、`<s>:shadow:resident:<instance>` 和 `<s>:shadow:instances:*`，`propagation` 也计入它持有的文档。
 - **就绪。** 与每个实例一样，平台文档安装之后宿主才就绪（[就绪](#readiness)），并且要求控制存储处于本版本的格式：镜像把 `cosecControlStoreFormat` 指示器放进了它的就绪分组。8.0.0-beta.5 之前版本写下的存储会让它处于未就绪，可见并有名字，直到运行过 `cosec-migrate repair-references`（[控制存储格式](./observability.md#snapshot-health)）。存活是存活分组，无论 Redis 里有什么都为 up。两种探针都在管理端口上；镜像的 `HEALTHCHECK` 是存活那个。
 - **一个副本，以及何时两个。** 一个就够：运维人员每小时只发几个请求，重启只要几秒。维护任务在每个实例上运行并取租约，让每份文档一次只有一个实例在处理（没有任何开关能把它们关掉），变更用比较并交换推进，所以第二个副本在设计上是支持的；系统测试目前还没有覆盖两个副本。运行两个是为了节点排空，不是为了负载，并配一个中断预算。升级时停掉宿主、再启动新镜像，不要滚动更新：跨存储格式变更时，旧副本和新副本不能同时运行（[预览版之间升级](./upgrading-previews.md#from-8-0-0-beta-4)）。
 - **内存。** 宿主在两个快照源里持有它所决策的每个租户的已编译文档：一个是它管道的，一个是控制面自己的，以及 `simulate`、`explain`、`analyze` 编译的文档所在的一个缓存，三者各占文档那四分之一堆的三分之一（`SNP-24`，DR1-F-5）。镜像默认使用网关的 JVM 参数；[`k8s/control/`](#kubernetes) 为试用设置 1536Mi 限额里 768 MiB 堆，production overlay 设置 3200Mi 里 2 GiB，依[内存](#memory)的规则（堆，加直接内存，加约 250 MiB，再加四分之一）：堆和限额一起改。2 GiB 的宿主每个源约持有 4,800 个典型租户；要更多就给它更多的堆。
@@ -424,7 +424,7 @@ cosec:
 | 12 个应用中各一个，5 个空间（60 个） | 两侧各约 25 个字符 | 3.3 KB | 4.7 KB |
 
 令牌在每个请求的 `Authorization` 中传递，请求头合计超过 `server.max-http-request-header-size`（默认 8 KB）时 Reactor Netty 拒绝该请求：
-约 100 个长 `role@space` 条目就会达到。网关转发的 `CoSec-Identity` 请求头带同样这些角色（按空间分组的裸名）和所附加策略的 id（`IDN-39`），上限是 `cosec.gateway.identity.max-size`（8 KB）：成员关系放不下的主体在网关就被拒绝（`500`），绝不少带一些转发出去。
+约 100 个长 `role@space` 条目就会达到。网关转发的 `CoSec-Identity` 请求头带同样这些角色（按空间分组的裸名）和所附加策略的 id（`IDN-39`），上限是 `cosec.gateway.identity.max-size`（6 KB）：成员关系放不下的主体在网关就被拒绝（`500`），绝不少带一些转发出去。网关之后的服务最多读 8 KB（`cosec.pipeline.identity.max-size`），它自己的服务器请求头上限由此推出，为 16 KB，除非你自己设置（`IDN-43`，[由计算得出，而非配置](./configuration.md#computed-not-configured)）。
 
 没有哪项按请求的开销取决于一个租户有多少成员。网关验证令牌、解析它携带的角色，并查两次撤销（令牌的和它的主体的），都按调用者为键；租户文档
 不列出它的成员。撤销查询为每个"未撤销"的回答在本地保留 30 秒，每个副本最多占堆的八分之一，按每个条目 290 和 230 字节计数

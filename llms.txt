@@ -61,7 +61,7 @@ Key facts: any matching DENY overrides every ALLOW; a request nothing allows is 
 ## Reference
 
 - [Snapshot document JSON Schema](https://cosec.ahoo.me/schema/8.0/cosec-snapshot-document.schema.json) (platform, app and tenant documents), [binding JSON Schema](https://cosec.ahoo.me/schema/8.0/cosec-binding.schema.json) and [catalog JSON Schema](https://cosec.ahoo.me/schema/8.0/cosec-catalog.schema.json)
-- [Agent skills](https://github.com/Ahoo-Wang/CoSec/tree/main/skills): policy documents, integration, extending CoSec, troubleshooting
+- [Agent skills](https://github.com/Ahoo-Wang/CoSec/tree/main/skills): policy documents, integration, the TypeScript client (`@ahoo-wang/cosec-fetcher`, `@ahoo-wang/cosec-react`), extending CoSec, troubleshooting
 - [Releases](https://github.com/Ahoo-Wang/CoSec/releases): changes and migration notes
 
 ## Optional

@@ -39,6 +39,7 @@ import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -75,14 +76,18 @@ class UnpairedSurrogatePipelineTest {
     private val withToken = facts(headers = mapOf("Authorization" to listOf("Bearer token")))
 
     private fun token(tenant: String, principal: String = "alice") =
-        VerifiedToken("jti", principal, tenant, null)
+        VerifiedToken("jti", principal, tenant, null, PERSON)
 
     @Test
     fun `a token of tenant beta with an unpaired surrogate is token-invalid and reads no tenant's documents`() = runTest {
         for (tenant in listOf("beta\uD800", "\uDC00beta")) {
             val views = RecordingViews()
             val engine = StubEngine(IMPLICIT_DENY)
-            val authenticator = TokenAuthenticator(Verifier { token(tenant) }, RevocationReader.NONE)
+            val authenticator = TokenAuthenticator(
+                Verifier { token(tenant) },
+                RevocationReader.NONE,
+                acceptUnavailableRevocations = false,
+            )
             val outcome = pipeline(authenticator, engine, views).evaluate(withToken)
 
             outcome.status.assert().isEqualTo(ProblemType.TOKEN_INVALID.status)
@@ -97,7 +102,11 @@ class UnpairedSurrogatePipelineTest {
     fun `a token of tenant beta with a surrogate pair is the tenant it names`() = runTest {
         val views = RecordingViews()
         val engine = StubEngine(IMPLICIT_DENY)
-        val authenticator = TokenAuthenticator(Verifier { token("beta\uD83D\uDE00") }, RevocationReader.NONE)
+        val authenticator = TokenAuthenticator(
+            Verifier { token("beta\uD83D\uDE00") },
+            RevocationReader.NONE,
+            acceptUnavailableRevocations = false,
+        )
         pipeline(authenticator, engine, views).evaluate(withToken)
         views.keys.map { it.tenant }.assert().containsOnly(TenantId("beta\uD83D\uDE00"))
     }
@@ -117,7 +126,12 @@ class UnpairedSurrogatePipelineTest {
                 AuthenticatedPrincipal(PrincipalId("alice"), TenantId("acme"), claims)
             },
             {
-                val credential = Identity.Credential(Identity.Method("custom"), "key\uD800", null)
+                val credential = Identity.Credential(
+                    Identity.Method("custom"),
+                    PERSON,
+                    "key\uD800",
+                    null
+                )
                 AuthenticatedPrincipal(
                     PrincipalId("alice"),
                     TenantId("acme"),

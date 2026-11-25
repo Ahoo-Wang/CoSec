@@ -61,6 +61,8 @@ class DefaultControlPlane(
 
     override val breakGlass: BreakGlass = BreakGlass(changes, revisions)
 
+    override val instances: InstanceReads = InstanceReads(authority, changes.readers)
+
     private val retained = RetainedDocuments(revisions, simulator.cache, work)
     private val reads = DocumentReads(authority, revisions, changes, retained)
 

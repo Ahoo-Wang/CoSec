@@ -59,10 +59,12 @@ import java.time.Duration
  * Revocation is judged by [TokenRevocation], as refresh and logout judge it. A [RevocationReader] that cannot read its
  * store throws [RevocationUnavailableException], and this is the one place that lets a token through on it: the token is
  * verified, signed and unexpired, and refusing every authenticated request during a Redis outage would be worse. That is
- * the documented exception to failing closed (PIP-7), which [acceptUnavailableRevocations] false turns off (503). Each
- * token so accepted is counted, and logged at most every few seconds ([UncheckedRevocations]).
+ * the documented exception to failing closed (PIP-7), and whoever builds a [TokenAuthenticator] chooses it, since
+ * [acceptUnavailableRevocations] has no default: false answers such a request 503. Each token so accepted is counted, and
+ * logged at most every few seconds ([UncheckedRevocations]).
  * Nothing that issues a token reads it so (`IDN-14`). Anything else [revocations] or [verifier] throws reaches the
- * pipeline, which answers 503.
+ * pipeline, which answers 503: a token whose `crit` names what the verifier does not understand among it
+ * ([me.ahoo.cosec.spi.token.TokenNotUnderstoodException], `IDN-47`), which is no refusal of the token.
  */
 class TokenAuthenticator(
     private val verifier: TokenVerifier,
@@ -72,6 +74,12 @@ class TokenAuthenticator(
      * until it expires, and only fits a host where nothing is ever revoked.
      */
     private val revocations: RevocationReader,
+    /**
+     * Whether a token is accepted while its revocations cannot be read (PIP-7): true accepts it, counted and logged; false
+     * answers the request 503. Required, so that whoever builds one states it; the starter passes
+     * `cosec.authentication.revocation.fail-closed` negated (accepted unless the operator sets it).
+     */
+    private val acceptUnavailableRevocations: Boolean,
     /** How audit names this way of authenticating, and the credential of a verifier other than CoSec's. */
     private val method: String = METHOD,
     /**
@@ -79,11 +87,6 @@ class TokenAuthenticator(
      * subject revocation also revokes tokens issued up to this long after it ([SubjectRevocation.revokes]).
      */
     private val revocationSkew: Duration = SubjectRevocation.DEFAULT_SKEW,
-    /**
-     * Whether a token is accepted while its revocations cannot be read (`cosec.authentication.revocation.fail-closed`
-     * false, the default); false answers the request 503 instead.
-     */
-    private val acceptUnavailableRevocations: Boolean = true,
     /** Where a token accepted without a revocation check is counted and logged (`cosec.revocation.unchecked`). */
     private val unchecked: UncheckedRevocations = UncheckedRevocations(),
 ) : Authenticator {
@@ -138,8 +141,9 @@ class TokenAuthenticator(
                 tenant,
                 MembershipSource.of(token),
                 token.attributes,
-                Identity.Credential(credentialMethod, token.id, token.expiresAt),
-                breakGlass = ownTokens,
+                // Whose the token is, as its verifier read it (IDN-46): a workload's token never uses break-glass.
+                Identity.Credential(credentialMethod, token.kind, token.id, token.expiresAt),
+                breakGlass = ownTokens && token.kind == Identity.Credential.Kind.PERSON,
                 issuedAt = token.issuedAt,
                 apiKeyCredential = false,
                 app = token.app?.let(::AppId),

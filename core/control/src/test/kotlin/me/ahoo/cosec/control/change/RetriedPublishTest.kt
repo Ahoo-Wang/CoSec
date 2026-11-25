@@ -24,7 +24,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
-import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.lifecycle.BreakGlass
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
@@ -304,7 +303,7 @@ class RetriedPublishTest {
         changes.get(held.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
         revisions.head(SnapshotKey.Platform)!!.document.bindings.none { it.breakGlass }.assert().isTrue()
         delivered(ChangeEvent.Kind.PUBLISHED, ChangeEvent.Kind.REVOKED)
-            .filter { it.change == held.id && it.kind == ChangeEvent.Kind.PUBLISHED }
+            .filter { it.change == held.id.value && it.kind == ChangeEvent.Kind.PUBLISHED }
             .single().operator.assert().isEqualTo(PLATO.actor)
         listeners.cancel()
     }
@@ -318,7 +317,7 @@ class RetriedPublishTest {
         changes.publish(PLATO, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
         delivered(ChangeEvent.Kind.PUBLISHED)
         Thread.sleep(200)
-        events.count { it.change == change.id && it.kind == ChangeEvent.Kind.PUBLISHED }.assert().isEqualTo(1)
+        events.count { it.change == change.id.value && it.kind == ChangeEvent.Kind.PUBLISHED }.assert().isEqualTo(1)
         listeners.cancel()
     }
 
@@ -385,7 +384,7 @@ class RetriedPublishTest {
         changes.publish(PLATO, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
         delivered(ChangeEvent.Kind.PUBLISHED)
         Thread.sleep(200)
-        events.none { it.change == change.id && it.kind == ChangeEvent.Kind.FAILED }.assert().isTrue()
+        events.none { it.change == change.id.value && it.kind == ChangeEvent.Kind.FAILED }.assert().isTrue()
         listeners.cancel()
     }
 
@@ -413,7 +412,7 @@ class RetriedPublishTest {
         ids.get().assert().isEqualTo(made)
         breakGlass.grants(BindingId("glass")).assert().isFalse()
         Thread.sleep(200)
-        events.none { it.change == revoke.id && it.kind == ChangeEvent.Kind.FAILED }.assert().isTrue()
+        events.none { it.change == revoke.id.value && it.kind == ChangeEvent.Kind.FAILED }.assert().isTrue()
         listeners.cancel()
     }
 
@@ -438,7 +437,7 @@ class RetriedPublishTest {
         changes.get(held.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
         delivered(
             ChangeEvent.Kind.REVIEW_NEEDED
-        ).single { it.change == held.id && it.kind == ChangeEvent.Kind.REVIEW_NEEDED }
+        ).single { it.change == held.id.value && it.kind == ChangeEvent.Kind.REVIEW_NEEDED }
             .note.assert().isEqualTo("settled by (platform)/plato while taking the slot, not re-analyzed")
         listeners.cancel()
     }
@@ -463,7 +462,7 @@ class RetriedPublishTest {
     }
 
     private companion object {
-        val PIA = Operator(Actor(TenantId.PLATFORM, PrincipalId("pia")), NO_MEMBERSHIPS)
+        val PIA = person(Actor(TenantId.PLATFORM, PrincipalId("pia")))
 
         /** A new DENY and its binding: a change that only narrows. */
         val BAN = listOf(

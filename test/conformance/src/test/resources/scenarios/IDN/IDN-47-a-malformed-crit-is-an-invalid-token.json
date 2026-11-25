@@ -1,0 +1,61 @@
+{
+  "rules": [
+    "IDN-47"
+  ],
+  "level": "pipeline",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "reads",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "reads",
+            "subject": {
+              "principal": "alice",
+              "tenant": "acme"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "reads"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "polarity": "positive",
+  "description": "CoSec's own token for alice whose crit header is a string, not an array of names: an invalid token. The request, evaluated as anonymous, is denied 401 token-invalid.",
+  "authentication": {
+    "result": "jwt",
+    "jwt": {
+      "jti": "t1",
+      "sub": "alice",
+      "tenantId": "acme",
+      "header": {
+        "crit": "cosec.later",
+        "cosec.later": true
+      }
+    }
+  },
+  "expect": {
+    "status": 401,
+    "type": "token-invalid"
+  }
+}

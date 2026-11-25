@@ -11,11 +11,10 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.login.token
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.token.CompositeToken
@@ -27,6 +26,7 @@ import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 
 /**
  * Switches a signed-in principal to another tenant, and to an app there (`wiki/integration/authentication.md`), to
@@ -48,8 +48,9 @@ import me.ahoo.cosec.spi.token.TokenVerifier
  * current generation, or the one just replaced within the rotation leeway, while an older pair presented again revokes
  * the session, as a refresh would. That is checked before [tenantSwitch] is asked, in the one place a refresh checks it
  * too. The switch moves nothing of the previous session, which refreshes on as before. The new token starts a session of
- * its own, which ends when the previous one would, since the user did not sign in again (`IDN-17`); the previous one is
- * left as it is, so a logout ends only the pair it is given.
+ * its own, which ends when the previous one would, since the user did not sign in again (`IDN-17`). The previous one is
+ * left as it is by the switch; a logout of the switched session ends the login it came from too (`IDN-40`,
+ * [TokenFamilies.logout]).
  *
  * @param tokenVerifier CoSec's own verifier, which checks the pair as a refresh's ([TokenVerifier.refresh])
  * @param credentialsType the application's credentials class, by which a login finds this authentication
@@ -73,13 +74,20 @@ class SwitchTenantAuthentication<C : SwitchTenantCredentials>(
             throw TokenVerificationException("The token pair presented is not the one the switch was asked with.")
         }
         val live = sessions.presented(token)
-        val subject = inTarget(previous, credentials.targetTenantId, tenantSwitch.switchTenant(credentials))
+        val subject = inTarget(previous, token, credentials.targetTenantId, tenantSwitch.switchTenant(credentials))
         return subject.inSession(live.fork(TenantId(credentials.targetTenantId)))
     }
 
-    private fun inTarget(previous: SecurityContext, target: String, membership: TenantMembership): TokenSubject =
+    private fun inTarget(
+        previous: SecurityContext,
+        token: VerifiedToken,
+        target: String,
+        membership: TenantMembership,
+    ): TokenSubject =
         TokenSubject(
             id = previous.principal.id,
+            // The presented token's kind: the switch's hook answers memberships, never whose the token is (IDN-46).
+            kind = token.kind,
             app = membership.app?.also(::requireAppId) ?: previous.scope.appId.ifEmpty { null },
             tenant = target,
             roles = membership.roles,

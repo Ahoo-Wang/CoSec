@@ -16,6 +16,9 @@ justAuth = "1.16.7"
 swagger = "2.2.56"
 springdoc = "3.2.1"
 # testing
+# The previous release of CoSec (RFC 0014 T): test/compat loads it beside the current build, in a class loader of its own,
+# to read what the current version writes and the other way round. Moved to each release once it is published.
+cosec-previous = "8.0.0-beta.9"
 junit = "6.1.3"
 fluent-assert = "1.2.1"
 mockk = "1.14.12"
@@ -65,6 +68,10 @@ spring-boot-webmvc = { module = "org.springframework.boot:spring-boot-webmvc" }
 # The gateway-server image's scrape endpoint (UB-2): versioned by the Spring Boot BOM above, like micrometer-core, as it
 # is the registry Spring Boot's own prometheus endpoint reads.
 micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus" }
+# test/compat only (RFC 0014 T): the previous release, never on a classpath of the current build
+cosec-previous-cocache = { module = "me.ahoo.cosec:cosec-cocache", version.ref = "cosec-previous" }
+cosec-previous-control = { module = "me.ahoo.cosec:cosec-control", version.ref = "cosec-previous" }
+cosec-previous-jwt = { module = "me.ahoo.cosec:cosec-jwt", version.ref = "cosec-previous" }
 [plugins]
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }

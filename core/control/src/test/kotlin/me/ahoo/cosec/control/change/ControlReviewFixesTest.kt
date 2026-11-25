@@ -49,6 +49,7 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
@@ -299,7 +300,13 @@ class ControlReviewFixesTest {
         authority.approvals.approverProblem(change, emptyList(), walt).assert().isNull()
         authority.approvals.approverProblem(change, needed, walt).assert().isEqualTo("it needs an approval")
         val unrecorded = change.copy(
-            approval = Approval(pia.actor, clock.now, change.candidate!!, listOf("document platform"))
+            approval = Approval(
+                pia.actor,
+                clock.now,
+                change.candidate!!,
+                listOf("document platform"),
+                kind = Identity.Credential.Kind.PERSON
+            )
         )
         authority.approvals.approverProblem(
             unrecorded,

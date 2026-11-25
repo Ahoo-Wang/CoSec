@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.cocache.shadow
 
@@ -24,8 +24,8 @@ import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.ConditionalPut
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
+import me.ahoo.cocache.api.spi.L1Read
 import me.ahoo.cocache.core.CoCacheFactory
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
@@ -41,6 +41,7 @@ import me.ahoo.cosec.spi.shadow.ShadowReportSink
 import me.ahoo.cosec.spi.shadow.StatusReadings
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
@@ -64,7 +65,7 @@ import java.util.concurrent.ConcurrentHashMap
  * status has expired (it is gone), as one older than a minute. A status or list that cannot be read fails it;
  * [statusReadings] names a status that does not decode instead (`CTL-73`).
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class CoCacheShadowReports @InternalCoSecApi constructor(
     private val reports: Store<String, ShadowReport>,
     private val reporters: Store<String, Set<String>>,
@@ -72,6 +73,12 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
     private val instances: Store<String, Map<String, Instant>>,
     private val residents: Store<String, ResidentDocuments>,
     private val clock: Clock = Clock.systemUTC(),
+    /**
+     * Reads an instance's status key as the backend stores it, only for the life the key has left: what ages a status
+     * that does not decode ([statusReadings]). Null when the store was built without it: such a status then counts while
+     * its instance's entry in the list is current, as one without a life does.
+     */
+    private val statusKey: (suspend (instance: String) -> L1Read)? = null,
 ) : ShadowReportSink, ShadowReportReader {
     /** For each instance this object writes for: the list as it was read when its entry was current, and until when. */
     private val listed = ConcurrentHashMap<String, Listed>()
@@ -242,21 +249,26 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
     override suspend fun statuses(): List<InstanceStatus> = readStatuses(lenient = false).statuses
 
     /**
-     * Every listed status that reads and is recent, and the instances whose status does not decode (`CTL-73`). An
-     * undecodable status has no `at` anyone can read, so what ends it is the store: every status is written with the
-     * key's life, [ShadowCacheSpecs.STATUS_TTL] (two minutes, renewed by each write), and once an instance stops writing
-     * its value expires, readable or not, and the listed instance reads as having none. A value with no life (written
-     * by hand, never by CoSec) counts only while its instance's entry in the list is current
-     * ([ShadowCacheSpecs.INDEX_EXPIRY]), which a gone instance no longer refreshes. Each such status is logged with
-     * why, at most once a minute per instance. A status under another instance's key is the store's data being wrong,
-     * not a version the reader does not know, and fails the call as [statuses] does; so does a store that does not
-     * answer.
+     * Every listed status that reads and is recent, and the instances whose status does not decode, among those written
+     * as recently (`CTL-73`). An undecodable status has no `at` anyone can read, so its key says when it was written:
+     * every status is written with the key's exact life, [ShadowCacheSpecs.STATUS_TTL] (an hour, renewed by each write,
+     * no jitter), so a key with less than that life minus a minute left was last written more than a minute ago, and
+     * its instance is not live, as a decodable status of that age is not. The age comes from the store's clock, not
+     * this reader's. A value with no life (written by hand, never by CoSec), or a store built without [statusKey],
+     * counts only while its instance's entry in the list is current ([ShadowCacheSpecs.INDEX_EXPIRY]), which a gone
+     * instance no longer refreshes. Each counted status is logged with why, at most once a minute per instance. A
+     * status under another instance's key is the store's data being wrong, not a version the reader does not know, and
+     * fails the call as [statuses] does; so does a store that does not answer.
      */
     override suspend fun statusReadings(): StatusReadings = readStatuses(lenient = true)
 
-    private suspend fun readStatuses(lenient: Boolean): StatusReadings {
+    /** Every listed status that reads and was written within [ShadowReportReader.READERS_TTL], and those that do not decode. */
+    override suspend fun readerReadings(): StatusReadings =
+        readStatuses(lenient = true, within = ShadowReportReader.READERS_TTL)
+
+    private suspend fun readStatuses(lenient: Boolean, within: Duration = ShadowReportReader.STATUS_TTL): StatusReadings {
         val now = clock.instant()
-        val since = now.minus(ShadowReportReader.STATUS_TTL)
+        val since = now.minus(within)
         val index = read(instances, ShadowCacheSpecs.INDEX_KEY)?.first.orEmpty()
         val members = index.keys
         check(members.all(ShadowReport::isInstanceId)) { "The list of instances names an invalid instance id" }
@@ -266,17 +278,22 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
             }
         }
         val statuses = found.mapNotNull { (_, read) -> (read as? StatusRead.Read)?.status }
-        return StatusReadings(
-            statuses.filter { !it.at.isBefore(since) },
-            found.filter { (instance, read) -> read is StatusRead.Unreadable && current(index[instance], now) }
-                .mapTo(HashSet()) { it.first },
-        )
+        val unreadable = HashSet<String>()
+        for ((instance, read) in found) {
+            if (read !is StatusRead.Unreadable) continue
+            val written = statusKey?.let { key -> writtenWithin(key(instance), within) }
+            if (written ?: current(index[instance], now)) {
+                warnUnreadable(instance, read.error)
+                unreadable += instance
+            }
+        }
+        return StatusReadings(statuses.filter { !it.at.isBefore(since) }, unreadable)
     }
 
     private sealed interface StatusRead {
         class Read(val status: InstanceStatus) : StatusRead
 
-        data object Unreadable : StatusRead
+        class Unreadable(val error: SnapshotFormatException) : StatusRead
     }
 
     /**
@@ -288,8 +305,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
             read(statuses, instance, "The status of instance [$instance]")?.first
         } catch (e: SnapshotFormatException) {
             if (!lenient) throw e
-            warnUnreadable(instance, e)
-            return StatusRead.Unreadable
+            return StatusRead.Unreadable(e)
         } ?: return null
         check(status.instance == instance) { "The status under [$instance] is ${status.instance}'s" }
         if (warned.isNotEmpty()) warned.remove(instance)
@@ -313,7 +329,8 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
         if (!claimed) return
         log.warn {
             "The status of instance [$instance] does not read: it counts as live and acknowledging no shadow window " +
-                "until it reads or expires, at most two minutes after its last write (${error.message})."
+                "until it reads, or until a minute after its last write, which its key's remaining life tells " +
+                "(${error.message})."
         }
     }
 
@@ -346,14 +363,31 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
             factory: CoCacheFactory,
             keyPrefix: String = DEFAULT_KEY_PREFIX,
             clock: Clock = Clock.systemUTC()
-        ): CoCacheShadowReports =
-            CoCacheShadowReports(
+        ): CoCacheShadowReports {
+            val statuses = ShadowCacheSpecs.statuses(keyPrefix)
+            val statusStore = factory.createLocked(statuses)
+            // The keyspace the store was created in, after every layer: where its keys and their lives are.
+            val admin = checkNotNull(
+                factory.runtime.admin(statuses.name)
+            ) { "The status store ${statuses.name} was not created." }
+            val keys = factory.runtime.backend.let { it.readOnlyStore(admin.keyspace) ?: it.store(admin.keyspace) }
+            return CoCacheShadowReports(
                 factory.createLocked(ShadowCacheSpecs.reports(keyPrefix)),
                 factory.createLocked(ShadowCacheSpecs.reporters(keyPrefix)),
-                factory.createLocked(ShadowCacheSpecs.statuses(keyPrefix)),
+                statusStore,
                 factory.createLocked(ShadowCacheSpecs.instances(keyPrefix)),
                 factory.createLocked(ShadowCacheSpecs.residents(keyPrefix)),
-                clock
-            )
+                clock,
+            ) { instance -> keys.read(admin.keyspace.storageKey(instance), null, null, null) }
+        }
     }
+}
+
+/**
+ * Whether a status key, as [read] answers it, was last written within [within], from the life it has left (`CTL-73`):
+ * false when it is gone; null when that cannot be told (a key with no life).
+ */
+private fun writtenWithin(read: L1Read, within: Duration): Boolean? = when (read) {
+    is L1Read.Hit -> read.ttl?.let { left -> left >= ShadowCacheSpecs.STATUS_TTL.minus(within) }
+    is L1Read.Miss, is L1Read.Leased -> false
 }

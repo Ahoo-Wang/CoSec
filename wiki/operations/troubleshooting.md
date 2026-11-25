@@ -230,6 +230,7 @@ No decision could be made, so the request was refused: CoSec fails closed. The a
 | `INDETERMINATE: RateLimiterUnavailable` / `rate_limiter` | A rule with `strictFailure: true` could not be counted (`Rate limiter unavailable: rule [<id>] refuses the request.` at `ERROR`). With `CROSSSLOT` in that line, on every permitted request of a Redis Cluster, see [`too-many-requests`](#too-many-requests). | Restore Redis, or drop `strictFailure`. |
 | `INDETERMINATE: RequiredListenerFailed` / `required_listener` | A `REQUIRED` decision listener failed or timed out on a permit (`REQUIRED decision listener [<name>] failed on request [<id>].`), or a permit came through a break-glass binding with no `REQUIRED` listener (`Request [<id>] permitted through break-glass, but no REQUIRED listener is registered.`). | Fix the listener's store, or register a `REQUIRED` listener before using break-glass ([Decision listeners](./observability.md#decision-listeners)). |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator` | The authenticator failed or took longer than the authentication timeout (20 % of `cosec.pipeline.timeout`): for example the Redis API key store is unreachable. | Restore the store. |
+| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for the tokens of one issuer, which also makes its served refresh and logout `503` | The issuer runs a later version of CoSec, whose tokens mark a header parameter critical in their JWS `crit` header, which this version does not understand (`TokenNotUnderstoodException`, `IDN-47`): it refuses such a token rather than read it without. The served routes log `The <route> route was given a token whose crit header names what this version does not understand`. A `401` `token-invalid` instead means the `crit` is malformed. | Upgrade this instance to the issuer's version: the same tokens then pass, and no client signs in again. |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request of one authenticator | An `Authenticator` of your own names its credential's method `jwt`, which is reserved for CoSec's token (`The authentication method [jwt] is CoSec's own token's ...`). | Name the method after your credential, such as `Identity.Method("ldap")` ([Extending](../architecture/extending.md#authenticators)). |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for the requests of some principals or keys | The authenticator gave a principal whose id, tenant, credential id or claimed roles hold an unpaired UTF-16 surrogate (`Principal [<id>] of tenant [<tenant>] holds an id with an unpaired UTF-16 surrogate ...`), or an API key's stored record names one (`API key [<id>] holds an id with an unpaired UTF-16 surrogate.`, `IDN-10`). Such an id would share a Redis key with another, so the request fails closed instead. Or the principal's id is blank (`A principal id is not blank.`, or `API key [<id>] has a blank principal.`, `IDN-38`): a blank id is no one. | Fix the authenticator, or the key's record: an id is Unicode text, and names someone. An authenticator answers `Rejected` for a credential that names no one. |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request with one key | The key is stored in another format, which is refused when read (`API key format [null] is not 3.`; `null` means the record has no `format`, as a key written by 7.x; `2` means an 8.0 pre-release wrote it). | A 7.x key: convert the keys ([API keys narrow, and memberships decide](./upgrading.md#api-keys-narrow-and-memberships-decide)). A pre-release key: issue a new key and delete the old one; `cosec-migrate api-keys` refuses to count it converted. |
@@ -390,6 +391,24 @@ document at an older revision. The causes, in the order to check them:
   format in `<why>` is an instance on a newer version than the control host (upgrade the control plane); anything else
   is a corrupt value: restart or stop that instance, whose next write replaces it.
 
+## A record a later version wrote {#a-record-a-later-version-wrote}
+
+During a rolling upgrade, an instance logs at `WARN`, at most once a minute, `The session store could not <operation>: a
+later CoSec wrote the session record (members [<path>] in its crit) ...`, and `cosec.stored.refused{reason="later"}`
+rises. A newer instance wrote a record with a member this older one does not know and must not ignore (`SNP-27`): it
+refuses that one record, answers the refresh, logout or switch that read it `503`, and keeps the session, never
+rewriting it. A control-plane instance logs `Control API <method> <path> (request <id>) is 503: a later CoSec wrote a
+stored record (the <record> record), members [<path>] in its crit ...` instead: the call that read a change, a staging
+slot, a revision index, the app list or a shadow window's record is answered `503` without detail, and the record is
+never rewritten. Nothing is wrong with the store. Upgrade the instance; an upgraded one reads the record. Outside a
+rolling upgrade, the instance is older than the records it meets: a rollback after the newer version wrote them, an
+instance scaled out from an older image, or one cut off from Redis for longer than its status lives. None of these is
+supported, and each refuses rather than permits until it runs the newer version again
+([What is not supported](./upgrading.md#what-is-not-supported)); `GET /instances` names the release each instance runs
+([The readers of the store](../policies/testing.md#instances)). If
+`cosec.stored.refused{reason="malformed"}` rises instead, a record is not one of its kind: look at the store and at
+whatever writes to it besides CoSec ([Storage](./storage.md#record-formats)).
+
 ## A service behind the gateway refuses requests
 
 A service in [`cosec.pipeline.mode=gateway`](./configuration.md#pipeline) reads the caller from the `CoSec-Identity`
@@ -398,9 +417,11 @@ read as anonymous:
 
 | Status | Cause | Fix |
 |---|---|---|
-| `400` `invalid-request` | The header is not base64url JSON of format v1, has an unknown or missing member, names an id with an unpaired UTF-16 surrogate (`IDN-10`), a blank `sub`, `tenant` or `rid` (`IDN-38`) or a tenant that cannot be a tenant id, such as one with `/` (`SCP-13`), is larger than [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline), arrived more than once, or names a scope that does not resolve on this service. | Something other than the CoSec gateway sets the header, or the gateway's `cosec.gateway.identity.max-size` is larger than the service's limit. |
+| `400` `invalid-request` | The header is not base64url JSON of format v1, has a missing member or a malformed `crit`, names an id with an unpaired UTF-16 surrogate (`IDN-10`), a blank `sub`, `tenant` or `rid` (`IDN-38`) or a tenant that cannot be a tenant id, such as one with `/` (`SCP-13`), is larger than [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline), arrived more than once, or names a scope that does not resolve on this service. | Something other than the CoSec gateway sets the header, or the gateway's `cosec.gateway.identity.max-size` is larger than the service's limit. |
 | `401` `token-invalid` | A version this service does not read, no `auth.exp`, or an identity issued later than now plus [`cosec.authentication.revocation.skew`](./configuration.md#authentication). | Upgrade the service with the gateway; synchronize the clocks. |
+| `503` `unavailable` | A member the header's `crit` names that this service does not know (`IDN-41`): a gateway or service of a later CoSec version wrote it, and this service is older than it counted on. The log line names the member; `cosec.identity.refused{problem=unavailable}` counts it, apart from any store outage. | Upgrade the service. |
 | `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. In a test without a gateway, a header made once and reused: make one per request ([`IdentityHeader`](../integration/web.md#services-behind-the-gateway)). |
+| `431`, or `400` without CoSec's problem body | The web server refused the request before CoSec read it: its headers together exceed the server's request-header limit (Reactor Netty and Jetty answer `431`, Tomcat `400`). On a host that reads the identity the starter derives that limit (16 KB at the defaults, `IDN-43`) unless `server.max-http-request-header-size` is set. The startup line says which limit is in effect and why: `… derived from …`, the request's headers really are over it; `… below … as the operator set it`, your value is too small; `… not derived …`, something other than CoSec set or created the web server's properties before CoSec could change them: look for an application bean or customizer that writes `ServerProperties`. In 8.0.0-beta.9, a host whose own environment post-processor set `cosec.pipeline.mode` after CoSec's (an unordered one, for instance) kept Spring Boot's 8 KB, while the startup line still said `derived`. | Unset `server.max-http-request-header-size` to have it derived, or raise it to at least the derived value; for `not derived`, set it explicitly. |
 
 The response says only the problem, never why, in every environment. The reason is in the service's log, from the
 logger `me.ahoo.cosec.runtime.identity.IdentityGate`:
@@ -511,6 +532,11 @@ answers `503` while no platform document is installed and `401` to an anonymous 
 permits the path. Liveness is not touched in Spring's state, but an HTTP liveness probe is a request, so it fails with the
 rest, and the kubelet restarts the pod.
 
+This is a host whose pipeline decides (`enforce` with `caller: credential`, the default). A WebFlux host whose gate is the
+forwarded identity (`gateway` mode, or `caller: forwarded-identity`, as the control-plane image) decides nothing for a
+request without `CoSec-Identity`: its probes answer as Spring's own, and HTTP probes work there, on the management port
+too ([Actuator on an application](../integration/web.md#actuator-on-an-application)).
+
 - **Readiness over HTTP:** permit `GET` on the two probe paths for anyone, with one statement
   ([the policy](../integration/web.md#actuator-on-an-application)). Before the first publish it still answers `503`, the
   right answer for "not ready". Spring Boot 4 serves the probes on every platform (`management.endpoint.health.probes.enabled`
@@ -544,6 +570,25 @@ rest, and the kubelet restarts the pod.
   into whole segments (`*` or `{name}` alone in a segment costs nothing), keep the text of a glob segment short, or
   fold several statements' patterns into fewer; a segment after a leading `**` counts twice. On the data
   plane a stored document over a bound is installed as failed, and the requests that read it answer `503`.
+
+## A pattern does not compile after an upgrade {#a-pattern-does-not-compile-after-an-upgrade}
+
+- `` '<c>' is reserved for a future pattern syntax; write \<c> for the character ``: a pattern holds one of
+  `[ ] ( ) | ! ^ $ \` unescaped (`DOC-15`), which an earlier preview read as text. Write it escaped, `\$` for `$`, a
+  backslash doubled in JSON ([Policy language](../policies/language.md#reserved-characters)). The message gives the
+  position. From 8.0.0-beta.9 on, a stored document with one is installed as failed, and the requests that read it answer
+  `503`: find such documents before upgrading with [`cosec-migrate check-patterns`](./upgrading.md#check-the-patterns-before-an-upgrade) ([Upgrading from 8.0.0-beta.8](./upgrading-previews.md#from-8-0-0-beta-8)).
+- `` \<c> escapes nothing ``: a backslash before a character that is not one of `[ ] ( ) | ! ^ $ \ * ? { }`.
+- `` a request path holds no backslash ``, `` hold no ';' ``, `` holds no control character ``, `` holds no dot segment ``,
+  or `` more than the 256 a request path's segment holds ``: the pattern matches no path the pipeline lets through
+  (`PIP-5`, `PIP-14`, `PIP-30`), so a DENY written so would deny nothing. Name the path as the pipeline sees it.
+- A route map that does not load with one of these messages: its path, action or resource template holds the
+  character; the same rule applies.
+- **No error, but a DENY stopped denying, or an ALLOW started granting, after the upgrade from 8.0.0-beta.8:** a pattern
+  stored before it holds a backslash, which beta.8 read as a character and this version reads as an escape
+  (`DOC-15`). A DENY on `doc/a\(b` denied the id `a\(b` and now denies `a(b`; an ALLOW on `http:path:/files/\$x`
+  matched nothing and now grants `/files/$x`. `cosec-migrate check-patterns` names each such pattern and the form that
+  keeps its meaning (the backslash escaped, `doc/a\\\(b`); publish it.
 
 ## A compilation does not end {#a-compilation-does-not-end}
 
@@ -584,10 +629,11 @@ The control plane logs `Shadow window <w> of change <c> is waiting for the ackno
 `GET /changes/{id}` names them in `shadow.waitingFor`: the window has its samples, or not yet, but cannot pass while a
 live instance (one with a status in the last minute) does not list it in its status (`CTL-10`). An instance cut off
 from Redis for longer than that writes no status: it is neither waited for nor acknowledging, and installs the
-published revision having compared nothing. A host with shadowing off writes no status at all.
+published revision having compared nothing. A host with shadowing off writes a status that says it does not shadow
+(`shadows: false`, `SNP-25`), and is not waited for.
 
 - **An instance of an older version** sends no acknowledgements. Finish the rolling upgrade: once the old instances are
-  gone, their statuses expire within two minutes and the window no longer waits for them.
+  gone, their statuses are a minute old within a minute, and the window no longer waits for them.
 - **An instance that cannot read the staged list** logs `The staged list cannot be read since it was at <instant>` and
   its `cosec.shadow.staged.age` rises. Fix its Redis access (the data-plane user reads `<s>:candidate-staged:all`,
   [Storage](./storage.md#redis-keys)).
@@ -595,11 +641,12 @@ published revision having compared nothing. A host with shadowing off writes no 
   the candidate.
 - **An instance whose status does not decode** counts as live and acknowledging nothing (`CTL-73`): the control host
   logs `The status of instance [<instance>] does not read: it counts as live and acknowledging no shadow window until
-  it reads or expires, at most two minutes after its last write (<why>).` at `WARN`, at most once a minute per
-  instance, and `cosec.control.shadow.status.unreadable` counts each read of it. An instance that stops writing
-  stops holding the windows two minutes later, when its status expires. A later format in `<why>` is a newer version during a rolling
-  upgrade: finish the upgrade of the control hosts, or roll that instance back. Anything else is a corrupt value or a
-  crash-looping instance: stop or fix the instance by its id; its status expires two minutes after its last write.
+  it reads, or until a minute after its last write, which its key's remaining life tells (<why>).` at `WARN`, at most
+  once a minute per instance, and `cosec.control.shadow.status.unreadable` counts each read of it. Like any instance,
+  one that stops writing stops holding the windows a minute later: the life its status key has left says when it was
+  written. A later format in `<why>` is a newer version during a rolling upgrade: finish the upgrade of the control
+  hosts, or roll that instance back. Anything else is a corrupt value or a crash-looping instance: stop or fix the
+  instance by its id.
 
 If **no** instance acknowledges any window (each one's `waitingFor` names every live instance), the instances hold no
 staged list: they log `The staged list cannot be read`, or `<s>:candidate-staged:all` has no `.kept` marker (a store
@@ -607,8 +654,8 @@ the control plane staged nothing on since it was emptied; the next stage, or the
 they acknowledge within a few report intervals.
 
 Only instances that take part in shadowing are waited for. A host with `cosec.authorization.shadow.enabled=false` (the
-control-plane image sets it) writes no status at all, and one whose `CandidateSource` is your own writes a status that
-says it does not shadow: neither holds a window, and `propagation` still counts the latter.
+control-plane image sets it), and one whose `CandidateSource` is your own, write a status that says it does not shadow:
+neither holds a window, and `propagation` counts both (`SNP-25`).
 
 If `waitingFor` is empty and the window still does not close, it waits for samples: its documents get too little
 traffic, and it closes *insufficient* at `cosec.control.shadow.max-duration`
@@ -740,6 +787,17 @@ An application has one `ControlService`: the in-process one where it runs the co
 host. To embed the control plane, remove `cosec.control.service-url`. To call the host, set `cosec.control.enabled=false`
 (or leave `cosec-control` out). `cosec.control.service-url needs cosec-control-http` means the host is named and the
 module that calls it is missing: add `me.ahoo.cosec:cosec-control-http`.
+
+### Startup fails on the identity header limit {#startup-fails-on-the-identity-header-limit}
+
+```text
+cosec.pipeline.identity.max-size is 4096 bytes, below the 6144 bytes HttpControlService relays this host's callers within: it would relay identity headers larger than its own gate admits (IDN-43). Set cosec.pipeline.identity.max-size to at least 6144 bytes.
+```
+
+A host that reads the identity (`gateway` mode, or `cosec.pipeline.caller=forwarded-identity`) and calls a control-plane
+host (`HttpControlService`) relays each caller's identity in at most 6 KB, the writer's limit (`IDN-43`). With its own
+reader's limit, `cosec.pipeline.identity.max-size`, set below that, it would relay headers its own gate refuses. Raise
+it to at least 6 KB, or unset it: every 8.x service reads 8 KB by default.
 
 ### A control call over HTTP fails on its client or its answer {#a-control-call-over-http-fails-on-its-client-or-its-answer}
 
@@ -1318,11 +1376,20 @@ for a check, `412` for an `ifMatch` that does not hold).
 - **An approval no longer counts at publish**: the change is `AWAITING_APPROVAL` again, its `APPROVAL` finding saying
   `the token the approver approved with is revoked`, `the approver's tokens are revoked`, `the approver no longer
   holds cosec:approve on the document`, `only a platform principal approves a boundary change`, `under four-eyes, only
-  a platform principal approves a platform principal's change`, or `the approval does not say what credential its
+  a platform principal approves a platform principal's change`, `the approval does not say its approver was a person:
+  approve the change again` (an approval recorded before 8.0.0-beta.9, or by a control host still on it, records no
+  kind, `APR-9`), or `the approval does not say what credential its
   approver approved with` (an approval from before the upgrade, from an older instance, or by a credential without an
   id). Ask for a new approval. A `403` on `:approve` with `a workload's credential (an API key, a service) cannot approve` in the log: the approver
   authenticated with an API key or stated a service's own identity (`IDN-34`); approve with a person's token; with `an approval names the approver's credential, and this one names none`: approve with a
   credential that has an id, such as CoSec's token.
+- **A person is refused with `a workload's credential (an API key, a service) cannot approve`, or a break-glass binding
+  does not reach them, after an upgrade from an earlier 8.0 preview**: their session began before CoSec's tokens said
+  whose they are, so their access token has no `cosec.kind` claim, which CoSec's verifier reads as a workload's, and a
+  refresh keeps it (`IDN-46`). A session refreshed or switched on an issuer replica still on 8.0.0-beta.8, during a
+  rolling upgrade of the issuer or after a rollback of it, loses its claim the same way. Have them sign in again on an
+  upgraded issuer: the new session's token says `person`. A login of your own that declares `Kind.WORKLOAD` for a
+  person's sign-in shows the same, for every new session.
 - **A service's change waits for a person although it states a platform administrator**: the change came through
   `ControlService` or the control-plane host's service port, where no one is the trust root (`CTL-81`), so it is
   analyzed: `NOT_ANALYZED` on an app's catalog, `CROSS_TENANT` on a grant in a tenant's document. Have a person approve

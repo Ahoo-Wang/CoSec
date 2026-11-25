@@ -1,0 +1,17 @@
+# Rule: IDN-45
+# Mutant: the session a subject is issued in declares it a person's whatever it was, so a machine's login is a person's from its first refresh
+# Tests: :login:test --tests me.ahoo.cosec.login.token.TokenSubjectTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenSubject.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenSubject.kt
+index 202ab5ae6..239f5e5d1 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenSubject.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenSubject.kt
+@@ -65,7 +65,7 @@ class TokenSubject(
+     /** This subject in [issue]'s session, bounded by its end. */
+     fun inSession(issue: TokenFamilies.Issue): TokenSubject = TokenSubject(
+         id = id,
+-        kind = kind,
++        kind = Identity.Credential.Kind.PERSON,
+         tenant = tenant,
+         app = app,
+         roles = roles,

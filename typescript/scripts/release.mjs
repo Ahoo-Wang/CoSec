@@ -59,11 +59,12 @@ export function distTag(version) {
     }
     return 'latest';
   }
-  if (/^alpha\./i.test(prerelease)) return 'alpha';
-  if (/^beta\./i.test(prerelease)) return 'beta';
-  if (/^rc/i.test(prerelease)) return 'rc';
+  // Lowercase only: semver orders pre-release identifiers in ASCII, so `RC1` would sort below `beta.9`.
+  if (/^alpha\.\d+$/.test(prerelease)) return 'alpha';
+  if (/^beta\.\d+$/.test(prerelease)) return 'beta';
+  if (/^rc\.\d+$/.test(prerelease)) return 'rc';
   throw new Error(
-    `${version}: no dist-tag is defined for pre-release "${prerelease}"`,
+    `${version}: no dist-tag is defined for pre-release "${prerelease}" (lowercase alpha.n, beta.n or rc.n)`,
   );
 }
 

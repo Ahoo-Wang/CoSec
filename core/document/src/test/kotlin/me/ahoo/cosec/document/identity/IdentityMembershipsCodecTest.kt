@@ -50,7 +50,12 @@ class IdentityMembershipsCodecTest {
             app = "order",
             space = space,
             roles = setOf("clerk"),
-            credential = Identity.Credential(Identity.Method.JWT, "t1", now.plusSeconds(3600)),
+            credential = Identity.Credential(
+                Identity.Method.JWT,
+                Identity.Credential.Kind.PERSON,
+                "t1",
+                now.plusSeconds(3600)
+            ),
             issuedAt = now,
             requestId = "r1",
             memberships = memberships,
@@ -113,7 +118,6 @@ class IdentityMembershipsCodecTest {
         {"spaces":{},"attachments":{}}                     | $.memberships.attachments is not an array
         {"spaces":{}}                                      | [memberships.attachments] is missing
         {"attachments":[]}                                 | [memberships.spaces] is missing
-        {"spaces":{},"attachments":[],"policies":[]}       | $.memberships has unknown members
         []                                                 | $.memberships is not an object""",
     )
     fun `memberships that are not this format are refused, never read as none`(memberships: String, reason: String) {

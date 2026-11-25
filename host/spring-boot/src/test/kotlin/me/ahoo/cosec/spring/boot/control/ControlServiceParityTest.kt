@@ -15,6 +15,10 @@
 
 package me.ahoo.cosec.spring.boot.control
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
@@ -23,6 +27,9 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.SecurityScope
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.http.HttpControlService
 import me.ahoo.cosec.control.local.LocalControlService
 import me.ahoo.cosec.control.sdk.ChangeState
@@ -32,6 +39,7 @@ import me.ahoo.cosec.control.sdk.ControlService
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
@@ -42,6 +50,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -57,6 +66,8 @@ import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
 import me.ahoo.cosec.testkit.PermittedRequest
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.config.BeanPostProcessor
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
 import org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration
@@ -107,6 +118,8 @@ class ControlServiceParityTest {
             ),
         )
         .withPropertyValues(
+            // The service port binds the application's address: the loopback one, where the requests go (#1962).
+            "server.address=127.0.0.1",
             "cosec.key-prefix=parity-${UUID.randomUUID()}",
             "cosec.ip2region.enabled=false",
             "cosec.authorization.snapshot.eviction-check=warn",
@@ -264,8 +277,11 @@ class ControlServiceParityTest {
         }
     }
 
-    /** A request alice of [tenant] makes as an administrator, behind a gateway that forwarded her: a context CoSec made. */
-    private fun alice(tenant: String): ControlCaller {
+    /**
+     * A request alice of [tenant] makes as an administrator, behind a gateway that forwarded her: a context CoSec made.
+     * Her header states [memberships] as a CoSec gateway's does, empty by default; null is a header without the member.
+     */
+    private fun alice(tenant: String, memberships: Identity.Memberships? = Identity.Memberships.NONE): ControlCaller {
         val now = Instant.now()
         val forwarded = Identity(
             tenant = tenant,
@@ -273,9 +289,15 @@ class ControlServiceParityTest {
             app = "cosec-control",
             space = "",
             roles = setOf("admin"),
-            credential = Identity.Credential(Identity.Method.JWT, "token-$tenant", now.plusSeconds(300)),
+            credential = Identity.Credential(
+                Identity.Method.JWT,
+                PERSON,
+                "token-$tenant",
+                now.plusSeconds(300)
+            ),
             issuedAt = now,
             requestId = "r-$tenant",
+            memberships = memberships,
         )
         return ControlCaller.of(PermittedRequest.withIdentity(IdentityHeader.write(forwarded)))
     }
@@ -340,6 +362,7 @@ class ControlServiceParityTest {
             subject,
             tenant,
             "cosec-control",
+            PERSON,
             setOf("admin"),
             attributes = attributes,
             issuedAt = now,
@@ -388,6 +411,40 @@ class ControlServiceParityTest {
                 runBlocking { http.document(ended(REMOTE), SnapshotKey.Tenant(REMOTE)) }
             }
             refused.detail.assert().isNull()
+        }
+    }
+
+    /**
+     * `IDN-42`, `IDN-39`: a caller whose header was forwarded without `memberships` is refused alike, as malformed. Over
+     * HTTP the relay states no memberships it was not forwarded, and the host refuses the header; in process the facade
+     * refuses the request itself. Before, the relay wrote empty memberships, and both decided without the caller's
+     * attachments and other spaces.
+     */
+    @Test
+    fun `a caller forwarded without memberships is refused alike through both implementations - IDN-42`() {
+        runner.run { context ->
+            context.startupFailure.assert().isNull()
+            publish(context, SnapshotKey.Platform, DocumentKind.PLATFORM, "", PLATFORM)
+            listOf(LOCAL, REMOTE).forEach { publish(context, SnapshotKey.Tenant(it), DocumentKind.TENANT, it, TENANT) }
+            val local = context.getBean(ControlService::class.java)
+            val port = context.getBean(ControlServiceListener::class.java).boundPort
+            val http = HttpControlService(URI("http://127.0.0.1:$port/cosec/control/v1"))
+            fun script(service: ControlService, tenant: String): List<String> = runBlocking {
+                listOf(
+                    answer { service.document(alice(tenant), SnapshotKey.Tenant(tenant)) },
+                    answer { service.document(alice(tenant, memberships = null), SnapshotKey.Tenant(tenant)) },
+                )
+            }
+            val deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos()
+            while (!script(http, REMOTE)[0].startsWith("200")) {
+                check(System.nanoTime() < deadline) { "The platform document was not installed" }
+                Thread.sleep(20)
+            }
+
+            val inProcess = script(local, LOCAL)
+
+            script(http, REMOTE).assert().isEqualTo(inProcess)
+            inProcess[1].assert().startsWith("400 INVALID_REQUEST")
         }
     }
 
@@ -448,7 +505,12 @@ class ControlServiceParityTest {
             app = "cosec-control",
             space = space,
             roles = setOf("admin"),
-            credential = Identity.Credential(Identity.Method.JWT, "token-$subject-$tenant", now.plusSeconds(300)),
+            credential = Identity.Credential(
+                Identity.Method.JWT,
+                PERSON,
+                "token-$subject-$tenant",
+                now.plusSeconds(300)
+            ),
             issuedAt = now,
             requestId = "r-$subject-$tenant",
             memberships = memberships,
@@ -496,6 +558,80 @@ class ControlServiceParityTest {
             inProcess[0].assert().startsWith("403")
             inProcess[1].assert().startsWith("403")
             inProcess[2].assert().startsWith("200")
+        }
+    }
+
+    /**
+     * `SNP-27`: a change record a later version wrote, one whose `crit` names a member this version does not know, is a
+     * `503` without detail through both implementations, and both tell it as a record a later version wrote. The facade
+     * in process goes through the same `ControlHttp` of the service profile, so it maps the refusal as the HTTP host does.
+     * The starter's store answers such a record's read with what the codec throws for it ([LaterChanges]).
+     */
+    @Test
+    fun `a record a later version wrote is a 503 alike through both implementations - CTL-77`() {
+        runner.withBean(LaterChanges::class.java, ::LaterChanges).run { context ->
+            context.startupFailure.assert().isNull()
+            publish(context, SnapshotKey.Platform, DocumentKind.PLATFORM, "", PLATFORM)
+            listOf(LOCAL, REMOTE).forEach { publish(context, SnapshotKey.Tenant(it), DocumentKind.TENANT, it, TENANT) }
+            val local = context.getBean(ControlService::class.java)
+            val port = context.getBean(ControlServiceListener::class.java).boundPort
+            val http = HttpControlService(URI("http://127.0.0.1:$port/cosec/control/v1"))
+            fun read(service: ControlService, tenant: String): String = runBlocking {
+                answer { service.change(alice(tenant), "${LaterChanges.PREFIX}$tenant") }
+            }
+            val deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos()
+            fun installed() = runBlocking { answer { http.document(alice(REMOTE), SnapshotKey.Tenant(REMOTE)) } }
+            while (!installed().startsWith("200")) {
+                check(System.nanoTime() < deadline) { "The platform document was not installed" }
+                Thread.sleep(20)
+            }
+            val logger = LoggerFactory.getLogger("me.ahoo.cosec.control") as Logger
+            val level = logger.level
+            val logged = ListAppender<ILoggingEvent>().also { it.start() }
+            logger.addAppender(logged)
+            logger.level = Level.DEBUG
+            val (inProcess, overHttp) = try {
+                read(local, LOCAL) to read(http, REMOTE)
+            } finally {
+                logger.level = level
+                logger.detachAppender(logged)
+            }
+
+            overHttp.assert().isEqualTo(inProcess)
+            inProcess.assert().startsWith("503 UNAVAILABLE")
+            // Refused as a record a later version wrote, through both, not as a store that is broken.
+            synchronized(logged) { logged.list.map { it.formattedMessage } }
+                .filter { "(the change record), members [device]" in it }.assert().hasSize(2)
+            val refused = org.junit.jupiter.api.assertThrows<ControlRefusedException> {
+                runBlocking { http.change(alice(REMOTE), "${LaterChanges.PREFIX}$REMOTE") }
+            }
+            refused.detail.assert().isNull()
+        }
+    }
+
+    /**
+     * The starter's control store, except that a change named [PREFIX]`<tenant>` is a record a later version wrote: its
+     * read throws what [ChangeRequestCodec] throws for it, as the store's own read of those bytes does.
+     */
+    private class LaterChanges : BeanPostProcessor {
+        override fun postProcessAfterInitialization(bean: Any, beanName: String): Any =
+            if (bean is ControlStore) later(bean) else bean
+
+        private fun later(store: ControlStore): ControlStore = object : ControlStore by store {
+            override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? {
+                val tenant = id.value.removePrefix(PREFIX).takeIf { it != id.value } ?: return store.change(id)
+                val record = """{"format":1,"id":"${id.value}","key":"tenant:$tenant","base":{"revision":0},""" +
+                    """"operations":[],"author":{"tenant":"$tenant","principal":"alice"},"note":"later",""" +
+                    """"kind":"PUBLISH","state":"DRAFT","findings":[],"checkedWith":{},""" +
+                    """"createdAt":"2026-11-01T00:00:00Z","updatedAt":"2026-11-01T00:00:00Z",""" +
+                    """"device":"d1","crit":["device"]}"""
+                ChangeRequestCodec.decode(record.encodeToByteArray())
+                error("A record a later version wrote was read.")
+            }
+        }
+
+        companion object {
+            const val PREFIX = "later-"
         }
     }
 

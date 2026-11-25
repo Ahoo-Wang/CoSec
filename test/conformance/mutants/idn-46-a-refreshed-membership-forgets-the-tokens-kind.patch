@@ -1,0 +1,17 @@
+# Rule: IDN-46
+# Mutant: a refresh whose hook answers the memberships issues a person's token, so a workload's session becomes a person's at its first refresh
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.TokenKindJwtTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
+index 05421718a..b950a749a 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
+@@ -59,7 +59,7 @@ class RefreshTokenAuthentication<C : RefreshTokenCredentials>(
+     private fun current(token: VerifiedToken, now: TenantMembership) = TokenSubject(
+         id = token.principal,
+         // The presented token's kind: the refresh's hook answers memberships, never whose the token is (IDN-46).
+-        kind = token.kind,
++        kind = me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON,
+         app = token.app,
+         tenant = token.tenant,
+         roles = now.roles,

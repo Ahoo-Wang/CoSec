@@ -1,6 +1,6 @@
 ---
 title: "Upgrading"
-description: "How to upgrade a running 8.0 deployment, in what order and what is not promised, and how to upgrade a CoSec 7.x deployment to 8.0: what changes, and how to migrate the data, the code, the configuration and the clients."
+description: "What is promised when two 8.x versions run mixed, how to upgrade and roll back a running deployment in what order, what is not supported, and how to upgrade a CoSec 7.x deployment to 8.0: what changes, and how to migrate the data, the code, the configuration and the clients."
 ---
 
 # Upgrading
@@ -16,48 +16,115 @@ A deployment that already runs an 8.0 preview (an `8.0.0-alpha` or `8.0.0-beta`)
 
 ## Upgrading a running deployment {#upgrading-a-running-deployment}
 
-For an operator moving a running 8.0 deployment (a gateway, services behind it, a control plane and Redis) to another
-version. This section says what the code does when two versions meet, and so in what order to upgrade and roll back. It
-promises no more than that: what it does not promise is listed at the end. A move from 7.x is the next section.
+For an operator moving a running 8.x deployment (a gateway, services behind it, a control plane and Redis) to another
+version. This section says what is promised when two versions run side by side, how CoSec keeps that promise, in what
+order to upgrade and roll back, what is not supported and what happens then, and how to see a mixed deployment. A move
+from 7.x is the next section.
 
-Four things cross a process boundary, and each is read strictly:
+### What is promised {#what-is-promised}
 
-| What crosses | Who writes, who reads | What an instance that does not know the content does |
+From 8.0.0 GA, two adjacent minor versions of 8.x (8.n and 8.n+1) run mixed, whichever you upgrade first:
+
+- a request that both versions, each run alone, admit is not refused while they run mixed;
+- a request that both refuse is not permitted while they run mixed;
+- a rollback of one minor version is supported, with the exceptions under [What is not supported](#what-is-not-supported).
+
+Two versions further apart (8.n with 8.n+2) are not promised: finish one upgrade before you start the next. The 8.0
+previews (the alphas, betas and release candidates of 8.0.0) promise nothing to each other: each preview's order of upgrade is in
+[Upgrading between 8.0 previews](./upgrading-previews.md). A preview before 8.0.0-beta.9 refuses every identity
+member it does not know with `400` `invalid-request`, so a service of such a preview behind a newer gateway refuses
+what that gateway adds.
+
+### How the promise is kept {#how-the-promise-is-kept}
+
+| What crosses | Who writes, who reads | How an instance reads what a newer one wrote |
 |---|---|---|
-| The `CoSec-Identity` header, format `v: 1` | the gateway writes, each service in `gateway` mode reads | refuses it, and the status says why: `400` `invalid-request` for a member it does not know, a wrong type, a duplicate member, a repeated role, a value out of range, a header over the size limit or sent more than once; `401` `token-invalid` for a format version it does not read, a credential with no expiry, or an issue time in the future; `401` `token-expired` for a credential or an identity that is too old. The members are checked before the version, so an identity that raises `v` and adds a member is `400`, and one that only raises `v` is `401` ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)) |
-| A policy document, `schema: 2` | the control plane and `cosec-migrate` write, every instance reads | refuses a document of another `schema` when it reads it, and does not install one it cannot compile (an unknown member, a repeated key, a wrong type): the requests that need it fail closed (`503`, `DocumentInvalid` or `SourceUnavailable` in the decision event, unless a DENY matches first; [Troubleshooting](./troubleshooting.md)) |
-| A value in Redis (revocations, sessions, API keys, memberships, control-plane records) | the instance that wrote it, and every other that reads | a value it cannot decode fails the read and stays in Redis: it is never deleted. A revocation entry it cannot decode makes the request `503`, never "not revoked"; a document record it cannot decode is never "no document", so the requests that need it are `503` unless a DENY matches first; a stored document or record the control API reads and cannot decode is `500`, and a change record it cannot decode is `503` ([Redis is the store of record](./storage.md#redis-is-the-store-of-record)) |
-| A token | the issuer signs, every verifier reads | reads the claims it knows ([the claims a client may read](../integration/clients.md#the-claims-a-client-may-read)) and ignores the rest; refuses a token with an `act` claim, a refresh token where an access token belongs, or incomplete session claims |
+| The `CoSec-Identity` header, format `v: 1` | the gateway (and `HttpControlService`'s relay) writes, each service in `gateway` mode reads | It ignores a member it does not know, at any level, unless the header's `crit` lists it. A member `crit` lists that it does not know refuses the request with `503` `unavailable`, never read without it (`IDN-41`): once the service is upgraded the same request passes. A malformed `crit` is `400` `invalid-request`; a format version other than `v: 1` is `401` `token-invalid`. Every 8.x service reads a header up to 8 KB, and no 8.x version lowers that; CoSec's writers write at most 6 KB, so what a later version adds fits (`IDN-43`, [Services behind the gateway](../integration/web.md#services-behind-the-gateway)) |
+| A record in Redis that carries `format` (sessions, the control plane's and the shadow windows' records) | the instance that wrote it, and every other that reads it | It ignores a member it does not know unless the record's `crit` lists it. A member `crit` lists that it does not know, or a later format, refuses that one record, which it neither reads nor rewrites: the call that read it is `503`, and every other record reads as before (`SNP-27`). Format numbers change only with a major version (`SNP-29`) ([When a reader does not know a record's format](./storage.md#record-formats)) |
+| A policy document, `schema: 2` | the control plane and `cosec-migrate` write, every instance reads | Always strictly: it does not install a document it cannot compile (a member it does not know, a repeated key, a wrong type, a reserved character in a pattern), and the requests that need it fail closed: `503`, `DocumentInvalid` in the decision event, unless a DENY matches first. Each instance reports the document format level it reads (`formatLevel`, 1 in 8.0, [the readers of the store](../policies/testing.md#instances)) |
+| An API key record, `format: 3` | `RedisApiKeyStore` writes, every instance that authenticates API keys reads | Strictly, as an input of authentication, like a document: a missing cap must never read as "not capped". A key of another format or with a member it does not know is never read without it: the request that presents it fails closed with `503`. A later 8.x release writes a new member only on a key that uses it, so a key that uses nothing new is the same record in both versions |
+| A token | the issuer signs, every verifier reads | It reads the claims it knows ([the claims a client may read](../integration/clients.md#the-claims-a-client-may-read)) and ignores the rest. It reads the JWS `crit` header: a token whose `crit` names a header parameter it does not understand is refused with `503` `unavailable`, never read without it, and passes once the verifier is upgraded; 8.0 understands none, and a malformed `crit` is `401` `token-invalid` (`IDN-47`). It refuses a token with an `act` claim, a refresh token where an access token belongs, or incomplete session claims |
+| What two releases share on one Redis: how each key is derived, what the rate limit, session index and social count scripts store, the invalidation channels | every instance | Frozen within 8.x ([Redis keys](./storage.md#redis-keys), `SNP-26`): instances of two releases count a client once, see each other's revocations and read the same documents. A later 8.x release that counts or derives a key another way uses a new key space |
 
-**Order of an upgrade.**
+The rule behind the first two rows: a member that an older reader may ignore, or drop when it rewrites a record, is
+one whose absence never widens what is decided or kept. A member whose absence would widen anything, a new
+restriction, is listed in `crit`, so an older reader refuses rather than permits. CoSec's 8.0 writers write no `crit`. A
+later 8.x release does not write a new header or record member that is a restriction until every instance that reads
+the store runs a release that understands it, judged from the releases the instances report (below); until then it
+writes what every reader understands, and no request is refused for it. A document is written by a person, not by
+CoSec: a later release's control plane does not publish a document that needs a level some instance that reads the
+store does not report.
 
-1. **Do not publish a document that uses something new until every instance runs the new version.** An instance that
-   does not know a new member does not install the document, and fails the requests that need it closed. A shadow
-   window that has such an instance reports `CANDIDATE_ERROR` and never closes clean, so the change is not published
-   through it ([Testing policies](../policies/testing.md#trying-changes-in-shadow-mode)).
-2. **Services behind a gateway before the gateway.** A service reads the identity strictly, so one older than its
-   gateway refuses a member the gateway added with `400` `invalid-request`; a gateway that raises the identity's format version `v` makes it `401` `token-invalid`, or `400` if it also adds a member.
-3. **Then the control plane, and `cosec-migrate`**, and, once every control-plane instance and every `cosec-migrate`
+### Order of an upgrade and a rollback {#order-of-an-upgrade-and-a-rollback}
+
+Within the promise any order works. This one keeps the documents readable everywhere and leaves the control plane's
+repairs for last:
+
+1. **The data plane: services behind a gateway, the gateway, every other instance.** In any order among them.
+2. **Then the control plane, and `cosec-migrate`**, and, once every control-plane instance and every `cosec-migrate`
    that writes to this Redis runs the new version, `cosec-migrate repair-references` once
    ([Repair the back-reference index](#repair-the-back-reference-index)) and `verify-chain` ([Verify the revision chains](#verify-the-revision-chains)).
+3. **Publish a document that uses something the new version added only once every instance runs it**, which
+   `GET /instances` shows (below). An instance that cannot compile the document does not install it, and fails the
+   requests that need it closed; a shadow window that has such an instance reports `CANDIDATE_ERROR` and never closes
+   clean, so the change is not published through it ([Testing policies](../policies/testing.md#trying-changes-in-shadow-mode)).
 4. **Redis is upgraded as Redis is**, not by CoSec: CoSec's keys live under `cosec.key-prefix`, and a restart or
    failover is covered by [Redis requirements](./storage.md#redis-requirements).
 
-**Order of a rollback** is the reverse: the gateway first, then the services behind it. A rollback of a document needs
-no instance to change: `POST /documents/<doc>:rollback` makes the document what it was at an earlier revision, as a
+**A rollback** of one minor version goes in the reverse order: the documents first, then the control plane and
+`cosec-migrate`, then the data plane. Roll back any document that uses something only the newer version reads: `POST /documents/<doc>:rollback` makes a document what it was at an earlier revision, as a
 change that is checked like any other ([Revisions, history and rollback](./storage.md#revisions-history-and-rollback)).
 After a downgrade of the control plane or of `cosec-migrate`, run `repair-references` and `verify-chain` again.
 
-**The signature of a mixed fleet** is `503` for the requests that need a document an older instance cannot compile
-(`DocumentInvalid`), `400` `invalid-request` from a service that refuses a member a newer gateway added, `401` `token-invalid` from one that only meets a higher identity format version, and `401` `token-invalid` from an
-instance that holds another signing secret. Each ends when the last instance runs one version.
+### What is not supported {#what-is-not-supported}
 
-**What is not promised.** That two versions interoperate on any of the four formats above: while an 8.0 pre-release is
-the latest, no promise holds between versions at all ([Upgrading between 8.0 previews](./upgrading-previews.md)), and
-afterwards each release's notes say what it changed. That a newer service reads every older gateway's identity, or an
-older one a newer's. That a value a newer version writes to Redis is readable by an older one. That a token a newer
-issuer signs, with a claim an older verifier does not read, means the same to it. Keep a mixed fleet short, and test an
-upgrade on a copy of the documents with the new version's `simulate` and `explain` before it carries traffic.
+Each of these fails closed: an instance refuses what it must understand and does not, and never permits for want of it.
+
+- **An older instance that appears after newer records were written**: a rollback, scaling out with an older image, or
+  an instance cut off from Redis for longer than its status lives (an hour, below). The newer side did not count it
+  among the readers when it started writing. Such an instance refuses each header or record whose `crit` lists a
+  member it does not know, and each record of a later format: the request or call is `503` `unavailable`, counted by
+  `cosec.stored.refused{record, reason="later"}` for a stored record and by `cosec.identity.refused{problem="unavailable"}`
+  for a header ([Observability](./observability.md#metrics)), and its log says a later version wrote it
+  ([A record a later version wrote](./troubleshooting.md#a-record-a-later-version-wrote)). It passes once the instance
+  is upgraded again. A process without `cosec-cocache` writes no status, so nothing sees it either: upgrade it before
+  anything new is used, or it refuses the same way.
+- **An API key that uses something a later release added** is refused with `503` by an instance that does not read
+  it. Issue such keys only once every instance runs that release, and before a rollback disable or reissue them.
+- **Rolling the data plane back below the document format level of a published document.** An instance that cannot
+  compile a document fails the requests that need it (`503`, `DocumentInvalid`). Roll the documents back first, then
+  the instances.
+- **Clients that do not report a status**: `cosec-control-sdk`, `cosec-fetcher`, the consumers of the Kafka decision
+  and change events, and an application that writes `CoSec-Identity` itself. No later release can see them before it
+  writes something new, so they rely only on reading leniently: a client ignores the members of an answer it does not
+  know ([Clients](../integration/clients.md)). `cosec-control-sdk` reads a document's entries strictly, so that writing
+  back what it read never drops a member: an older SDK refuses an entry with a member a later control plane added. The
+  control API reads a request strictly too, so a newer `cosec-control-sdk` that sends an operation, or a member of one,
+  that an older control plane does not know is answered `400` `invalid-request`: use what a release added to the
+  control API only once the control plane runs it.
+
+### Seeing a mixed deployment {#seeing-a-mixed-deployment}
+
+Every CoSec process with `cosec-cocache` writes a status with the CoSec release it runs, once as it starts and then
+every 10 seconds, or every shadow report interval with shadowing on (`SNP-25`); its startup summary says `status=<instance> (release <v>)`. A status lives an hour after its last
+write; an instance is live, for a shadow window and `propagation`, only with a status from the last minute.
+
+- `GET /instances`, on the control API, lists every process that reported in the last hour with its release, and
+  counts the releases ([The readers of the store](../policies/testing.md#instances)).
+- `cosec.control.instances.releases`, a gauge on each control-plane host, is how many releases those readers ran at
+  that host's last read of them. Every control-plane host reads them at each of its shadow passes (the shadow check
+  interval of its startup line, at most a minute; at most once every 5 seconds), whichever replica holds the pass's
+  lease, so the gauge needs no call of `GET /instances`. It reads `0` until the host's first pass, up to one interval
+  after it starts, and keeps its last value while the readers cannot be read (the failure is logged). Above 1 for
+  longer than a rolling upgrade takes is an instance of an old release still reading the store
+  ([Observability](./observability.md#metrics)). The control host also logs the releases once each time they change
+  while more than one is there.
+
+While two versions run, expect `503` with `DocumentInvalid` for a document an older instance cannot compile, `503`
+`unavailable` for what an older instance must understand and does not (above), and `401` `token-invalid` from an
+instance that holds another signing secret. Each ends when the last instance runs one version. Keep a mixed deployment
+short, and try an upgrade on a copy of the documents with the new version's `simulate` and `explain` before it carries
+traffic.
 
 ## 7.x to 8.0
 
@@ -145,9 +212,9 @@ cosec-migrate-8.0.0/bin/cosec-migrate convert ...
 To build it from the CoSec sources instead, run `./gradlew :migrate:installDist`; the tool is then
 `migration/migrate/build/install/cosec-migrate/bin/cosec-migrate`.
 
-Its commands are below. Exit codes: `0` done, `1` the data was rejected, a write failed or `verify-chain` found a
-broken chain, `2` a usage error.
-`publish`, `bootstrap`, `repair-references` and `verify-chain` take `--cluster` for a Redis Cluster: `--to-redis` then names seed
+Its commands are below. Exit codes: `0` done, `1` the data was rejected, a write failed, `verify-chain` found a
+broken chain or `check-patterns` a pattern to rewrite, `2` a usage error.
+`publish`, `bootstrap`, `repair-references`, `verify-chain` and `check-patterns` take `--cluster` for a Redis Cluster: `--to-redis` then names seed
 nodes, comma-separated (`redis://node-1:6379,redis://node-2:6379`). The other commands read Redis with clients that
 do not: `convert`, `partition plan` and `api-keys` ask the node whether it is part of a Redis Cluster and stop before
 they read anything when it is, since a scan of one node sees one shard's keys (R2C-30). Each command takes only the options listed for it: another one, `publish --dry-run` for
@@ -161,6 +228,7 @@ example, is a usage error before anything is read or written, never ignored.
 | `partition plan` | Converts twice, with `--partition platform` and `by-owner`, and writes one plan per tenant to submit through the control plane. Writes nothing to Redis. |
 | `repair-references` | Adds to the back-reference index what every document's head refers to and the index misses, removes what no head has, and completes the app list. |
 | `verify-chain` | Walks each document's revision chain and names a revision whose record is missing, the trace a write lost in a Redis failover leaves, and a revision index that does not follow the head's chain. Writes nothing. |
+| `check-patterns` | Names every pattern of the stored heads that the next preview does not compile (`DOC-15`), with where it is and how to write it. Writes nothing. |
 
 #### Convert
 
@@ -437,6 +505,58 @@ A broken chain does not change what instances enforce, which is the head. It mea
 of that document misses the revision, and a change published around the failover may be missing from the head too.
 Compare the head with what was published, and publish again what it lacks, as after a regression
 ([Troubleshooting](./troubleshooting.md#decisions-use-an-old-revision)).
+
+#### Check the patterns before an upgrade {#check-the-patterns-before-an-upgrade}
+
+```bash
+cosec-migrate check-patterns --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] \
+  [--document platform|app:<id>|tenant:<id>] [--prefix tenant:acme]
+```
+
+Before upgrading from 8.0.0-beta.8, run it with the new release's `cosec-migrate` against the store of the version
+you run. It reads the head of every document the store lists, or of the one `--document` names, or of those whose key
+starts with `--prefix`, as that version stored it (only each document's current revision: the history is not read,
+and a rollback to an older revision publishes it again, compiled then), then the operations of each of that document's
+open changes, which are also the candidates of the staged and shadowing ones, and compiles each action and resource of
+their statements, rate limit rules and catalog permissions with the new rules
+([Reserved characters](../policies/language.md#reserved-characters), `DOC-15`). A pattern it does not compile is a
+finding, and so is every pattern that holds a backslash, though it compiles: the earlier preview read a backslash as a
+character, this version reads it as an escape, so such a pattern means another thing after the upgrade without an
+error. An open change it names fails or changes meaning after the upgrade: its publish or rebase sends it back to
+`DRAFT` with a `COMPILE` finding naming the character, and its shadow window closes blocked on the first upgraded
+instance. Rewrite it, or abandon it and propose it again once every instance is upgraded. It prints, where `<doc>` is
+the document or `<doc> change <id>` one of its open changes:
+
+- `ok <doc>` for a document whose patterns all compile and hold no backslash;
+- `PATTERN <doc> <JSON path>: <why>; write <pattern>, in JSON "<pattern>", once every instance runs this version;
+  until then ...` for a pattern that holds a reserved character or a backslash: `<pattern>` is the pattern as the
+  earlier preview read it (a reserved character and a backslash as text), written as the new version needs it to mean
+  the same. What follows "until then" depends on what the entry does:
+  - for a DENY or a rate limit rule with an unescaped reserved character, the bridge both versions read alike for the
+    window of the upgrade (the character as `?` in a path pattern, the action's name or the typed segment that holds it
+    as `*`), which matches more; where no wildcard stands in (a reserved character in a typed resource's type), keep the
+    DENY as it is: an upgraded instance fails its document closed (`503`) until the exact form is published;
+  - for a DENY or a rate limit rule with a backslash in a typed resource or an action, keep the stored pattern and add
+    the exact form beside it in the same entry: each version matches what was meant with one of the two, and the other
+    matches a little more on this version, nothing that was meant on 8.0.0-beta.8. It never advises narrowing or
+    removing a DENY;
+  - for an ALLOW or a catalog permission, narrow or remove it for the window: a wildcard would grant more;
+- `PATTERN <doc> <JSON path>: <why>; no escape writes it: ...` for a path pattern that matches no request path (a `;`,
+  a control character, a dot segment, a segment longer than 256 characters, or a backslash before any other character):
+  it denied nothing before either, so name the path as the pipeline sees it;
+- `PATTERN <doc> <JSON path>: <why>; it granted nothing on 8.0.0-beta.8 and grants that path on this version: remove
+  it before the upgrade, ...` for an ALLOW whose path holds a backslash before a reserved character or `* ? { }`, which
+  matched nothing before and matches the escaped character now; for a DENY so written, `keep it, or remove it`;
+- `FAILED <doc>: <reason>` when the head or the change could not be read (`<doc> change *` when the open changes could
+  not be listed); the others are still checked.
+
+Then `Checked <n> document(s) and <c> open change(s): <p> pattern(s) to rewrite in <d> of them, <f> could not be read.` It exits with `1`
+when there is a pattern to rewrite or a document it could not read, so a deployment script can stop on it. Then, through
+the control plane: on the version you run, publish each DENY with its bridge, or with its exact form beside it, and
+narrow or remove each affected ALLOW; upgrade every instance; publish the form the tool printed, alone. No other order works: an unescaped reserved character fails the whole
+document on the new version, and the old one reads the escaped form as a backslash and the character: in a path it
+matches nothing, in a typed resource or an action another id or verb. It only reads, so it may run while the
+control plane runs.
 
 #### Run it as a Kubernetes Job {#run-as-a-kubernetes-job}
 
@@ -812,10 +932,17 @@ the revocation check reports is `503`, never an accepted token (`PIP-7`).
 - **Break-glass, 7.x's root,** applies only to a token CoSec's own `JwtTokenVerifier` verified, never to a token of a
   custom `TokenVerifier` or to a principal another authenticator accepted (`BRK-8`).
 - **Tenant switch and social login.** A tenant switch (7.x's `AbstractSwitchTenantAuthentication`, now
-  `SwitchTenantAuthentication` with a `TenantSwitch`, [From 8.0.0-alpha.4](./upgrading-previews.md#from-8-0-0-alpha-4)) answers the user's
+  `SwitchTenantAuthentication` with a `TenantSwitch`) answers the user's
   `TenantMembership` in the target tenant and app instead of a principal, so the new token never carries the previous
   tenant's roles, and it presents the session's token pair, as a refresh does: an access token alone does not switch
-  ([Switching tenant and app](../integration/authentication.md#switching-tenant-and-app)). `DirectSocialUserPrincipalConverter` signs only `cosec_oauth_provider` and `cosec_oauth_user_id`,
+  ([Switching tenant and app](../integration/authentication.md#switching-tenant-and-app)). Where 7.x subclassed it and
+  implemented `switchTenant(targetTenantId, previousPrincipal)`, declare
+  `SwitchTenantAuthentication(tokenVerifier, families, revocation, YourCredentials::class.java) { credentials -> … }` as a
+  bean, with the starter's `TokenVerifier`, `TokenFamilies` and `TokenRevocation` beans. Your credentials class
+  implements `SwitchTenantCredentials`: `targetTenantId`, `targetAppId` (null by default), the request's `context`
+  (`SecurityContext`) instead of 7.x's `principal`, and the session's `accessToken` and `refreshToken`. The new token is
+  for the app your switch answers in its `TenantMembership`, else the previous token's: a user never gets an app by
+  naming it. `DirectSocialUserPrincipalConverter` signs only `cosec_oauth_provider` and `cosec_oauth_user_id`,
   not the provider's user info ([Authentication](../integration/authentication.md#tenants)).
 - `cosec.api-key.header` is now `cosec.pipeline.api-key-header` (default `X-API-Key`), and no document may read the
   header it names (`CND-5`).
@@ -996,6 +1123,24 @@ document and revocation reader.
 tool that read or wrote those keys directly must use the control plane. Give only the control plane's Redis account
 write access to `<prefix>:snapshot:*` and `<prefix>:control:*`. All keys: [Storage](./storage.md).
 
+#### One key prefix {#one-key-prefix}
+
+[`cosec.key-prefix`](./configuration.md#key-prefix) (`cosec` by default) is the prefix of every key 8.0 writes. It
+replaces 7.x's `cosec.authorization.cache.key-prefix` (default `cosec`) and `cosec.api-key.key-prefix` (default
+`cosec:api-key`), and the fixed `cosec` of the rate limit counters and the social login's OAuth states. With the
+defaults every key 8.0 still reads stays where it was. With `<p>` the value of `cosec.key-prefix`:
+
+- token revocations (`<p>:token:revoked:*`) are read under `<p>`, where 7.x wrote them
+  under `cosec.authorization.cache.key-prefix`;
+- API keys are read under `<p>:api-key`, where 7.x read them under `cosec.api-key.key-prefix`;
+- rate limit counters and OAuth states are written under `<p>`; both are short-lived, and a counter starts again.
+
+A deployment that set either 7.x prefix to something else sets `cosec.key-prefix` and, before switching, copies each
+revocation and API key under the new prefix (`COPY`, or `RENAME`, which keeps the key's expiry): **a revocation left
+under the old prefix is no longer read, so the token it revoked is accepted again**. `cosec-migrate api-keys` converts
+the keys under `<--key-prefix>:api-key`. `cosec.key-prefix` holds no `:` (`SNP-9`), so a 7.x prefix that held one
+cannot be kept: choose one without, and copy the keys under it.
+
 #### Startup fails when Redis's eviction policy cannot be read {#startup-fails-when-redis-s-eviction-policy-cannot-be-read}
 
 At startup CoSec reads Redis's `maxmemory-policy` and refuses to start unless it is `noeviction`, because an evicted
@@ -1078,12 +1223,12 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 | 7.x package | 8.0 package (module) | Types |
 |---|---|---|
 | `me.ahoo.cosec.api.authentication`, `me.ahoo.cosec.authentication` | `me.ahoo.cosec.login` (`cosec-login`) | `Authentication`, `Credentials` (now `LoginCredentials`), `CompositeAuthentication` |
-| `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `AbstractSwitchTenantAuthentication` is `SwitchTenantAuthentication` with a `TenantSwitch`; `SimpleRefreshTokenAuthentication` is `RefreshTokenAuthentication` (`AbstractRefreshTokenAuthentication` is removed) ([From 8.0.0-alpha.4](./upgrading-previews.md#from-8-0-0-alpha-4)) |
+| `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `AbstractSwitchTenantAuthentication` is `SwitchTenantAuthentication` with a `TenantSwitch`; `SimpleRefreshTokenAuthentication` is `RefreshTokenAuthentication` (`AbstractRefreshTokenAuthentication` is removed); both take your credentials class ([Tokens and API keys](#tokens-and-api-keys), [Refreshing tokens](../integration/authentication.md#refreshing-tokens)) |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `TokenConverter`, `TokenCompositeAuthentication`, `RefreshTokenMismatchException` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.spi.token` (`cosec-spi`) | `TokenVerifier`, `TokenStore`, `TokenRevoker`, `RevocationReader`, `TokenVerificationException`, `TokenExpiredException`, `TokenRevokedException` |
-| `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `DefaultTokenRevoker` is `StoreTokenRevoker` ([From 8.0.0-alpha.4](./upgrading-previews.md#from-8-0-0-alpha-4)) |
-| `me.ahoo.cosec.token` | `me.ahoo.cosec.api.token` (`cosec-api`) | `SimpleCompositeToken` is removed: `CompositeToken` is a final class (`RevocableTokenVerifier` is removed too: [From 8.0.0-alpha.4](./upgrading-previews.md#from-8-0-0-alpha-4)) |
-| `me.ahoo.cosec.api.CoSec` | gone | Its values have names where they mean something: `CoSecPrincipal.ANONYMOUS_ID` (`me.ahoo.cosec.api.principal`), `TenantId.DEFAULT` (`me.ahoo.cosec.model`); the `cosec.` property prefix is written out ([From 8.0.0-alpha.4](./upgrading-previews.md#from-8-0-0-alpha-4)) |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `DefaultTokenRevoker` is `StoreTokenRevoker`: it revokes through the `TokenStore`, and also ends the token's session. The starter's bean is still `cosecTokenRevoker`, and `TokenRevoker` is still the SPI, whose `revoke` and `revokeSubject` now suspend. Where you constructed it, it takes the `TokenRevocation` and `TokenFamilies` beans besides the verifier, the store and the time to keep a revocation |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.api.token` (`cosec-api`) | `SimpleCompositeToken` is removed: `CompositeToken` is a final class, built with `CompositeToken(accessToken, refreshToken)`, equal by value, and its string hides both tokens. The JSON a login or refresh answers is unchanged. `RefreshTokenCredentials` declares `accessToken` and `refreshToken` and is no longer a `CompositeToken`: where you passed it as one (`TokenRevoker.revoke`), build one. `RevocableTokenVerifier` is removed too: the pipeline, refresh and logout read revocations through `TokenRevocation` (`me.ahoo.cosec.runtime.token`), and a `TokenVerifier` checks only the token itself |
+| `me.ahoo.cosec.api.CoSec` | gone | Its values have names where they mean something: `CoSecPrincipal.ANONYMOUS_ID` (`me.ahoo.cosec.api.principal`), `TenantId.DEFAULT` (`me.ahoo.cosec.model`); the `cosec.` property prefix is written out. Code that read `CoSec.COSEC`, `CoSec.COSEC_PREFIX` or `CoSec.DEFAULT` writes the value it meant (`cosec`, `cosec.`, `(0)`); no key, property or span attribute changes |
 | `me.ahoo.cosec.context` | `me.ahoo.cosec.webmvc` (`cosec-webmvc`) | `SecurityContextHolder` |
 | `me.ahoo.cosec.context.request` | `me.ahoo.cosec.runtime.http` (`cosec-runtime`) | `RemoteIpResolver`, `XForwardedRemoteIpResolver` |
 | `me.ahoo.cosec.api.audit` | `me.ahoo.cosec.spi.audit` (`cosec-spi`) | `AuditEventSink` |
@@ -1091,7 +1236,7 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 | `me.ahoo.cosec.apikey` | `me.ahoo.cosec.spi.apikey` (`cosec-spi`) | `ApiKey`, `ApiKeyReader`, `InMemoryApiKeyStore` |
 | `me.ahoo.cosec.limiter` | `me.ahoo.cosec.spi.ratelimit` (`cosec-spi`) | `RateLimit`, `RateLimitResult`, `RateLimiter` ([below](#removed-and-replaced-apis)) |
 | `me.ahoo.cosec` | `me.ahoo.cosec.model` (`cosec-model`) | `CoSecException` |
-| `me.ahoo.cosec.spring.boot.starter` and its sub-packages | `me.ahoo.cosec.spring.boot` and the same sub-packages (`cosec-spring-boot`) | The starter's classes, such as `jwt.JwtProperties`: `me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties` is now `me.ahoo.cosec.spring.boot.jwt.JwtProperties`, and, like the other `*Properties` classes, `@InternalCoSecApi` ([From 8.0.0-alpha.4](./upgrading-previews.md#from-8-0-0-alpha-4)): read `cosec.jwt.*` with `@Value` or the `Environment`, and do not reuse its nested types |
+| `me.ahoo.cosec.spring.boot.starter` and its sub-packages | `me.ahoo.cosec.spring.boot` and the same sub-packages (`cosec-spring-boot`) | The starter's classes, such as `jwt.JwtProperties`: `me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties` is now `me.ahoo.cosec.spring.boot.jwt.JwtProperties`, and, like the other `*Properties` classes and `EnabledCapable`, `@InternalCoSecApi`: read `cosec.jwt.*` with `@Value` or the `Environment`, and do not reuse its nested types. Its `@ConditionalOn*` annotations are internal: condition a bean of your own with `@ConditionalOnProperty("cosec.jwt.enabled")` instead of `@ConditionalOnJwtEnabled`. Auto-configuration class names in `spring.autoconfigure.exclude` and logger names change with the package (`me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration` is `me.ahoo.cosec.spring.boot.CoSecAutoConfiguration`) |
 
 The 8.0 SPIs live in the same places: `MembershipProvider` and `MembershipClaims` in `me.ahoo.cosec.spi.membership`,
 `SnapshotDocumentStore` and `InMemorySnapshotDocumentStore` in `me.ahoo.cosec.spi.snapshot`, `AttributeProvider` in
@@ -1146,7 +1291,7 @@ Code that uses any of these no longer compiles or is no longer called.
 | `BlacklistChecker` | A `BlacklistSource` behind an `AttributeProvider` bean (`BlacklistAttributeProvider`). |
 | `RequestAttributesAppender`, `GatewayRouteRequestAttributesAppender` | `AttributeProvider`. |
 | `SimpleSecurityContext`, the extension `CoSecPrincipal.tenant` | None: the pipeline makes the request's `SecurityContext`. In a test, mock or implement the interface; the tenant is `SecurityContext.tenantId`. |
-| The principal and tenant wrappers of `cosec-core`: `SimplePrincipal`, `SimpleTenantPrincipal`, `TenantPrincipal`, `TokenPrincipal`, `TokenTenantPrincipal`, `SimpleTokenPrincipal`, `SimpleTokenTenantPrincipal`; `SimpleTenant`, `Tenant`, `TenantCapable` | What a token is issued for is a `TokenSubject` (`me.ahoo.cosec.login.token`): the principal's `id`, the `app` and `tenant` it is for, its claimed `roles` and `policies`, and `attributes`. An `Authentication` answers one, and `TokenConverter` turns it into tokens ([Authentication](../integration/authentication.md)). What a request reads is `CoSecPrincipal` (`SecurityContext.principal`), with its tenant in `SecurityContext.tenantId`. The tenant ids are `TenantId.DEFAULT` and `TenantId.PLATFORM` (`me.ahoo.cosec.model`). |
+| The principal and tenant wrappers of `cosec-core`: `SimplePrincipal`, `SimpleTenantPrincipal`, `TenantPrincipal`, `TokenPrincipal`, `TokenTenantPrincipal`, `SimpleTokenPrincipal`, `SimpleTokenTenantPrincipal`; `SimpleTenant`, `Tenant`, `TenantCapable` | What a token is issued for is a `TokenSubject` (`me.ahoo.cosec.login.token`): the principal's `id`, whose the token is (`kind`, required: `PERSON` for a user's sign-in, `WORKLOAD` for a machine's; a workload never approves a change, is never the control plane's trust root and has no break-glass, [Logging in](../integration/authentication.md#logging-in), `IDN-45`), the `app` and `tenant` it is for, its claimed `roles` and `policies`, and `attributes`. An `Authentication` answers one, and `TokenConverter` turns it into tokens ([Authentication](../integration/authentication.md)). What a request reads is `CoSecPrincipal` (`SecurityContext.principal`), with its tenant in `SecurityContext.tenantId`. The tenant ids are `TenantId.DEFAULT` and `TenantId.PLATFORM` (`me.ahoo.cosec.model`). |
 | `RoleCapable`, `PolicyCapable` (a principal's `roles` and `policies`) | The principal's memberships, `Memberships` (`me.ahoo.cosec.model`), from the token's claims or a `MembershipProvider`. The roles effective for a request are `SecurityContext.scope.roles`: the roles in the request's space, by their bare names (`editor`, not `editor@team-a`). The principal's roles in other spaces are not on the context, and neither are the policies attached to it: the attached policy ids of the token or of the membership provider are not exposed in 8.0. To branch on what an attached policy meant, check an action the policy permits ([Checks in code](../integration/checks.md)), or give the role the permission. |
 | The `String` aliases `RoleId`, `PolicyId` and `PermissionId` of `cosec-api` | `RoleId` and `PolicyId` are value classes of `me.ahoo.cosec.model`, with the same names in another package: `RoleId("admin")`, and `.value` for the string. `PermissionId`: none. A permission is an action, granted by a policy or by a catalog entry ([Role permissions](../policies/role-permissions.md)). |
 | `KafkaAuditEventSink` | `KafkaAuditListener`, a `DecisionListener` the starter registers when `cosec-kafka` is on the classpath ([Observability](./observability.md)). The record's key is the same, and its value is the audit event ([Observability changes](#observability-changes)). |
@@ -1161,8 +1306,9 @@ Code that uses any of these no longer compiles or is no longer called.
 | `me.ahoo.cosec.limiter.RateLimiter` and its `LocalRateLimiter`, `RedisRateLimiter` (`cosec-cocache`) | `me.ahoo.cosec.spi.ratelimit.RateLimiter`, a suspending SPI; the starter registers its `LocalRateLimiter` or `ReactiveRedisRateLimiter` ([Rate limiting](../policies/rate-limiting.md)). `RateLimit` and `RateLimitResult` remain. |
 | `Jwts.toPrincipal(String)`, `Jwts.decode`, `Jwts.verifyTimeClaims` | None: `Jwts` is internal to `cosec-jwt`. Turn a token into a principal with `TokenVerifier.verify`, which checks the signature, the expiry and the claims, then call `TokenRevocation.check` (`me.ahoo.cosec.runtime.token`, the starter's bean) on what it returns: `verify` alone accepts a revoked token. A revocation store that cannot be read throws `RevocationUnavailableException`, which your code decides on ([Verifying a token outside the pipeline](../integration/authentication.md#verifying-a-token-outside-the-pipeline)). |
 | `PrincipalConverter`, `TokenVerifier.toPrincipal` | `TokenVerifier.verify`, then `TokenRevocation.check` on its result (the starter's bean), as above ([Verifying a token outside the pipeline](../integration/authentication.md#verifying-a-token-outside-the-pipeline)). |
-| `Authentication.authenticate`, `TokenCompositeAuthentication.authenticateAsToken`, the social providers: `Mono<...>` | Suspending functions that return the value; a failed login throws ([Logging in](../integration/authentication.md#logging-in)). |
-| `DefaultAuthenticationProvider` and `SocialProviderManager` as objects | Classes, one instance per application context: inject the `AuthenticationProvider` or `SocialProviderManager` bean. |
+| `Authentication.authenticate`, `TokenCompositeAuthentication.authenticateAsToken`: `Mono<...>` | Suspending functions that return the value; a failed login throws ([Logging in](../integration/authentication.md#logging-in)). |
+| `SocialAuthenticationProvider` of your own, registered with `SocialProviderManager` | None in 8.0: the provider interface and its registry are `@InternalCoSecApi`, and the social providers are JustAuth's, chosen by each registration's `type` under `cosec.authentication.login.social.registration.<name>` ([Social login](../integration/authentication.md#social-login)). A provider JustAuth has moves to its registration. For one it does not have, implement `Authentication` for credentials of your own and serve the OAuth exchange yourself, as any login of your own ([Logging in](../integration/authentication.md#logging-in)): it then keeps the `state` single use and bound to the browser that started the sign-in, which CoSec's social login does for its providers. A provider of one's own is a candidate for the external identity providers of 8.1. |
+| `DefaultAuthenticationProvider` and `SocialProviderManager` as objects | None for an application: both are `@InternalCoSecApi`, as is `AuthenticationProvider`. Declare `Authentication` beans, which the starter registers, and log in through the `TokenCompositeAuthentication` bean; start a social sign-in with the `SocialAuthentication` bean. |
 | `AuthorizationChecker.check(...)`: `Mono<Boolean>` | `AuthorizationChecker.check(security, action, resource)`, a suspending function; `cosec-webflux` adds a `Mono<Boolean>` form and `cosec-webmvc` a blocking one ([Checks](../integration/checks.md)). |
 | Filters `ReactiveAuthorizationFilter`, `AuthorizationFilter` (servlet), `AuthorizationGatewayFilter`, and their constructors taking an `Authorization` | `PipelineWebFilter`, `PipelineServletFilter`, `PipelineGatewayFilter`, created by the starter. |
 | `ReactiveInjectSecurityContextWebFilter`, `InjectSecurityContextFilter` (inject mode) | `cosec.pipeline.mode=gateway` behind a CoSec gateway ([Inject mode becomes identity propagation](#inject-mode-becomes-identity-propagation)). The 8.0 filters put the security context on every permitted request. |
@@ -1183,14 +1329,19 @@ longer can: a second bean of one of these types fails startup (for `ControlHttp`
 `DefaultControlPlane`, `ControlHttp`, `ControlHttpRequest` and `ControlHttpResponse` are `@InternalCoSecApi`, and
 so are `ControlPlane` and the `Operator` every one of its methods takes: the control plane is not a library an application
 calls, and an application writes through its HTTP API
-([Roles from an external source](../scenarios/external-source.md)). `ControlStore`, `ChangeOptions`, the change listeners,
-`Revisions`, `ControlSnapshot` and the maintenance beans stay replaceable.
+([Roles from an external source](../scenarios/external-source.md)). Of the control plane, an application implements
+only change listeners ([Change listeners](../architecture/extending.md#change-listeners)): its storage (`ControlStore`
+and its records, the shadow window ports), `ChangeOptions` and `Revisions` are `@InternalCoSecApi` too
+([Control store](../architecture/extending.md#control-store)).
 
 #### Policy test suites
 
 The 8.0 test kit is the `cosec-testkit` module. `PolicyTestKit.load(dir)` reads documents laid out as
 `cosec-migrate convert` writes them, and `tests(dir)` returns a JUnit 5 dynamic test for each scenario file, for a
-`@TestFactory` ([Testing policies](../policies/testing.md)). A 7.x suite's `policies`, `appPermissions` and role grants
+`@TestFactory` ([Testing policies](../policies/testing.md)). `PolicyTestKit` is `@ExperimentalCoSecApi` in 8.0, so a
+suite opts in with `@file:OptIn(ExperimentalCoSecApi::class)`; the kit's request contexts for testing application code
+(`PermittedRequest`, `IdentityHeader`, `CoSecTestBindings`) are stable and need none
+([Testing your application](../policies/testing.md#testing-your-application)). A 7.x suite's `policies`, `appPermissions` and role grants
 become the converted documents; each of its `cases` becomes one scenario file:
 
 | 7.x case | 8.0 scenario |
@@ -1238,9 +1389,9 @@ read; no property turns the check off ([Unknown properties](./configuration.md#u
 | `cosec.inject.enabled` | Removed ([Inject mode becomes identity propagation](#inject-mode-becomes-identity-propagation)). |
 | `cosec.api-key.store-blocking` | Removed. |
 | `cosec.jwt.token-revocation.enabled` | Removed: revocation is always on ([Token revocation is always on](#token-revocation-is-always-on)). |
-| `cosec.authorization.cache.key-prefix` | `cosec.key-prefix`, the prefix of every key: copy the token revocations first ([which families move](./upgrading-previews.md#from-8-0-0-alpha-2)). |
-| `cosec.api-key.key-prefix` | `cosec.key-prefix`: copy the API keys first ([which families move](./upgrading-previews.md#from-8-0-0-alpha-2)). |
-| `cosec.authorization.snapshot.key-prefix` (8.0 previews) | `cosec.key-prefix`: set it to this prefix ([which families move](./upgrading-previews.md#from-8-0-0-alpha-2)). |
+| `cosec.authorization.cache.key-prefix` | `cosec.key-prefix`, the prefix of every key: copy the token revocations first ([One key prefix](#one-key-prefix)). |
+| `cosec.api-key.key-prefix` | `cosec.key-prefix`: copy the API keys first ([One key prefix](#one-key-prefix)). |
+| `cosec.authorization.snapshot.key-prefix` (8.0 previews) | `cosec.key-prefix`: set it to this prefix. |
 | `cosec.unknown-properties` (8.0 previews) | Removed: an unknown key always fails startup. |
 
 `cosec.authorization.cache.token.*` is now `cosec.authentication.revocation.cache.*`.
@@ -1271,13 +1422,32 @@ Two settings changed during the 8.0 previews:
 - **Audit events** are written for every outcome, including `400`, cancelled requests, authentication failures and
   errors, and `kind` says which (`DECIDED`, `BAD_REQUEST`, `AUTHENTICATION_UNAVAILABLE`, `CANCELLED`, `ERROR`). New
   fields: `snapshotVersion` (the revisions read), `binding` (the binding the deciding statement applied through, or
-  `attached:<policy>`), `breakGlass`. New values: decision `INDETERMINATE`; reason codes `INDETERMINATE`,
-  `SCOPE_REJECTED`, `RATE_LIMITER_UNAVAILABLE`, `TOKEN_REVOKED`, `BOUNDARY`. `authorization.source` says what decided
+  `attached:<policy>`), `breakGlass`. `authorization.source` says what decided
   in terms of the binding model: `via`, `document`, `policy` and `statement` replace the source `type`, `policy` and
   `role`, and `principal.policies` and `request.device.userAgent` are gone
   ([Audit events](./observability.md#audit-events)). `elapsedNanos` now covers the whole pipeline (authentication,
   attributes, rate limits), not only the authorization. An `AuditEventSink` still receives the flat record; one that
   reads those fields changes with them.
+- **Audit decisions and reason codes are renamed, removed and added.** The JSON an `AuditEventSink`, the audit log and
+  a Kafka record carry writes each value by its name, and so does the Kotlin enum (`me.ahoo.cosec.api.audit`):
+
+  | Field | 7.x | 8.0 |
+  |---|---|---|
+  | `authorization.decision` (`AuditDecision`) | `ALLOW`, `EXPLICIT_DENY`, `IMPLICIT_DENY`, `TOO_MANY_REQUESTS`, `ERROR` | `PERMIT`, `EXPLICIT_DENY`, `IMPLICIT_DENY`, `SCOPE_REJECTED`, `BOUNDARY`, `INVALID_REQUEST`, `TOO_MANY_REQUESTS`, `ERROR`, `INDETERMINATE` |
+  | `authorization.reasonCode` (`AuditReasonCode`) | `ALLOW`, `EXPLICIT_DENY`, `IMPLICIT_DENY`, `TOKEN_EXPIRED`, `TOKEN_INVALID`, `TOO_MANY_REQUESTS`, `REGEX_TIMEOUT`, `ERROR` | `PERMIT`, `EXPLICIT_DENY`, `IMPLICIT_DENY`, `TOKEN_EXPIRED`, `TOKEN_INVALID`, `TOO_MANY_REQUESTS`, `ERROR`, `INDETERMINATE`, `SCOPE_REJECTED`, `RATE_LIMITER_UNAVAILABLE`, `TOKEN_REVOKED`, `BOUNDARY`, `DELEGATION_UNSUPPORTED`, `INVALID_REQUEST`, `TOKEN_NOT_YET_VALID` |
+
+  What a consumer changes:
+  - **Match `PERMIT` where it matched `ALLOW`, in both fields.** A SIEM rule, an alert or a Kafka consumer that matches
+    `"ALLOW"` matches nothing after the upgrade, and nothing fails to say so.
+  - **`REGEX_TIMEOUT` is never written**: 8.0 has no regular expressions in a policy, so nothing times out. 7.x wrote it
+    with the decision `IMPLICIT_DENY`.
+  - **Accept the new values.** A refusal is any decision but `PERMIT`; a consumer that counts refusals adds
+    `SCOPE_REJECTED`, `BOUNDARY` and `INVALID_REQUEST` (a `400`, with `kind` `BAD_REQUEST`). A request no decision could
+    be made for is `INDETERMINATE` (`503`), where 7.x wrote `ERROR`; `ERROR` is now a `500` only. A token refused as
+    revoked is `TOKEN_REVOKED`, no longer `TOKEN_INVALID`. Which outcome writes which pair:
+    [Audit events](./observability.md#audit-events).
+  - Code that names the enums recompiles: `AuditDecision.ALLOW`, `AuditReasonCode.ALLOW` and `AuditReasonCode.REGEX_TIMEOUT`
+    are gone, and a `when` over either enum gains the new values.
 - **Metrics**: the `cosec.authorization` timer covers the whole pipeline too. Its `source` tag is now `binding`,
   `attachment`, `builtin`, `boundary`, `scope` or `none` (7.x: `global_policy`, `principal_policy`,
   `role_permission`, `root`, `blacklist`, `none`, `unknown`); `result` names what decided in the decision event's words (`permit`,

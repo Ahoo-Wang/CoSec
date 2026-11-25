@@ -53,6 +53,7 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenRevokedException
@@ -112,7 +113,14 @@ class SwitchFromReplayedPairTest {
     /** The request made with [accessToken], as the pipeline let it through: CoSec's token authenticator verified it. */
     private fun requestWith(accessToken: String): SecurityContext {
         val pipeline = Pipeline
-            .builder(TokenAuthenticator(verifier, RevocationReader.NONE), SuspendingSnapshotSource(EMPTY))
+            .builder(
+                TokenAuthenticator(
+                    verifier,
+                    RevocationReader.NONE,
+                    acceptUnavailableRevocations = false,
+                ),
+                SuspendingSnapshotSource(EMPTY)
+            )
             .engine(PERMITTING)
             .build()
         val facts = HttpFacts(
@@ -181,7 +189,11 @@ class SwitchFromReplayedPairTest {
     }
 
     private suspend fun login(): CompositeToken = converter.toToken(
-        TokenSubject("alice", tenant = "acme").inSession(families.start(TenantId("acme"), PrincipalId("alice")))
+        TokenSubject(
+            "alice",
+            Identity.Credential.Kind.PERSON,
+            tenant = "acme"
+        ).inSession(families.start(TenantId("acme"), PrincipalId("alice")))
     )
 
     private companion object {

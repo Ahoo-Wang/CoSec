@@ -11,11 +11,10 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.spring.boot.realserver
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -141,7 +140,7 @@ class CorsWiringTest {
 
     private fun servlet(source: Class<*>, block: (Int, ConfigurableApplicationContext) -> Unit) {
         val context = SpringApplicationBuilder(source).web(WebApplicationType.SERVLET)
-            .properties("server.port=0", "spring.main.banner-mode=off")
+            .properties("server.address=127.0.0.1", "server.port=0", "spring.main.banner-mode=off")
             .initializers(
                 ApplicationContextInitializer<ConfigurableApplicationContext> {
                     it.environment.propertySources.remove(GATEWAY_PROPERTIES)

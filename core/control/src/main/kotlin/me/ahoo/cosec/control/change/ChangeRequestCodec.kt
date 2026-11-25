@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.control.change
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeJson.actor
 import me.ahoo.cosec.control.change.ChangeJson.actorTree
@@ -47,7 +46,7 @@ import java.time.Instant
  * with the same entries, digests included. Reading is strict: anything else is a [SnapshotFormatException], whose
  * message escapes control characters, a document key of an app no key can name included (SCP-10).
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 object ChangeRequestCodec {
     private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
@@ -64,7 +63,7 @@ object ChangeRequestCodec {
 
     fun decodeSlot(slot: ByteArray): StageSlot = guarded {
         val node = read(slot)
-        StoredFormat.of(node, "staging slot")
+        StoredFormat.read(node, ChangeMembers.STAGING_SLOT, "staging slot")
         StageSlot(node.get("holder")?.let { ChangeId(it.text()) }, node.get("since")?.let { Instant.parse(it.text()) })
     }
 
@@ -135,7 +134,7 @@ object ChangeRequestCodec {
     private fun change(node: JsonNode): ChangeRequest {
         // The reader's rule (CTL-53): members of a known format this version does not know are ignored. The operations
         // stay as strict as the document format they carry: an operation is understood, or the change does not read.
-        StoredFormat.of(node, "change request")
+        StoredFormat.read(node, ChangeMembers.CHANGE, "change request")
         val key = documentKey(node.need("key").text())
         val (kind, owner) = ownerOf(key)
         val base = node.need("base")
@@ -221,8 +220,9 @@ object ChangeRequestCodec {
     private inline fun <T> guarded(block: () -> T): T = try {
         block()
     } catch (error: SnapshotFormatException) {
-        // The document format's codecs, which read a change's entries, quote what they read as they found it.
-        throw SnapshotFormatException(SnapshotKeyText.message(error.message.orEmpty()))
+        // The document format's codecs, which read a change's entries, quote what they read as they found it. A record
+        // a later version wrote keeps its marker, which quotes nothing (SNP-27).
+        throw SnapshotFormatException(SnapshotKeyText.message(error.message.orEmpty()), StoredFormat.later(error))
     } catch (error: JacksonException) {
         throw SnapshotFormatException("A change request is malformed${error.at}.")
     } catch (error: IllegalArgumentException) {

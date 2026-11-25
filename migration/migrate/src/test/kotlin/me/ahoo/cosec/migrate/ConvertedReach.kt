@@ -139,7 +139,7 @@ class ConvertedReach(documents: Map<SnapshotKey, PolicyDocument>) {
                 tenant,
                 MembershipClaims.parse(roles, policies),
                 emptyMap(),
-                Identity.Credential(Identity.Method("test"), "token-$id", null),
+                Identity.Credential(Identity.Method("test"), Identity.Credential.Kind.PERSON, "token-$id", null),
                 app = app,
             )
             val host = Pipeline.builder(

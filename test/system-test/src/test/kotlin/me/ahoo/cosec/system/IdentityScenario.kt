@@ -48,6 +48,8 @@ class IdentityScenario {
         identity["sub"].assert().isEqualTo("alice")
         val auth = identity.member("auth")
         auth["method"].assert().isEqualTo("jwt")
+        // Whose the credential is, which CoSec's writer always states (IDN-44): alice signed in as a person.
+        auth["kind"].assert().isEqualTo("person")
         auth["jti"].assert().isEqualTo(token.jti)
         (auth["exp"] as Number).toLong().assert().isEqualTo(token.expiresAt.epochSecond)
         (auth["iat"] as Number?)?.toLong().assert().isEqualTo(token.issuedAt.epochSecond)
@@ -72,6 +74,8 @@ class IdentityScenario {
             Transcript.note("decoded CoSec-Identity of a session token: $identity")
             identity["sub"].assert().isEqualTo("bella")
             val auth = identity.member("auth")
+            // CoSec's login declared bella a person, its token says so, and the gateway forwards it (IDN-45, IDN-46).
+            auth["kind"].assert().isEqualTo("person")
             auth["jti"].assert().isEqualTo(claims["jti"])
             (auth["iat"] as Number).toLong().assert().isEqualTo((claims.getValue("iat") as Number).toLong())
             val session = auth.member("session")
@@ -83,6 +87,26 @@ class IdentityScenario {
                 (claims.getValue("cosec.generation") as Number).toLong()
             )
         }
+    }
+
+    /**
+     * `IDN-46`: a refreshed pair keeps the kind of the token it was refreshed from, and a token that does not say whose it
+     * is, as an earlier 8.0 preview issued it, reaches the service as a workload's, never refused.
+     */
+    @Test
+    fun `a refreshed token stays a person's, and a token without its kind is forwarded as a workload's`() {
+        val refreshed = SignIn.pairOf(SignIn.refresh(SignIn.of("bella", "identity-tenant")))
+        forwardedKind(refreshed.bearer).assert().isEqualTo("person")
+        forwardedKind(Token.issue("alice", "identity-tenant", kind = null).bearer).assert().isEqualTo("workload")
+        forwardedKind(Token.issue("alice", "identity-tenant", kind = "workload").bearer).assert().isEqualTo("workload")
+    }
+
+    /** The `auth.kind` of the identity the gateway forwards for a request with [bearer]. */
+    private fun forwardedKind(bearer: Pair<String, String>): Any? {
+        val echo = Http.get(at("/behind/orders/42"), bearer)
+        echo.status.assert().describedAs("$echo").isEqualTo(200)
+        val identity = ForwardedIdentity.decode(echo.json().headers().getValue("cosec-identity").single())
+        return identity.member("auth")["kind"]
     }
 
     @Test
@@ -214,7 +238,7 @@ class IdentityScenario {
             "sub" to "mallory",
             "scope" to mapOf("app" to "", "space" to ""),
             "roles" to listOf("admin"),
-            "auth" to mapOf("method" to "jwt", "jti" to "forged", "exp" to now + 600, "iat" to now),
+            "auth" to mapOf("method" to "jwt", "kind" to "person", "jti" to "forged", "exp" to now + 600, "iat" to now),
             "iat" to now,
             "rid" to "forged",
         )

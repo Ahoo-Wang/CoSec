@@ -1,0 +1,16 @@
+{
+  "id": "STA-4",
+  "source": "RFC 0011 D2",
+  "statement": "On every port a host opens, nothing the application serves answers without passing CoSec. A WebFlux application's management server (management.server.port different from the application's) is under the pipeline, as its application port is: its probes, and what it inherits of the application's functional routes; CoSec's own routes (the control API, the login routes) are not served there (CTL-69). A WebMvc application's management server serves only actuator's endpoints: a controller, a functional route, the control API and the login routes are not served there. A gateway's management server serves actuator's endpoints, and none of CoSec's own routes (CTL-69); the gateway's routes are served there only where Spring Cloud Gateway cannot tell the port apart (a random management port), and then under the gateway's filter. With one port, the probes are requests like any other.",
+  "level": "startup",
+  "pending": null,
+  "guards": [
+    "spring-boot:ManagementPortTest#WebFlux keeps its management server under the pipeline and serves the application's routes only behind it",
+    "spring-boot:ManagementPortTest#WebMvc leaves its management server outside CoSec and serves nothing of the application there",
+    "spring-boot:ManagementPortTest#a gateway leaves its management server outside CoSec too, and gates its own routes and the control API there as on the application port",
+    "spring-boot:ManagementPortTest#the two stacks answer alike on the application port",
+    "spring-boot:ManagementPortTest#with one port nothing changes, the probes are requests like any other",
+    "spring-boot:ManagementPortTest#a gateway on a random management port serves its routes there, under the gateway's filter",
+    "spring-boot:ManagementPortTest#WebFlux serves the application's functional routes on its management port, WebMvc does not"
+  ]
+}

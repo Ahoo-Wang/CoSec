@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.change
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeJson.actor
 import me.ahoo.cosec.control.change.ChangeJson.actorTree
 import me.ahoo.cosec.control.change.ChangeJson.factory
@@ -24,6 +27,7 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.ObjectNode
@@ -42,7 +46,18 @@ internal object ApprovalCodec {
         node.put("principalBindings", approval.principalBindings).put("breakGlass", approval.breakGlass)
         node.set("credentialId", approval.credentialId?.let(factory::stringNode) ?: factory.nullNode())
         node.set("issuedAt", approval.issuedAt?.let { factory.stringNode(it.toString()) } ?: factory.nullNode())
+        approval.kind?.let { node.put(KIND, it.name) }
     }
+
+    /** Whose the approval was (`APR-9`): `PERSON`, any other name a workload's, and none (before kinds) null. */
+    private fun kind(node: JsonNode?): Identity.Credential.Kind? = when {
+        node == null || node.isNull -> null
+        !node.isString -> throw format("$.approval.kind is not a string")
+        node.text() == Identity.Credential.Kind.PERSON.name -> Identity.Credential.Kind.PERSON
+        else -> Identity.Credential.Kind.WORKLOAD
+    }
+
+    private const val KIND = "kind"
 
     private fun membershipsTree(node: ObjectNode, memberships: Memberships?) {
         if (memberships == null) {
@@ -122,6 +137,7 @@ internal object ApprovalCodec {
             breakGlass = node.need("breakGlass").flag(),
             credentialId = node.need("credentialId").textOrNull(),
             issuedAt = node.need("issuedAt").textOrNull()?.let(Instant::parse),
+            kind = kind(node.get(KIND)),
         )
     }
 

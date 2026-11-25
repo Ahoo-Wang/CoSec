@@ -145,7 +145,8 @@ A DENY cannot name a bare resource type such as `order`: it would cover only the
 | `*` | Every action. |
 
 There is no other wildcard. Service and verb compare exactly, case included (`http:get` is not `http:GET`). Neither
-may be empty or contain `:`, `*`, whitespace or control characters.
+may be empty or contain `:`, whitespace or control characters; a [reserved character](#reserved-characters), and `*`,
+`?`, `{` or `}` within a name, is written escaped (`http:M\!` for a method `M!`).
 
 Where a request's action comes from:
 
@@ -213,7 +214,8 @@ A resource is a type and an id: `order` and `42` for `order/42`, `http` and `/or
 | `order/*/items` | | | yes |
 
 Ids are split on `/` and compared as written: never decoded, never trimmed. The type cannot be `http`, and cannot
-contain `:`; no literal may contain `*`, `?`, `{`, `}`, whitespace or control characters.
+contain `:`; no literal may contain whitespace or control characters, and `*`, `?`, `{`, `}` and the
+[reserved characters](#reserved-characters) are written escaped (`file/a\(1\).txt`).
 
 ### HTTP paths
 
@@ -236,7 +238,11 @@ Spring's `PathPattern` matches, on this subset:
 
 These do not compile: `{name:regex}`, an empty pattern, a segment that can match an empty value other than `*` alone
 (such as `{a}{b}` or `*{a}`), `{}` or `{*}`, and text that holds half of a surrogate pair without the other half (a
-character outside the Basic Multilingual Plane, such as an emoji, is written whole).
+character outside the Basic Multilingual Plane, such as an emoji, is written whole). A [reserved character](#reserved-characters)
+unescaped does not compile either, nor does a pattern that matches no request path (`DOC-15`): one holding a `\`
+(`PIP-14`), a `;` or a control character (`PIP-5`, `PIP-30`: the pipeline removes path parameters and refuses an encoded
+`;` or control character), a `.` or `..` segment (`PIP-5`), or a segment whose values hold more than 256 characters. A
+DENY written so would deny nothing.
 
 A resource may be a pattern object with options, for `http:path:` patterns only:
 
@@ -265,8 +271,8 @@ A pattern over a bound does not compile:
 
 | Bound | Limit |
 |---|---|
-| An `http:path:` pattern | at most 2,048 characters after `http:path:`, the longest path the pipeline accepts |
-| A typed resource pattern | at most 2,058 characters |
+| An `http:path:` pattern | at most 2,048 characters after `http:path:`, the longest path the pipeline accepts; an escape counts as the one character it writes |
+| A typed resource pattern | at most 2,058 characters, an escape counting as one |
 | A segment that mixes `*`, `?` or `{name}` with other text, such as `report-*.pdf` | at most 16 parts: each `*`, `?` and `{name}`, and each run of text between them. Consecutive `*` count once: `a**b` is `a*b` |
 | All such segments of one document, across its policies, boundaries and rate limit rules | at most 2,048 glob units in all: each segment's parts and the characters of its text, so `report-*.pdf` is 3 parts and 11 characters, 14 units. A segment after a leading `**` or `{*name}` counts twice, and so does a rate limit rule whose `key` reads a captured variable |
 
@@ -284,6 +290,32 @@ characters, the longest the pipeline accepts (`GlobBoundBenchmark`, its worst in
 segment of surrogate pairs, such as emoji, against `?` and `*`; with ASCII it is about 0.33 ms. It allocates the
 values it captures: about 0.25 MB per request with ASCII values, and about 0.6 MB with values outside Latin-1. A shadow window evaluates its candidate document as well,
 within a budget of its own.
+
+### Reserved characters {#reserved-characters}
+
+`[ ] ( ) | ! ^ $ \` are reserved for a later pattern syntax (classes, groups and alternatives, negation, anchors, the
+escape itself), in every pattern a document or a route map holds: an `http:path:` pattern, a typed resource pattern, an
+action pattern, a route's path, and the literal segments of a route's resource template. Unescaped, each is a compile
+error naming the character and its position (`DOC-15`). So a pattern written for a later syntax never compiles here as
+a literal that matches nothing: a DENY that relied on it would otherwise be void on an instance of this version.
+
+A backslash writes a character as text: `\` followed by one of `[ ] ( ) | ! ^ $ \ * ? { }` is that character, and
+followed by anything else is a compile error. An escaped `*`, `?` or `{` is never a wildcard or a capture. In the
+service or the verb of an action, `*`, `?`, `{` and `}` are written escaped too: an action has no wildcard within a name.
+
+| You mean | Write | In JSON |
+|---|---|---|
+| `/odata/$metadata` | `http:path:/odata/\$metadata` | `"http:path:/odata/\\$metadata"` |
+| `/files/a(1).txt` | `http:path:/files/a\(1\).txt` | `"http:path:/files/a\\(1\\).txt"` |
+| `/Products(42)`, capturing `42` | `http:path:/Products\({id}\)` | `"http:path:/Products\\({id}\\)"` |
+| a segment that is `*` | `http:path:/files/\*` | `"http:path:/files/\\*"` |
+| the action of the method `M!` | `http:M\!` | `"http:M\\!"` |
+
+An escaped character matches that character in the request path once decoded, as every literal does: `\(` matches
+`(` and `%28`. A path pattern cannot escape `\` itself, since no request path holds one (`PIP-14`); a typed resource
+and an action can. The length bounds count an escape as the character it writes. `cosec-migrate` escapes a 7.x path
+pattern's reserved characters, which 7.x read as text, and `cosec-openapi` escapes every such character of a spec path
+outside its templates, `*` and `?` included.
 
 ## Path variables
 

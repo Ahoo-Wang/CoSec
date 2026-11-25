@@ -297,7 +297,7 @@ class PipelineBuilderTest {
             TENANT,
             MembershipSource.Claims(PipelineFixtures.claims("" to "clerk")),
             emptyMap(),
-            Identity.Credential(Identity.Method.JWT, "t1", now.plusSeconds(3600)),
+            Identity.Credential(Identity.Method.JWT, Identity.Credential.Kind.PERSON, "t1", now.plusSeconds(3600)),
             breakGlass = true,
             issuedAt = null,
             apiKeyCredential = false,
@@ -307,7 +307,7 @@ class PipelineBuilderTest {
         val gateway = PipelineFixtures.pipeline(
             authenticator(AuthnResult.Authenticated(principal, Identity.Method("token")))
         ) {
-            forwardIdentity { maxBytes = IdentityCodec.DEFAULT_MAX_BYTES }
+            forwardIdentity { maxBytes = IdentityCodec.WRITE_MAX_BYTES }
             clock(clock)
         }
         val routed = facts().let {

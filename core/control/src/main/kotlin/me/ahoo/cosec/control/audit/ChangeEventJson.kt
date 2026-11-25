@@ -32,7 +32,7 @@ object ChangeEventJson {
             .put("id", event.id)
             .put("time", event.time.toString())
             .put("kind", event.kind.name)
-            .put("change", event.change.value)
+            .put("change", event.change)
             .put("document", event.document.toString())
             .put("note", event.note)
         root.putObject(

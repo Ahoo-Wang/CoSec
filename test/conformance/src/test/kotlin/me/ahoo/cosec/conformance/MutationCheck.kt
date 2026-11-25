@@ -32,14 +32,18 @@ import kotlin.system.exitProcess
  * # Tests: :engine:test --tests me.ahoo.cosec.engine.EnginePropertyTest
  * ```
  *
- * followed by the diff, as `git diff` writes it (`git apply` skips the header).
+ * followed by the diff, as `git diff` writes it (`git apply` skips the header). A patch that changes code the compiler
+ * copies into its callers (an `inline fun`, a `const val`) adds `# Inlined: <what>`, and its builds compile from source
+ * ([Recompilation]).
  */
 class Mutant(
     val name: String,
     val rules: List<String>,
     val description: String,
     val tests: List<String>,
-    val patch: Path
+    val patch: Path,
+    /** What the patch changes that its callers inline (`# Inlined:`), or null: such a mutant builds strictly. */
+    val inlined: String? = null
 ) {
     /** The compile tasks of the modules [tests] runs, so a mutant that does not compile is told apart from a killed one. */
     val compileTasks: List<String> get() = tests.filter {
@@ -91,6 +95,7 @@ class Mutant(
                 description = field("mutant"),
                 tests = field("tests").split(' ').filter { it.isNotBlank() },
                 patch = patch,
+                inlined = header["inlined"]?.takeIf { it.isNotBlank() },
             )
         }
 
@@ -104,8 +109,25 @@ class Mutant(
  * tree. [FAILS_WITHOUT_PATCH] is a mutant whose tests failed with the patch and again once it was reverted (a flaky test,
  * or something the patch left behind): no kill. [BUILD_FAILED] is a build that failed without a compiler error or a
  * failing test (a dependency that could not be resolved, say), twice, or that timed out: it says nothing about the mutant.
+ * [NOT_RECOMPILED] is a build, of the mutant or of its control, that does not show the patched code compiled
+ * ([Recompilation]): its tests may have run classes from before, so neither a pass nor a failure is a verdict.
  */
-enum class MutantResult { KILLED, SURVIVED, DOES_NOT_APPLY, DOES_NOT_COMPILE, BUILD_FAILED, FAILS_WITHOUT_PATCH }
+enum class MutantResult {
+    KILLED,
+    SURVIVED,
+    DOES_NOT_APPLY,
+    DOES_NOT_COMPILE,
+    BUILD_FAILED,
+    FAILS_WITHOUT_PATCH,
+    NOT_RECOMPILED
+}
+
+/**
+ * What [build] lacks to prove it compiled the patch: the [required] tasks it did not run ([Recompilation.notRun]) and,
+ * for a [strict] build, the compilations it did not run whole ([Recompilation.notRebuilt]). Empty when it proves it.
+ */
+fun unproved(build: Build, required: List<String>, strict: Boolean): List<String> =
+    Recompilation.notRun(build.log, required) + if (strict) Recompilation.notRebuilt(build.log) else emptyList()
 
 /** One Gradle build of a mutant's worktree: its exit code, what it printed, and whether it was stopped for taking too long. */
 class Build(val exit: Int, val log: String, val timedOut: Boolean = false) {
@@ -141,7 +163,11 @@ fun controlled(control: Build, failedTests: Int): MutantResult = when {
     else -> MutantResult.BUILD_FAILED
 }
 
-/** The verdicts after which a mutant's tree is reverted and reused; after any other, it is replaced by a fresh one. */
+/**
+ * The verdicts after which a mutant's tree is reverted and reused; after any other, it is replaced by a fresh one. So is
+ * an [Mutant.inlined] mutant's after every verdict: reverting it recompiles incrementally, which may leave its callers
+ * with the patched code the next mutant would run.
+ */
 private val REUSABLE = setOf(MutantResult.KILLED, MutantResult.SURVIVED, MutantResult.DOES_NOT_APPLY)
 
 /**
@@ -149,11 +175,14 @@ private val REUSABLE = setOf(MutantResult.KILLED, MutantResult.SURVIVED, MutantR
  * checked out (`HEAD`, in a temporary `git worktree`, so the working copy is untouched), checks it compiles, and runs
  * its tests: at least one must fail, and the same tests must pass once the patch is reverted (the control). A mutant
  * that no longer applies or compiles fails the check too: the code moved, so the mutant must follow it.
- * `-Pmutants=<name,...>` runs only those. Not part of `check`: each mutant rebuilds.
+ * `-Pmutants=<name,...>` runs only those. Not part of `check`: each mutant rebuilds. A verdict counts only on builds
+ * that show the patched code compiled, the control's too ([Recompilation]); an [Mutant.inlined] mutant's are built from
+ * source.
  *
  * The mutants share one worktree and one Gradle daemon, one after another ([MutantTree] says how none decides the
- * next); after a mutant that did not compile, whose build failed or timed out, or whose control failed, the worktree is
- * replaced by a fresh one. A run leaves that daemon alive for two minutes after its last build, locally too.
+ * next); after a mutant that did not compile, whose build failed or timed out, was not recompiled or whose control
+ * failed, and after every [Mutant.inlined] one, the worktree is replaced by a fresh one. A run leaves that daemon alive
+ * for two minutes after its last build, locally too.
  */
 object MutationCheck {
     private const val BUILD_TIMEOUT_MINUTES = 30L
@@ -194,8 +223,9 @@ object MutationCheck {
      * Checks [mutants] one after another: each starts from a tree at `HEAD` with no test results ([MutantTree.prepare]).
      * After a verdict in [REUSABLE] the tree is reverted ([MutantTree.revert]: one that fails throws, and the run stops
      * there) and the next mutant uses it; after any other ([MutantResult.DOES_NOT_COMPILE], [MutantResult.BUILD_FAILED],
-     * a timeout among them, [MutantResult.FAILS_WITHOUT_PATCH]) it is removed and the next mutant gets a fresh one, so
-     * nothing a failed or abandoned build left or still writes can reach it.
+     * a timeout among them, [MutantResult.FAILS_WITHOUT_PATCH], [MutantResult.NOT_RECOMPILED]), and after an
+     * [Mutant.inlined] mutant, it is removed and the next mutant gets a fresh one, so nothing a failed or abandoned build
+     * left or still writes, and no caller still holding inlined patched code, can reach it.
      */
     internal fun inOrder(
         mutants: List<Mutant>,
@@ -209,7 +239,7 @@ object MutationCheck {
                 println("== ${mutant.name} (${mutant.rules.joinToString()}): ${mutant.description}")
                 tree.prepare()
                 val result = check(tree, mutant)
-                if (result in REUSABLE) {
+                if (result in REUSABLE && mutant.inlined == null) {
                     tree.revert()
                 } else {
                     removeTree(tree)
@@ -226,8 +256,11 @@ object MutationCheck {
     private fun check(tree: MutantTree, mutant: Mutant): MutantResult {
         if (!tree.apply(mutant.patch)) return MutantResult.DOES_NOT_APPLY
         val worktree = tree.directory
-        val compile = retried { gradle(worktree, mutant.compileTasks) }
+        val strict = mutant.inlined != null
+        val required = Recompilation.requiredTasks(mutant.patch)
+        val compile = retried { gradle(worktree, mutant.compileTasks, strict) }
         if (compile.exit != 0) return verdict(compile, null, 0)
+        notRecompiled(compile, required, strict)?.let { return it }
         val tests = retried(unless = { failedTests(worktree) > 0 }) {
             gradle(worktree, listOf("--continue") + rerun(mutant.tests))
         }
@@ -238,13 +271,24 @@ object MutationCheck {
         tree.revert()
         tree.prepare()
         controlsRun++
+        // A strict mutant's reverted code is compiled from source too, before its tests; any other's by the tests' build.
+        val reverted = if (strict) retried { gradle(worktree, mutant.compileTasks, strict = true) } else null
+        if (reverted != null && reverted.exit != 0) return controlled(reverted, 0)
         val control = retried(unless = { failedTests(worktree) > 0 }) {
             gradle(worktree, listOf("--continue") + rerun(mutant.tests))
         }
+        notRecompiled(reverted ?: control, required, strict)?.let { return it }
         return controlled(control, failedTests(worktree)).also {
             if (it == MutantResult.KILLED) controlsPassed++
             println("   control: ${if (it == MutantResult.KILLED) "passed" else "FAILED ($it)"}")
         }
+    }
+
+    /** [MutantResult.NOT_RECOMPILED] when [build] does not prove it compiled the patch ([unproved]), printing what it lacks. */
+    private fun notRecompiled(build: Build, required: List<String>, strict: Boolean): MutantResult? {
+        val missing = unproved(build, required, strict).ifEmpty { return null }
+        missing.forEach { println("   not recompiled: $it") }
+        return MutantResult.NOT_RECOMPILED
     }
 
     /** [tests] with `--rerun` after each task path: a test task is never up to date or restored, it runs. */
@@ -312,18 +356,19 @@ object MutationCheck {
      * mutant cost when each build had its own JVM), which stops itself two minutes after the last build. File-system
      * watching is off, so every build reads the files as they are after a patch or a revert. The log is written outside
      * the tree, where no test that reads the repository can see it. It prints what a quiet build would ([quietView]); the
-     * plain console's task lines stay in [Build.log], where [survival] reads them.
+     * plain console's task lines stay in [Build.log], where [survival] and [unproved] read them. A [strict] build runs
+     * every task again without the build cache ([Recompilation.STRICT]).
      */
-    private fun gradle(directory: Path, tasks: List<String>): Build {
+    private fun gradle(directory: Path, tasks: List<String>, strict: Boolean = false): Build {
         val log = Files.createTempFile("mutation-gradle-", ".log")
         val process = ProcessBuilder(
             listOf(
                 Executables.gradleWrapper(directory),
                 "-D$DAEMON_IDLE_TIMEOUT",
                 "--no-watch-fs",
-                "--build-cache",
                 "--console=plain"
             ) +
+                (if (strict) Recompilation.STRICT else listOf("--build-cache")) +
                 tasks
         ).directory(directory.toFile()).redirectErrorStream(true).redirectOutput(log.toFile()).start()
         val finished = process.waitFor(BUILD_TIMEOUT_MINUTES, TimeUnit.MINUTES)

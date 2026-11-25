@@ -1,0 +1,17 @@
+# Rule: PIP-7
+# Mutant: a TokenAuthenticator built without stating it accepts a token while its revocations cannot be read
+# Tests: :architecture:test --tests me.ahoo.cosec.architecture.SafeDefaultsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
+index e82164c35..80da03c19 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
+@@ -79,7 +79,7 @@ class TokenAuthenticator(
+      * answers the request 503. Required, so that whoever builds one states it; the starter passes
+      * `cosec.authentication.revocation.fail-closed` negated (accepted unless the operator sets it).
+      */
+-    private val acceptUnavailableRevocations: Boolean,
++    private val acceptUnavailableRevocations: Boolean = true,
+     /** How audit names this way of authenticating, and the credential of a verifier other than CoSec's. */
+     private val method: String = METHOD,
+     /**

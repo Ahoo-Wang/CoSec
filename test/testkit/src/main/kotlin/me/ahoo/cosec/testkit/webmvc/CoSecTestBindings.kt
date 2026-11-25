@@ -17,7 +17,6 @@ package me.ahoo.cosec.testkit.webmvc
 
 import jakarta.servlet.Filter
 import jakarta.servlet.http.HttpServletRequest
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.runtime.http.RequestGate
@@ -41,7 +40,6 @@ import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
  * Every binder refuses a context the pipeline did not make, so a test never runs as anonymous without saying so; a bound
  * context whose request has ended is denied as any other (`PIP-26`).
  */
-@ExperimentalCoSecApi
 object CoSecTestBindings {
     /** CoSec's filter over [gate], built as the starter builds it: the same class, problem writer and request end. */
     @JvmStatic

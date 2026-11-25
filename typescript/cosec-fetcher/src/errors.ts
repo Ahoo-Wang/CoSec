@@ -120,6 +120,44 @@ function answeredStatus(error: unknown): number | undefined {
 const CAUSE_DEPTH = 8;
 
 /**
+ * A tenant switch ({@link JwtTokenManager.switchTenant}) issued nothing that
+ * was stored. It carries no token: `problem` and `status` say what the switch
+ * route answered.
+ *
+ * - `sessionEnded`: the route refused the pair (`401`, or what
+ *   `isRefreshRejected` names), other than a `token-expired`, which is
+ *   refreshed once: the session the switch was presented from is
+ *   over, and its pair was removed here if it was still the stored one.
+ * - Otherwise the session is unchanged and its pair kept: the application's
+ *   own refusal (a `403` of its `TenantSwitch`, say), a `503`, a `5xx`, a
+ *   network error or a timeout (no `status`), an answer that is not a pair, or
+ *   a second `token-expired` after the refresh a first one started succeeded.
+ *   A switch never moves the session it is presented from, so calling
+ *   `switchTenant` again presents the same current pair safely.
+ */
+export class TenantSwitchError extends FetcherError {
+  /** What CoSec answered (`token-revoked`, `unavailable`, ...), when it said. */
+  readonly problem?: CoSecProblem;
+  /** The status the switch route answered, when it answered. */
+  readonly status?: number;
+  /** Whether the switch route ended the session: it refused the pair. */
+  readonly sessionEnded: boolean;
+
+  constructor(cause: unknown, sessionEnded: boolean) {
+    super(
+      sessionEnded
+        ? 'The tenant switch was refused: the session is over.'
+        : 'The tenant switch issued nothing; the session is kept.',
+      withoutExchange(cause),
+    );
+    this.problem = getCoSecProblem(cause);
+    this.status = answeredStatus(cause);
+    this.sessionEnded = sessionEnded;
+    this.name = 'TenantSwitchError';
+  }
+}
+
+/**
  * The name and message of `error` and of each of its causes, and nothing else
  * of them: not an exchange, not a request. A fetcher error holds the request,
  * whose body may be the token pair, so no original error object is kept.

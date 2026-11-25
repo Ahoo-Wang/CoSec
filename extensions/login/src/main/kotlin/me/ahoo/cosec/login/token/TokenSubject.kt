@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.login.token
 
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.TokenSession
 import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Instant
@@ -27,6 +28,13 @@ import java.time.Instant
 class TokenSubject(
     /** The principal's id: the token's subject. Not empty, and not beginning with `(`, which is CoSec's (`IDN-12`). */
     val id: String,
+    /**
+     * Whose the token is, a person's or a workload's (`IDN-45`): the `cosec.kind` claim, which decides whether its
+     * holder may approve a change, be the trust root and use break-glass. No default: an [me.ahoo.cosec.login.Authentication]
+     * says which for every principal it signs in. A refresh and a tenant switch keep the kind of the token they issue
+     * from; nothing changes it within a session.
+     */
+    val kind: Identity.Credential.Kind,
     /** The principal's tenant; null puts it in the default tenant. */
     val tenant: String? = null,
     /**
@@ -52,11 +60,12 @@ class TokenSubject(
     val notAfter: Instant? = null,
 ) {
     private fun fields(): List<Any?> =
-        listOf(id, tenant, app, roles, policies, attributes, membershipMarker, session, notAfter)
+        listOf(id, kind, tenant, app, roles, policies, attributes, membershipMarker, session, notAfter)
 
     /** This subject in [issue]'s session, bounded by its end. */
     fun inSession(issue: TokenFamilies.Issue): TokenSubject = TokenSubject(
         id = id,
+        kind = kind,
         tenant = tenant,
         app = app,
         roles = roles,
@@ -73,7 +82,7 @@ class TokenSubject(
 
     /** What identifies the subject's scope and how much it holds; never the attributes, which an application fills freely. */
     override fun toString(): String =
-        "TokenSubject(id=$id, tenant=$tenant, app=$app, roles=${roles.size}, policies=${policies.size}, " +
+        "TokenSubject(id=$id, kind=$kind, tenant=$tenant, app=$app, roles=${roles.size}, policies=${policies.size}, " +
             "attributes=${attributes.size}, session=${session != null})"
 
     companion object {
@@ -85,6 +94,8 @@ class TokenSubject(
         @JvmOverloads
         fun of(token: VerifiedToken, issue: TokenFamilies.Issue? = null): TokenSubject = TokenSubject(
             id = token.principal,
+            // The kind the presented token carries, never one an application's hook gives (IDN-46).
+            kind = token.kind,
             app = token.app,
             tenant = token.tenant,
             roles = token.roles,

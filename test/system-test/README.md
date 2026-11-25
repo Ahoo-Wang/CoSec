@@ -38,6 +38,30 @@ The workflow runs the suite twice, a matrix of `leg`; `COMPOSE_FILE` names `comp
 change, onboarding a tenant): they speak HTTP to the gateway's `/cosec/control` route, the same URL in both legs.
 `service-path` marks what only the control host has (its service port, its three ports, its replicas).
 
+## The previous release
+
+RFC 0014 T asks what a fleet half upgraded does: the gateways and the control host still on the previous release, the
+services already on the new one. The leg `previous` runs that: `gh workflow run system-test.yml --ref main -f ref=<sha>
+-f previous=<release>` pulls the published `ghcr.io/ahoo-wang/cosec-gateway:<release>` and `cosec-control:<release>`, builds
+the services from the ref, and runs the `control-host` deployment's scenarios against them (`-PsystemLeg=control-host
+-PsystemPrevious=<release>`). It runs alone (neither the two deployments nor the kind job), never on a pull request, at night or
+by default, and it is not a required check: dispatch it at a release candidate, and otherwise only when no pull request is armed.
+
+Every scenario of the deployment runs there, except what holds only from a later release than the one under test: those are
+listed in one place, `PreviousRelease.LATER`, each with the release it holds from and why, and reported as left out with that
+reason; they run again once `previous` reaches that release. The list is empty: 8.0.0-beta.9, the first release with RFC
+0014's readers, runs every scenario of the deployment. What the services read of the previous
+release's formats, and the previous release of theirs, is `test/compat`'s (`MIX-*`), which runs in every build.
+
+Not run here, and why:
+
+- the current gateway in front of the previous services: those services are this suite's own applications, never published,
+  so the previous ones would be built from the previous tag inside the workflow;
+- two gateways of two releases on one rate limit, over the network: `test/compat` holds the same counts on one Redis (`MIX-8`);
+- the previous `control-sdk` against the current control host: `test/compat` holds the control API across releases (`MIX-16`,
+  `MIX-17`);
+- the `embedded` deployment: its control plane is the IAM's, built from the ref, so a previous control plane has no place in it.
+
 ## Running it
 
 On CI, through [`.github/workflows/system-test.yml`](../../.github/workflows/system-test.yml): nightly on `main`, on the

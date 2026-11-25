@@ -1,0 +1,10 @@
+{
+  "id": "GRT-7",
+  "source": "RFC 0007 §7.4 (2026-10-30 revision)",
+  "statement": "A fragment granted to Anyone in the default tenant (0), where unauthenticated callers are, is never contained.",
+  "level": "control",
+  "pending": null,
+  "guards": [
+    "control:GrantAnalyzerTest#an Anyone grant in the default tenant is never contained"
+  ]
+}

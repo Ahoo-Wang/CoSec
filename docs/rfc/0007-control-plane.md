@@ -896,7 +896,8 @@ r[s := g]；r 的作用域在 σ' 中，`covers` 保证 H 在该作用域按策�
   - 审批不是服务配置上的路由（`CTL-58`）：服务发起的、等人的变更在运维端口上批准（`CTL-81`）。
 - **发布时再判一次**（`CTL-9`）：发布在当前的头上重新判定发布者对每个目标的授权与授出分析；它单独发布不了的等待审批，什么也不写。
 - **批准绑定到内容**：批准记录候选摘要与越权项列表的摘要；变基、改动候选都让批准作废。批准 72 小时内有效（`cosec.control.approval.expire-after`，`APR-2`）。
-- **发布时再核实批准人**（`APR-5`、`APR-8`，RC1-11）：批准记录批准人的 token 属性（任何 JSON 类型）、成员关系、凭据 id（token 的 `jti`）与签发时间（`iat`）。发布时：
+- **发布时再核实批准人**（`APR-5`、`APR-8`、`APR-9`，RC1-11）：批准记录批准人的 token 属性（任何 JSON 类型）、成员关系、凭据 id（token 的 `jti`）、签发时间（`iat`）与凭据的种类（`approval.kind`，取自批准那一刻批准人自己的凭据）。发布时：
+  - 只计入写明是人的批准（`APR-9`，2026-11-25）：没有种类的（记下种类之前的宿主写的）与写着别的种类的都不算数，变更回到 `AWAITING_APPROVAL` 并附发现，要重新批准。“工作负载从不批准”（`APR-7`）因此在发布这一刻可以核对，而不是靠“当初放行过”的假定；旧宿主改写记录时丢掉这个成员，后果只是重新批准；
   - 按记录的成员关系与属性重新检查批准人对当前文档的 `cosec:approve`，失败或无法判定则回到 `AWAITING_APPROVAL` 并附发现；
   - 那个 token 已被吊销、或批准人截至当时签发的全部 token 已被吊销（容差为 `cosec.authentication.revocation.skew`），批准不再算数；吊销读不到是 503，批准保留；
   - 没有记下凭据 id 的批准（升级前的、旧实例接受的）不算数，须重新批准；
@@ -1195,7 +1196,7 @@ starter 在类路径上有 `cosec-control`、且 `cosec.control.enabled` 不为 
 - **门面**（`CTL-65`、`CTL-77`、`STA-11`）：应用经 `cosec-control-sdk` 的 `ControlService` 调用控制面（`ControlCaller`、`ControlRefusedException` 也在那里，包名
   `me.ahoo.cosec.control.sdk`；它不依赖 runtime 与控制面）。两种实现答得一样：进程内的 `LocalControlService`（`cosec-control`）与经控制面宿主服务端口的 `HttpControlService`
   （`cosec-control-http`）。两者把服务配置的每个调用做成同一个请求（一张路由表，`RoutedControlService`），各用一套映射声明调用方：请求的主体按网关转发身份的方式写
-  （`IdentityIssuer`），应用自己的主体写成同一个服务身份（`ServiceIdentity`，凭据名 `service`，§7.3）。转述带上调用方完整的成员关系（`IDN-39`，RFC 0006 §7.3），所以附加到调用方的 DENY、或读它在另一个空间里的角色的 DENY，经两种实现判定一致。经门面的每次调用都由管线按 `ControlCaller` 所声明的主体、按策略判定，
+  （`IdentityIssuer`），应用自己的主体写成同一个服务身份（`ServiceIdentity`，凭据名 `service`，§7.3）。转述带上调用方完整的成员关系（`IDN-39`，RFC 0006 §7.3；被转述的身份没有写成员关系时不写，进程内的门面对这样的调用方同样答 400，`IDN-42`），转述的头不超过 CoSec 写方的上限 6 KiB（`IDN-43`），所以附加到调用方的 DENY、或读它在另一个空间里的角色的 DENY，经两种实现判定一致。经门面的每次调用都由管线按 `ControlCaller` 所声明的主体、按策略判定，
   并按该主体记录，走路由自己的代码路径，没有绕过它的路；门面恰好到达服务配置提供的路由，两者共用一个定义；进程内的调用记为 `via.method: in-process`。`ControlCaller.of`
   接受任何 `SecurityContext`，不是 CoSec 的 gate 或管线所造的上下文在调用时被拒绝，在控制面被问到之前，两种实现用同样的异常与措辞（同 `PIP-29`）；HTTP 实现另外拒绝没有凭据的
   请求主体，而不是把它当匿名发出。已结束请求的调用方不被陈述：`IdentityIssuer` 只为进行中的请求签发身份，`HttpControlService` 因此在发送任何东西之前以 403（不带细节）拒绝这次调用，

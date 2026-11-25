@@ -1,0 +1,17 @@
+# Rule: IDN-46
+# Mutant: a tenant switch issues a person's token whatever token it was asked with, so a workload's session becomes a person's by switching
+# Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchTenantAuthenticationTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt
+index cb40f219f..16c4f0a01 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt
+@@ -87,7 +87,7 @@ class SwitchTenantAuthentication<C : SwitchTenantCredentials>(
+         TokenSubject(
+             id = previous.principal.id,
+             // The presented token's kind: the switch's hook answers memberships, never whose the token is (IDN-46).
+-            kind = token.kind,
++            kind = me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON,
+             app = membership.app?.also(::requireAppId) ?: previous.scope.appId.ifEmpty { null },
+             tenant = target,
+             roles = membership.roles,

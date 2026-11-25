@@ -1,0 +1,12 @@
+{
+  "id": "IDN-16",
+  "source": "RFC 0009 §11.3; round-2 review M2",
+  "statement": "The generation the family just replaced, presented within cosec.jwt.session.rotation-leeway of the move, is answered with a pair of the current generation and moves nothing: a refresh whose response was lost can be retried, and two tabs refreshing one pair both keep a usable pair. The window opens at the move and does not slide. Any older generation, or the one just replaced after the leeway, revokes the whole family and is refused, so a copied pair, even one answered within the leeway, is caught at the next refresh after it.",
+  "level": "pipeline",
+  "pending": null,
+  "guards": [
+    "login:TokenFamiliesTest#reuse revokes the family",
+    "login:TokenFamiliesTest#the pair just replaced is answered at the current generation within the leeway",
+    "login:TokenFamiliesTest#a copy answered within the leeway is caught at the next refresh"
+  ]
+}

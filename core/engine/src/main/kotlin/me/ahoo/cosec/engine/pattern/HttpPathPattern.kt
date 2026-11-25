@@ -352,7 +352,7 @@ internal sealed class PathElement {
             value.equals(text, ignoreCase = !caseSensitive)
     }
 
-    /** A segment with `?` and no `*` or capture: `?` is one UTF-16 character; case folds per character. */
+    /** A segment with `?` ([WILDCARD]) and no `*` or capture: `?` is one UTF-16 character; case folds per character. */
     class SingleChar(private val text: String, private val caseSensitive: Boolean) : Segment() {
         override fun matches(value: String, captures: Array<String?>?): Boolean {
             if (value.length != text.length) {
@@ -360,7 +360,7 @@ internal sealed class PathElement {
             }
             for (index in text.indices) {
                 val expected = text[index]
-                if (expected == '?') {
+                if (expected == WILDCARD) {
                     continue
                 }
                 val actual = value[index]

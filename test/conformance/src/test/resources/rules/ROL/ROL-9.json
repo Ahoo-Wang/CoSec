@@ -1,0 +1,12 @@
+{
+  "id": "ROL-9",
+  "source": "RFC 0012 §7.2, §7.3",
+  "statement": "PutRole is analyzed per permission, what cannot be proved contained needs an approval, and adding a permission needs cosec:grant.",
+  "level": "control",
+  "guards": [
+    "control:RolesTest#a star role put with the catalog that defines its permissions is asked cosec grant for",
+    "control:RolesTest#a catalog that gives a star role a binding it did not derive is asked cosec grant for",
+    "control:RolesTest#a hand-written permission that gives a star role a binding is asked cosec grant for"
+  ],
+  "pending": null
+}

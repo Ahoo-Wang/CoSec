@@ -83,6 +83,8 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.runtime.shadow.StagedDocuments
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.WORKLOAD
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipProvider
@@ -134,6 +136,7 @@ import java.time.Instant
  *            { "publish": "c1" }, { "abandon": "c1" }, { "rebase": "c1" },
  *            { "approve": { "change": "c1", "by": "bob", "candidate": "own" | "other" } },
  *            { "approveAsBefore": { "change": "c1", "by": "bob" } },  // READY, approved as an older instance stored it
+ *            { "approveBeforeKinds": { "change": "c1", "by": "bob" } },  // the same, with its credential but no kind (APR-9)
  *            { "reject": { "change": "c1", "by": "bob" } }, { "advance": "PT73H" },
  *            { "report": { "change": "c1", "instance": "i1", "counts": { "NARROWED": 2 } } },
  *            { "publish": { "change": "c1", "ack": "summary" | { "NARROWED": 1 } } },
@@ -300,12 +303,25 @@ object ChangeRunner : ScenarioRunner {
                 operator.get("attributes")?.let(::attributes).orEmpty(),
                 // By default a token of its own, as an approval records it.
                 credential = credential?.let(::credential)
-                    ?: Identity.Credential(Identity.Method("oidc"), "token-$name", null).takeIf { credential == null },
+                    ?: Identity.Credential(Identity.Method("oidc"), PERSON, "token-$name", null).takeIf { credential == null },
                 issuedAt = credential?.get("issuedAt")?.let { Instant.parse(it.text()) },
                 provided = operator.get("provider")?.bool() == true,
             )
         }
         private val operators = securities.mapValues { (_, security) -> Operator.of(security)!! }
+
+        /**
+         * Who takes a step of a scenario without operators: the platform's administrator, a person with a token of its
+         * own in a request the host permitted, as a scenario's operators are by default; never an operator without a
+         * request, which the control plane reads as a workload's (`IDN-44`).
+         */
+        private val platform: Operator = Operator.of(
+            engine.security(
+                TenantId.PLATFORM,
+                PLATFORM.actor.principal.value,
+                credential = Identity.Credential(Identity.Method("oidc"), PERSON, "token-cosec", null),
+            )
+        )!!
 
         /** Revoked token ids, and the instant before which an operator's tokens are revoked. */
         private val revokedTokens = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
@@ -324,14 +340,14 @@ object ChangeRunner : ScenarioRunner {
          */
         private fun credential(node: JsonNode): Identity.Credential? = if (node.isString) {
             when (node.text()) {
-                "api-key" -> Identity.Credential(Identity.Method.API_KEY, "key", null)
-                "service" -> Identity.Credential(Identity.Method.SERVICE, "service:svc", null)
+                "api-key" -> Identity.Credential(Identity.Method.API_KEY, WORKLOAD, "key", null)
+                "service" -> Identity.Credential(Identity.Method.SERVICE, WORKLOAD, "service:svc", null)
                 "none" -> null
                 else -> throw ScenarioFormatException("Unknown credential $node")
             }
         } else {
             node.only("token", "issuedAt")
-            Identity.Credential(Identity.Method("oidc"), node.required("token").text(), null)
+            Identity.Credential(Identity.Method("oidc"), PERSON, node.required("token").text(), null)
         }
         private var next: ChangeId? = null
         private val reports = InMemoryShadowReports(clock)
@@ -518,7 +534,7 @@ object ChangeRunner : ScenarioRunner {
                 ),
             )
             val found = plane.diff(
-                PLATFORM,
+                platform,
                 documentKey(argument.required("document").text()),
                 argument.required("from").longValue(),
                 argument.required("to").longValue(),
@@ -586,6 +602,8 @@ object ChangeRunner : ScenarioRunner {
             }
 
             "approveAsBefore" -> target(argument).let { (id, op) -> approvedAsBefore(id, op) }
+
+            "approveBeforeKinds" -> target(argument).let { (id, op) -> approvedAsBefore(id, op, beforeKinds = true) }
 
             else -> transition(action, argument)
         }
@@ -699,7 +717,7 @@ object ChangeRunner : ScenarioRunner {
         private suspend fun audited(argument: JsonNode): String {
             auditing.awaitDelivered()
             val id = argument.text()
-            return "audited " + audit.events.filter { it.change.value == id }.joinToString(",") { it.kind.name }
+            return "audited " + audit.events.filter { it.change == id }.joinToString(",") { it.kind.name }
         }
 
         /**
@@ -945,16 +963,17 @@ object ChangeRunner : ScenarioRunner {
                 )
             }
             if (name == null) {
-                return PLATFORM
+                return platform
             }
             return operators[name] ?: throw ScenarioFormatException("No operator $name")
         }
 
         /**
          * [id] approved by [op] as an instance before RC1-11 stored it: `READY`, the approval naming no credential, written
-         * to the store as that instance would, past every check of this one's `approve`.
+         * to the store as that instance would, past every check of this one's `approve`. [beforeKinds]: as an instance
+         * before kinds (8.0.0-beta.8) stored it instead, naming [op]'s credential but not whose it was (`APR-9`).
          */
-        private suspend fun approvedAsBefore(id: ChangeId, op: Operator): ChangeRequest {
+        private suspend fun approvedAsBefore(id: ChangeId, op: Operator, beforeKinds: Boolean = false): ChangeRequest {
             val current = store.change(id) ?: throw ScenarioFormatException("No change ${id.value} to approve")
             val change = current.value
             val approval = Approval(
@@ -964,6 +983,8 @@ object ChangeRunner : ScenarioRunner {
                 change.escalations.map { it.subject },
                 op.memberships,
                 op.attributes,
+                credentialId = op.security?.principal?.credential?.id.takeIf { beforeKinds },
+                issuedAt = op.security?.principal?.issuedAt.takeIf { beforeKinds },
             )
             val approved = change.copy(state = ChangeState.READY, approval = approval)
             check(store.putChange(current.digest, approved, change.state)) { "Change ${id.value} moved meanwhile." }

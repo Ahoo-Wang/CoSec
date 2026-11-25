@@ -1,0 +1,16 @@
+{
+  "id": "PIP-32",
+  "source": "Review round 2, R2B-8 (header views over the server's request); RFC 0006 §5.3.1",
+  "statement": "Nothing reads the server's request after the response. Headers, cookies and the address are read as a view over the server's request only while the request is being decided; whatever outlives it (a decision event and what a listener keeps of it, an audit record, a shadow replay, a security context an application holds) carries copies made before the response.",
+  "level": "build",
+  "pending": null,
+  "guards": [
+    "runtime:BreakGlassAndShadowTest#aReplayReadsTheHeadersTheRequestCarriedNotTheHostsLater",
+    "runtime:CheckAfterResponseTest#a check admitted before the end reads the copy after the server recycles the request",
+    "runtime:CheckAfterResponseTest#an ended request admits no check and never goes back to the server",
+    "runtime:CheckAfterResponseTest#the end waits for a check that is copying the headers",
+    "spring-boot:RealServerAfterResponseTest#a listener and the audit record read after the response what the request carried",
+    "spring-boot:RealServerAfterResponseTest#a security context kept after the response answers what the request carried, and admits no check",
+    "spring-boot:RealServerFactsParityTest#Tomcat refuses its request after the response"
+  ]
+}

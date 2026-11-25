@@ -1,0 +1,12 @@
+{
+  "id": "SNP-29",
+  "source": "RFC 0014 R1 on stored records and G5 (the coordinator's ruling of 2026-11-24, after the red-team review CE-9, CE-10, CE-15); RFC 0014 §5 (sentences proposed in the PR)",
+  "statement": "A stored record's format number is kept for a change no reader of the major version can follow, and changes only with the major version: within 8.x a session record is format 2 at most (format 2 being a session a tenant switch started, IDN-36, the 8.0 baseline) and every other record format 1. A higher format is refused as one a later version wrote. What 8.x adds within a format is a member, with crit when ignoring or dropping it would widen anything.",
+  "level": "build",
+  "guards": [
+    "cocache:TokenFamilyMembersTest#the session's format numbers are frozen for 8_x",
+    "document:StoredCritTest#a later format is a later version's too, and counts as one",
+    "cocache:StoredRecordMembersTest#the records' format numbers are frozen for 8_x"
+  ],
+  "pending": null
+}

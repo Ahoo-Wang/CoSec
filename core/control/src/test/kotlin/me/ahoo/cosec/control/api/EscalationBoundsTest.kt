@@ -102,7 +102,7 @@ class EscalationBoundsTest {
         // Every fragment is counted in one entry: none is left out of what the approval is for.
         escalations.sumOf { counted.find(it.subject)!!.groupValues[1].toInt() }.assert().isEqualTo(fragments)
         ChangeRequestCodec.encode(change).size.assert().isLessThan(MAX_RECORD_BYTES)
-        val checked = fixture.events.single { it.kind == ChangeEvent.Kind.CHECKED && it.change == change.id }
+        val checked = fixture.events.single { it.kind == ChangeEvent.Kind.CHECKED && it.change == change.id.value }
         ChangeEventSize.of(checked).assert().isLessThan(MAX_RECORD_BYTES.toLong() * 2)
     }
 

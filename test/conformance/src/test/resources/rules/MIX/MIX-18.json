@@ -1,0 +1,10 @@
+{
+  "id": "MIX-18",
+  "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on phase 2 of the cross-version fixture); the red-team inventory, row 18",
+  "statement": "A client meets both versions during a rolling upgrade: every problem the previous version answers it with, with its status, type and title, the current one answers alike; a later version may add a problem, never remove or change one. Within one version contract/ pins every answer (PIP-25).",
+  "level": "build",
+  "guards": [
+    "compat:EdgeCompatTest#every problem the previous version answers a client with, the current one answers alike"
+  ],
+  "pending": null
+}

@@ -51,8 +51,10 @@ fun interface TestIndex {
  * 2. every scenario names rules of the registry, none of them superseded, and uses a known polarity and level;
  * 3. every property test and guard the registry names exists;
  * 4. the pending rules are reported with their PR;
- * 5. a guarded rule is covered only by tests [GuardAllowlist] lists for its level, each a named test JUnit runs (not a
- *    bare class), and a `timing` rule by at least one property test that `propertyStress` scales.
+ * 5. a guarded rule is covered by the tests its own file names, each a named test JUnit runs (not a bare class), and a
+ *    `timing` rule by at least one property test that `propertyStress` scales. No runner checks that such a test does
+ *    what the rule says, so naming one is reviewed where it is written: in the rule's file, `rules/<FAMILY>/<ID>.json`.
+ *    No list is kept beside the registry (2026-11-24): one derived from the registry could never disagree with it.
  */
 object RuleCoverage {
     val LEVELS = setOf("engine", "analysis", "pipeline", "control", "build", "startup", "timing")
@@ -66,7 +68,6 @@ object RuleCoverage {
         rules: List<RuleEntry>,
         scenarios: List<Scenario>,
         tests: TestIndex,
-        allowlist: Map<String, Set<String>> = GuardAllowlist.GUARDS,
     ): CoverageReport {
         val errors = ArrayList<String>()
         val byId = checkRules(rules, tests, errors)
@@ -74,28 +75,22 @@ object RuleCoverage {
         for (rule in rules) {
             if (rule.pending != null || rule.superseded != null) continue
             if (rule.level in GUARDED_LEVELS) {
-                checkGuarded(rule, tests, allowlist[rule.level].orEmpty(), errors)
+                checkGuarded(rule, tests, errors)
                 continue
             }
             val missing = POLARITIES - polarities[rule.id].orEmpty()
             if (missing.isNotEmpty()) errors += "Rule ${rule.id} has no ${missing.sorted().joinToString(" or ")} scenario"
         }
-        checkAllowlist(rules, allowlist, errors)
         return CoverageReport(errors, rules.filter { it.pending != null && it.superseded == null })
     }
 
-    private fun checkGuarded(rule: RuleEntry, tests: TestIndex, allowed: Set<String>, errors: MutableList<String>) {
+    private fun checkGuarded(rule: RuleEntry, tests: TestIndex, errors: MutableList<String>) {
         val name = "${rule.level.replaceFirstChar(Char::uppercase)} rule ${rule.id}"
         if (rule.properties.isEmpty() && rule.guards.isEmpty()) {
             errors += "$name names no test"
             return
         }
-        for (reference in rule.properties + rule.guards) {
-            if (reference !in allowed) {
-                errors += "$name names $reference, which is not a ${rule.level} guard of GuardAllowlist"
-            }
-            checkGuard(name, reference, tests, errors)
-        }
+        for (reference in rule.properties + rule.guards) checkGuard(name, reference, tests, errors)
         if (rule.level == TIMING) checkTiming(name, rule, tests, errors)
     }
 
@@ -119,19 +114,6 @@ object RuleCoverage {
                 errors += "$name names $reference, whose class does not read $ITERATIONS, so propertyStress " +
                     "does not scale it"
             }
-        }
-    }
-
-    /** An allowlisted guard must exist and be named by a rule of its level, or the list drifts from the registry. */
-    private fun checkAllowlist(
-        rules: List<RuleEntry>,
-        allowlist: Map<String, Set<String>>,
-        errors: MutableList<String>
-    ) {
-        for ((level, references) in allowlist) {
-            if (level !in GUARDED_LEVELS) errors += "GuardAllowlist has unknown level $level"
-            val named = rules.filter { it.level == level }.flatMap { it.properties + it.guards }.toSet()
-            for (reference in references - named) errors += "GuardAllowlist lists $reference, which no $level rule names"
         }
     }
 

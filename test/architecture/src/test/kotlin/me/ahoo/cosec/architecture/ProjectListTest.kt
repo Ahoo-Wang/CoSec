@@ -34,7 +34,7 @@ class ProjectListTest {
             "extensions" to listOf("jwt", "social", "login", "ip2region", "micrometer", "opentelemetry", "cosid", "kafka", "control-http"),
             "host" to listOf("spring-boot"),
             "migration" to listOf("migrate"),
-            "test" to listOf("testkit", "conformance", "architecture", "e2e", "client-host", "system-test", "system-behind", "system-auth", "system-enforcer", "code-coverage-report"),
+            "test" to listOf("testkit", "conformance", "architecture", "compat", "e2e", "client-host", "system-test", "system-behind", "system-auth", "system-enforcer", "code-coverage-report"),
             "bom" to listOf("bom", "dependencies"),
             "platform" to listOf("gateway-server", "control-server"),
         )
@@ -46,7 +46,7 @@ class ProjectListTest {
 
         /** Not something a user reports a bug against: test-only projects and the BOMs. */
         private val UNREPORTED =
-            setOf("conformance", "architecture", "e2e", "client-host", "system-test", "system-behind", "system-auth", "system-enforcer", "code-coverage-report", "bom", "dependencies")
+            setOf("conformance", "architecture", "compat", "e2e", "client-host", "system-test", "system-behind", "system-auth", "system-enforcer", "code-coverage-report", "bom", "dependencies")
 
         /** No tests to run: the BOMs, the coverage report, and the gateway server, which `docker-deploy` builds. */
         private val UNTESTED = setOf("bom", "dependencies", "code-coverage-report", "gateway-server")

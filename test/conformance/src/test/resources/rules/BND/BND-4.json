@@ -1,0 +1,10 @@
+{
+  "id": "BND-4",
+  "source": "RFC 0004 §4.2",
+  "statement": "An anonymous principal matches no Principal binding and has no roles or attachments: only Anyone bindings apply to it.",
+  "level": "engine",
+  "guards": [
+    "engine:EngineTest#an anonymous principal has no attachments, principal or break-glass bindings"
+  ],
+  "pending": null
+}

@@ -1,0 +1,16 @@
+# Rule: DOC-15
+# Mutant: a path pattern takes a reserved character as a literal, so a pattern of a later syntax compiles here as one that matches nothing
+# Tests: :engine:test --tests me.ahoo.cosec.engine.pattern.ReservedCharactersTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
+index 5f97f7e7a..08c32fb89 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
+@@ -191,7 +191,6 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
+                     plain.append(escaped)
+                     index++
+                 }
+-                in PatternEscapes.RESERVED -> throw PatternEscapes.reserved(pattern, begin + index, char)
+                 ';' -> throw invalid(
+                     begin + index,
+                     "a request path's segments hold no ';': path parameters are removed and an encoded one refused " +

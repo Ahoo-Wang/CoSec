@@ -1,0 +1,10 @@
+{
+  "id": "MEM-1",
+  "source": "RFC 0004 §4.5.2 (#1027)",
+  "statement": "A token that carries the membership marker together with role or policy claims fails closed: Indeterminate(MembershipUnavailable).",
+  "level": "engine",
+  "guards": [
+    "runtime:MembershipResolverTest"
+  ],
+  "pending": null
+}

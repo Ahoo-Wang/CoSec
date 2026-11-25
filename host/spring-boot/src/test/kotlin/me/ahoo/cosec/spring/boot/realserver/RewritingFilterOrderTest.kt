@@ -11,11 +11,10 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.spring.boot.realserver
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineWebAutoConfiguration
@@ -106,7 +105,7 @@ class RewritingFilterOrderTest {
 
     private fun answer(source: Class<*>, type: WebApplicationType, property: String): RawResponse {
         val context = SpringApplicationBuilder(source).web(type)
-            .properties("server.port=0", "spring.main.banner-mode=off", "$property=true")
+            .properties("server.address=127.0.0.1", "server.port=0", "spring.main.banner-mode=off", "$property=true")
             // Spring Cloud Gateway, on this test classpath, forces the reactive filter off ahead of every other source; a
             // plain WebFlux application has no such source.
             .initializers(

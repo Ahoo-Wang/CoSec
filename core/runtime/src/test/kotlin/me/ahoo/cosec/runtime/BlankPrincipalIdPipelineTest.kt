@@ -30,6 +30,7 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spi.token.VerifiedToken
@@ -43,7 +44,7 @@ import org.junit.jupiter.api.Test
  */
 class BlankPrincipalIdPipelineTest {
     private class Verifier(private val subject: String) : TokenVerifier {
-        override fun verify(accessToken: String): VerifiedToken = VerifiedToken("jti", subject, "acme", null)
+        override fun verify(accessToken: String): VerifiedToken = VerifiedToken("jti", subject, "acme", null, PERSON)
 
         override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
     }
@@ -54,7 +55,11 @@ class BlankPrincipalIdPipelineTest {
     fun `a token of a blank subject is token-invalid and decided as anonymous`() = runTest {
         for (subject in listOf("", " ", "\t\n", " ")) {
             val engine = StubEngine(IMPLICIT_DENY)
-            val authenticator = TokenAuthenticator(Verifier(subject), RevocationReader.NONE)
+            val authenticator = TokenAuthenticator(
+                Verifier(subject),
+                RevocationReader.NONE,
+                acceptUnavailableRevocations = false,
+            )
             val outcome = pipeline(authenticator, engine).evaluate(withToken)
 
             outcome.status.assert().describedAs(subject).isEqualTo(ProblemType.TOKEN_INVALID.status)
@@ -66,7 +71,14 @@ class BlankPrincipalIdPipelineTest {
     @Test
     fun `white space around a subject is part of its id`() = runTest {
         val engine = StubEngine(IMPLICIT_DENY)
-        pipeline(TokenAuthenticator(Verifier(" alice "), RevocationReader.NONE), engine).evaluate(withToken)
+        pipeline(
+            TokenAuthenticator(
+                Verifier(" alice "),
+                RevocationReader.NONE,
+                acceptUnavailableRevocations = false,
+            ),
+            engine
+        ).evaluate(withToken)
         engine.requests.single().request.subject.id.assert().isEqualTo(" alice ")
     }
 

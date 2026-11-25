@@ -37,7 +37,12 @@ class IdentityCodecTest {
         app = "order",
         space = "team-a",
         roles = setOf("clerk", "admin"),
-        credential = Identity.Credential(Identity.Method.JWT, "t1", Instant.parse("2026-11-01T01:00:00Z")),
+        credential = Identity.Credential(
+            Identity.Method.JWT,
+            Identity.Credential.Kind.PERSON,
+            "t1",
+            Instant.parse("2026-11-01T01:00:00Z")
+        ),
         issuedAt = Instant.parse("2026-11-01T00:00:00Z"),
         requestId = "r1",
         claims = mapOf("name" to "Alice", "level" to 3L, "staff" to true),
@@ -45,14 +50,19 @@ class IdentityCodecTest {
 
     private fun header(json: String) = Base64.getUrlEncoder().withoutPadding().encodeToString(json.encodeToByteArray())
 
-    private fun reason(header: String, maxBytes: Int = IdentityCodec.DEFAULT_MAX_BYTES) =
+    private fun reason(header: String, maxBytes: Int = IdentityCodec.READ_MAX_BYTES) =
         assertThrows<IdentityFormatException> { IdentityCodec.decode(header, maxBytes) }.reason
 
     @Test
     fun `what is encoded is decoded`() {
         IdentityCodec.decode(IdentityCodec.encode(identity)).assert().isEqualTo(identity)
         val apiKey = identity.copy(
-            credential = Identity.Credential(Identity.Method.API_KEY, "k1", Instant.parse("2027-01-01T00:00:00Z")),
+            credential = Identity.Credential(
+                Identity.Method.API_KEY,
+                Identity.Credential.Kind.WORKLOAD,
+                "k1",
+                Instant.parse("2027-01-01T00:00:00Z")
+            ),
             claims = emptyMap()
         )
         IdentityCodec.decode(IdentityCodec.encode(apiKey)).assert().isEqualTo(apiKey)
@@ -62,7 +72,11 @@ class IdentityCodecTest {
     @Test
     fun `a capped credential says so, and only it`() {
         val capped = identity.copy(
-            credential = identity.credential.copy(method = Identity.Method.API_KEY, capped = true)
+            credential = identity.credential.copy(
+                method = Identity.Method.API_KEY,
+                kind = Identity.Credential.Kind.WORKLOAD,
+                capped = true,
+            )
         )
         IdentityCodec.decode(IdentityCodec.encode(capped)).credential.capped.assert().isTrue()
         String(
@@ -96,7 +110,9 @@ class IdentityCodecTest {
             """"auth":{"method":"jwt","jti":"t1","exp":2},"iat":1,"rid":"r1""""
         IdentityCodec.decode(header("""{"v":1,$valid}""")).subject.assert().isEqualTo("alice")
         reason(header("""{"v":2,$valid}""")).assert().isEqualTo(IdentityFormatException.Reason.UNSUPPORTED_VERSION)
-        reason(header("""{"v":1,$valid,"admin":true}""")).assert().isEqualTo(IdentityFormatException.Reason.MALFORMED)
+        // A member this version does not know is ignored (IDN-41): it grants nothing it would not grant without it.
+        IdentityCodec.decode(header("""{"v":1,$valid,"admin":true}""")).assert()
+            .isEqualTo(IdentityCodec.decode(header("""{"v":1,$valid}""")))
         reason(header("""{"v":1,$valid,"sub":"bob"}""")).assert().isEqualTo(IdentityFormatException.Reason.MALFORMED)
         reason(header("""{"v":1,${valid.replace("\"alice\"", "\"\"")}}""")).assert()
             .isEqualTo(IdentityFormatException.Reason.MALFORMED)
@@ -216,12 +232,14 @@ class IdentityCodecTest {
         decoded.credential.session.assert().isEqualTo(session)
         decoded.credential.issuedAt.assert().isEqualTo(Instant.parse("2026-11-01T00:50:00Z"))
         String(Base64.getUrlDecoder().decode(IdentityCodec.encode(withSession))).assert().contains(
-            """"auth":{"method":"jwt","jti":"t1","exp":1793494800,"iat":1793494200,""" +
+            """"auth":{"method":"jwt","kind":"person","jti":"t1","exp":1793494800,"iat":1793494200,""" +
                 """"session":{"sid":"s1","auth_time":1793404800,"generation":3}}"""
         )
         // Without them the bytes are what they were.
         String(Base64.getUrlDecoder().decode(IdentityCodec.encode(identity))).assert()
-            .doesNotContain("session").contains(""""auth":{"method":"jwt","jti":"t1","exp":1793494800}""")
+            .doesNotContain(
+                "session"
+            ).contains(""""auth":{"method":"jwt","kind":"person","jti":"t1","exp":1793494800}""")
     }
 
     /** A session that is wrong is refused, never read as no session; nor is an issue time after the expiry. */
@@ -247,9 +265,8 @@ class IdentityCodecTest {
             """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1,"generation":-1}}""",
             """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1,"generation":0}}""",
             """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1,"generation":1.5}}""",
-            // An empty session id, an unknown member.
+            // An empty session id.
             """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"","auth_time":1,"generation":1}}""",
-            """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1,"generation":1,"x":1}}""",
             // A session without the token's issue time, or of another credential than CoSec's token.
             """{"method":"jwt","jti":"t1","exp":9,"session":$good}""",
             """{"method":"api-key","jti":"k1","exp":9,"iat":2,"session":$good}""",
@@ -263,10 +280,22 @@ class IdentityCodecTest {
             ).assert().describedAs(auth).isEqualTo(IdentityFormatException.Reason.MALFORMED)
         }
         assertThrows<IllegalArgumentException> {
-            Identity.Credential(Identity.Method.API_KEY, "k1", Instant.parse("2027-01-01T00:00:00Z"), session = session)
+            Identity.Credential(
+                Identity.Method.API_KEY,
+                Identity.Credential.Kind.WORKLOAD,
+                "k1",
+                Instant.parse("2027-01-01T00:00:00Z"),
+                session = session
+            )
         }
         assertThrows<IllegalArgumentException> {
-            Identity.Credential(Identity.Method.JWT, "t1", Instant.EPOCH, issuedAt = Instant.EPOCH.plusSeconds(1))
+            Identity.Credential(
+                Identity.Method.JWT,
+                Identity.Credential.Kind.PERSON,
+                "t1",
+                Instant.EPOCH,
+                issuedAt = Instant.EPOCH.plusSeconds(1)
+            )
         }
     }
 
@@ -296,7 +325,7 @@ class IdentityCodecTest {
         )
         val encoded = IdentityCodec.encode(withItsSession)
         (encoded.length - IdentityCodec.encode(large).length).assert().isLessThanOrEqualTo(256)
-        encoded.length.assert().isLessThan(IdentityCodec.DEFAULT_MAX_BYTES)
+        encoded.length.assert().isLessThan(IdentityCodec.WRITE_MAX_BYTES)
         IdentityCodec.decode(encoded).assert().isEqualTo(withItsSession)
     }
 

@@ -15,18 +15,285 @@ section above it:
 
 | You run | Read |
 |---|---|
-| `8.0.0-beta.7` | [From beta.7](#from-8-0-0-beta-7) |
-| `8.0.0-beta.6` | [From beta.6](#from-8-0-0-beta-6), then the one above |
-| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5), then the two above |
-| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the three above |
-| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the four above |
-| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the five above |
-| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the six above |
-| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the seven above |
+| `8.0.0-beta.9` | [From beta.9](#from-8-0-0-beta-9) |
+| `8.0.0-beta.8` | [From beta.8](#from-8-0-0-beta-8), then the one above |
+| `8.0.0-beta.7` | [From beta.7](#from-8-0-0-beta-7), then the two above |
+| `8.0.0-beta.6` | [From beta.6](#from-8-0-0-beta-6), then the three above |
+| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5), then the four above |
+| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the five above |
+| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the six above |
+| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the seven above |
+| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the eight above |
+| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the nine above |
 | `8.0.0-alpha.3`, `alpha.2`, `alpha.1` | [From alpha.3](#from-8-0-0-alpha-3), [alpha.2](#from-8-0-0-alpha-2) or [alpha.1](#from-8-0-0-alpha-1), then every section above it |
 
-Which preview of the library may run behind which preview of the gateway image: see
-[Upgrading a running deployment](./upgrading.md#upgrading-a-running-deployment).
+Which preview of the library may run behind which preview of the gateway image: a preview whose readers and writers of
+one header or record must be upgraded in an order says so in its section, under **Upgrade in this order**
+([from beta.8](#from-8-0-0-beta-8), [from beta.7](#from-8-0-0-beta-7), [from beta.5](#from-8-0-0-beta-5)).
+
+## From 8.0.0-beta.9 {#from-8-0-0-beta-9}
+
+- **Security: whoever builds a `TokenAuthenticator` states whether a token is accepted while its revocations cannot
+  be read** (`PIP-7`). `acceptUnavailableRevocations` has no default and is the third parameter:
+  `TokenAuthenticator(verifier, reader, acceptUnavailableRevocations = !failClosed, …)`. Until beta.9 it defaulted to
+  `true`: a hand-built authenticator accepted every token during a revocation-store outage, whatever
+  `cosec.authentication.revocation.fail-closed` said. Code that builds one without the argument no longer compiles;
+  pass what the operator chose, as the starter does
+  ([Authenticators](../architecture/extending.md#authenticators)), or `false` to refuse. Not binary compatible: the
+  constructor's signature changed. The starter and the kit need no change from you: the kit's
+  `PermittedRequest.withToken` and `IdentityHeader.withToken` refuse.
+- **The adapter contract, the kit's request contexts and `document.identity.IdentityHeader` are stable.**
+  `RequestGate`, `HttpFacts`, `Headers`, `Cookies`, `Outcome`, `Problem`, `ProblemEncoder`, `ProblemRenderer`,
+  `RequestSecurity` and `Pipeline.evaluate`; the kit's `PermittedRequest`, `IdentityHeader` and `CoSecTestBindings`; and
+  `document.identity.IdentityHeader` lose `@ExperimentalCoSecApi`: remove `@OptIn(ExperimentalCoSecApi::class)` where
+  nothing else needs it. A test of a handler that reads the caller no longer needs one; a test that uses
+  `PipelineFixture`, `PolicyTestKit` or `Pipeline.behindGateway` still does. `Headers` and `Cookies` are `@CoSecSpi`: a
+  member added later comes with a body. Building a pipeline without Spring (`Pipeline.builder`, its settings,
+  `Pipeline.behindGateway`, `awaitDocuments`), `SnapshotDocumentStore`, the kit's policy and pipeline tests,
+  `cosec-control-sdk` with `HttpControlService`, and the evaluation trace stay experimental
+  ([Stability levels](../architecture/extending.md#stability-levels)).
+- **Change events are stable.** `ChangeListener.onChange`, `ChangeEvent`, `MovedHead`, `RevisionRef`, `Escalation` and
+  `ChangeOrigin` lose `@ExperimentalCoSecApi`: drop your `@OptIn(ExperimentalCoSecApi::class)` for them.
+  `ChangeEvent.change` is now a `String`, the change's id as the control API answers it (`GET /changes/{id}`, the SDK's
+  `Change.id`), in place of the internal `ChangeId`: replace `event.change.value` with `event.change`. `MovedHead` and
+  `RevisionRef` are plain classes, no longer data classes: no `copy`, no destructuring; equality and `toString` are
+  unchanged. `ChangeEvent` now compares by value. The Kafka change log's payload is unchanged.
+- **The control plane's storage is not an extension point.** `ControlStore` with its records and exceptions
+  (`ControlStoreException`, `InMemoryControlStore`, `IndexedReference`, `ReferrerEntry`, ...), `control.change.*` but
+  `Escalation`, `ChangeOrigin`, `Confirmation` and `ShadowSummary`, `ChangeRequestCodec`, `CoCacheControlStore`,
+  `ProvenanceKind`, and the shadow window's ports and values in `spi.shadow` (`CandidateStore`, `ShadowReportSink`,
+  `ShadowReportReader`, `ShadowReport`, `InstanceStatus`, `ResidentDocuments`, `StagedCandidates`, `StoredCandidate`)
+  with `CoCacheShadowReports` were `@ExperimentalCoSecApi` and are `@InternalCoSecApi` now; `ControlStore`,
+  `CandidateStore`, `ShadowReportSink` and `ShadowReportReader` are no longer `@CoSecSpi`. A `ControlStore` or shadow
+  port of your own no longer compiles; the starter wires CoSec's on Redis
+  ([Control store](../architecture/extending.md#control-store)).
+- **`JustAuthProvider` is internal** (`@InternalCoSecApi`). The starter builds one per configured registration; sign in
+  through `SocialAuthentication`. `JustAuthCredentials` keeps JustAuth's `AuthCallback` as its supertype, the one
+  JustAuth type in CoSec's API, reviewed: the callback's parameters are `AuthCallback`'s properties, bound by name.
+- **The audit and decision sets are open** ([Sets that grow](../architecture/extending.md#sets-that-grow)):
+  `DecisionEvent.Kind`, `StatementRef`, `BindingRef`, `AuditDecision`, `AuditReasonCode`, `AuditEventKind`, `AuditVia`
+  and `Escalation.Reason` may gain a member in a minor release. A `when` over one has an `else`, and a sink or a Kafka
+  consumer accepts a value it does not know. Nothing changes in what CoSec writes today.
+- **The request-header limit of a host that reads the identity is derived however the mode is set** (`IDN-43`).
+  - **What was wrong in beta.9:** the starter derived `server.max-http-request-header-size` only when
+    `cosec.pipeline.mode=gateway` or `cosec.pipeline.caller=forwarded-identity` was in the environment before its own
+    environment post-processor ran. A host whose own post-processor set the mode later kept Spring Boot's 8 KB, and
+    its startup line still said `derived`. A request whose identity header and other headers together passed 8 KB was
+    refused by the server (`431`, or `400` on Tomcat) before CoSec read it.
+  - **Now:** the limit is applied to the web server's properties once the environment is final.
+  - **What breaks:** nothing to change. One difference: the derived limit is no longer a property of the environment,
+    so code that read `server.max-http-request-header-size` from the `Environment` to learn it now finds only a value
+    you set. Read `ServerProperties.maxHttpRequestHeaderSize` instead.
+  - **The startup line** now names the limit in effect: derived, yours, yours and too small, or not derived
+    ([Troubleshooting](./troubleshooting.md)).
+
+## From 8.0.0-beta.8 {#from-8-0-0-beta-8}
+
+**Upgrade in this order.** This preview's `CoSec-Identity` header states whose the credential is, `auth.kind`
+(`IDN-44`), a member a beta.8 reader refuses, and its access tokens state it too, `cosec.kind` (`IDN-45`), which a
+beta.8 verifier ignores, so a rolling upgrade has an order. One service can be several of these at once (an IAM service
+that issues the tokens, reads the header behind a gateway and calls a control-plane host's service port); finish each
+step before the next:
+
+1. **The control-plane hosts**, and an IAM service that embeds the control plane. An upgraded host reads a header with
+   or without `auth.kind`; a beta.8 one refuses a header that has it with `400` `invalid-request`, as it refuses any
+   member it does not know. Every upgraded service that calls a host's service port (`HttpControlService`) writes the
+   member, so the hosts go before anything that calls them.
+2. **The service that issues CoSec's tokens, all of its replicas together or in quick succession, and every other
+   reader of the header**: the services in `gateway` mode, one that also calls a host's service port included. A beta.8
+   gateway or host ignores the claim the upgraded issuer writes. A session refreshed or switched on a beta.8 replica of
+   the issuer loses its kind, as it does after a rollback of the issuer.
+3. **The gateways, and every other host that verifies CoSec's tokens itself** (`enforce` mode), an application that
+   calls a host's service port among them. They write `auth.kind`, which every reader now reads; with a gateway
+   upgraded before the services behind it, every identified request to a beta.8 service is refused.
+
+As for whose a credential is, nothing is refused between the steps, and nothing is permitted that beta.8 refused, but
+it reads narrower for some people until the end (the window of the reserved characters, below, is another matter):
+
+- From step 1 until the gateway in front of them is upgraded, an upgraded reader takes the header a beta.8 gateway
+  forwards, which states no kind, as a workload's, and an upgraded host takes a caller a beta.8 application relays to
+  its service port alike. That person cannot approve a change, is not the control plane's trust root and gets no
+  break-glass there; every other decision is made as before.
+- A session signed in before the issuer was upgraded, or refreshed or switched since on a beta.8 replica of it, carries
+  no kind, and keeps none through later refreshes and switches (`IDN-46`, below). Every upgraded verifier reads it as a
+  workload's: a host upgraded in step 1 that verifies tokens itself at once, the gateways from step 3.
+- A control-plane host that verifies CoSec's tokens itself (`cosec.pipeline.caller=credential`, the default: operators who call it
+  with their own token rather than through a gateway) reads every token issued before step 2 as a workload's from the
+  moment it is upgraded in step 1: no operator can approve a change or be the trust root there until the issuer is
+  upgraded and they sign in again.
+- It ends for a person once the gateway or host that verifies their token runs this preview and they have signed in
+  again on an upgraded issuer.
+
+The other way round, a login the upgraded issuer declares a workload's is still read as a person's by a gateway or
+host on beta.8 that verifies the token itself, which ignores `cosec.kind`, until every verifier is upgraded: no wider
+than beta.8, which read every CoSec token so.
+
+- **Breaking: every credential declares whose it is, a person's or a workload's** (`IDN-44`). Affected: an
+  `Authenticator` of your own, and anything else that builds an `Identity.Credential`. Its constructor takes a required
+  `kind` after the method, `Identity.Credential.Kind.PERSON` or `WORKLOAD`, with no default: code that builds one does
+  not compile until it chooses. What decides whether a principal may approve a change, be the control plane's trust root
+  or use break-glass is now that kind, not the method's name: before, any method other than `api-key` and `service` was
+  read as a person's, so an authenticator of machine clients that named its own method could approve. A principal with
+  no credential is now a workload: it never could approve, and it is no longer the trust root. `CoSec-Identity` carries
+  `auth.kind`, which every writer of this version writes; a header without it (a beta.8 gateway's) is read as a
+  workload's, so an operator forwarded by a beta.8 gateway cannot approve on an upgraded control host until the gateway
+  is upgraded. A header that declares an `api-key` or `service` credential a person's is refused with `400`.
+- **Breaking: a login declares whose the token is** (`IDN-45`). Affected: every `Authentication` of your own.
+  `TokenSubject` takes a required `kind` after `id`, `Identity.Credential.Kind.PERSON` or `WORKLOAD`, with no default:
+  a login does not compile until it says which. Declare a user's sign-in a person's and a machine's (client
+  credentials, a service account) a workload's. CoSec's access tokens now carry the claim `cosec.kind`, which a client
+  must not depend on (`contract/token/claims.json`); refresh tokens do not. The claim makes each token about 30
+  characters longer, so the same heap's verified-token cache holds about 0.5 % fewer of them (16,298 of the largest
+  test token at 2 GiB, where 16,384 fitted).
+- **Breaking: a verified token says whose it is** (`IDN-46`). Affected: every `TokenVerifier` of your own, and every
+  session signed in before this preview. `VerifiedToken` takes a required `kind` after `app`, with no default: a
+  verifier does not compile until it says which from the token's claims (a client-credentials token a workload's), and
+  declares `WORKLOAD` where the token does not say. The credential `TokenAuthenticator` makes is of that kind, and only
+  CoSec's own token read as a person's gets break-glass. CoSec's verifier reads `cosec.kind`: a token without it, which
+  an earlier preview issued, is a workload's, and a refresh or a tenant switch keeps the presented token's kind. Such a
+  session cannot approve a change or use break-glass until its user signs in again.
+- **A token whose JWS `crit` header names anything is refused** (`IDN-47`). Affected: no token CoSec issues (it writes
+  no `crit`), and a `TokenVerifier` of your own. CoSec's verifier now reads the `crit` header of every token, access and
+  refresh, once the signature is verified. 8.0 understands no critical header parameter, so a token that names one is
+  answered `503` `unavailable` (the pipeline, the served refresh and logout routes), and passes once the instance runs
+  the issuer's version. A malformed `crit` is `401` `token-invalid`. A verifier of your own must refuse what its `crit`
+  names and it does not understand: throw `TokenNotUnderstoodException`, or `TokenVerificationException` for a
+  malformed one ([Authentication](../integration/authentication.md)). No change for clients.
+- **A change approved before every control-plane host runs this preview is approved again** (`APR-9`). An approval now
+  records whose the approver's credential was, and publication counts only one that says a person's. An approval a
+  beta.8 host recorded says nothing, so it does not count: the change returns to `AWAITING_APPROVAL`, its `APPROVAL`
+  finding saying `the approval does not say its approver was a person: approve the change again`. Approve it again once
+  the upgrade is complete and the approver has signed in again: behind a beta.8 gateway, or with a session from before
+  the issuer's upgrade, an approver is a workload's, and a re-approval is a `403`. The change answer shows `approval.kind` (`PERSON`, `WORKLOAD`), and `cosec-control-sdk`'s
+  `Approval.kind` reads it. `Approval` takes it as a fifth constructor parameter, `kind: ApproverKind?`, null by default:
+  Kotlin source that builds one compiles as before, while code compiled against 8.0.0-beta.8 that calls its
+  four-argument constructor (Java included, which passes the kind or `null`) is compiled again.
+- **Breaking: a service reads an identity header with members it does not know** (`IDN-41`). A reader of `CoSec-Identity`
+  ignored no unknown member: it answered `400` to any, which is why beta.8's `memberships` needed an order between the
+  gateways and the services behind them. It now ignores a member it does not know, at any level, unless the header's
+  new `crit` names it: a member a later version must have every reader understand. A member `crit` names that the
+  service does not know is refused with `503` `unavailable`, counted as `cosec.identity.refused{problem=unavailable}`
+  and logged naming it. No 8.0 writer writes `crit`. A header an application writes with a misspelled member is now
+  read without it rather than refused; for `auth.capped` or `claims` that reads wider (a capped credential as uncapped,
+  claims as none), so write the header with `IdentityHeader.write`.
+- **Breaking: a relayed caller states only the memberships it was forwarded** (`IDN-42`). `HttpControlService`'s relay of a
+  request's caller wrote empty `memberships` for a caller whose own `CoSec-Identity` had none, so a host that decides on
+  the identity took it as a caller with no attachment and no role in another space. It now leaves the member out, and
+  the host refuses the call with `400` `invalid-request`; the control plane's in-process facade refuses such a caller
+  alike. Only a header without `memberships` reaches this: one from a beta.7 gateway, or one an application wrote.
+  Upgrade the gateways (every beta.8 gateway writes the member) before relying on control calls made for their callers.
+- **Breaking: the identity header has a reader's limit and a smaller writer's limit** (`IDN-43`). A gateway now writes at most
+  6 KB by default (`cosec.gateway.identity.max-size`, was 8 KB), and so does `HttpControlService`'s relay; a service
+  still reads 8 KB (`cosec.pipeline.identity.max-size`), which no 8.x version lowers. A principal whose identity takes
+  6 to 8 KB now fails at the gateway with `500` unless you raise `cosec.gateway.identity.max-size`, up to 8 KB; on the
+  servers' default request-header limit such a header did not reach a service anyway. A host that reads the identity
+  (`gateway` mode, or `cosec.pipeline.caller=forwarded-identity`) now gets `server.max-http-request-header-size` derived,
+  16 KB at the defaults, when you have not set it; a value you set is kept, and named at startup at `WARN` when it is
+  smaller. Such a host that also calls a control-plane host (`HttpControlService`) no longer starts with
+  `cosec.pipeline.identity.max-size` below 6 KB: it would relay headers larger than its own gate admits
+  ([Troubleshooting](./troubleshooting.md#startup-fails-on-the-identity-header-limit)).
+- **Breaking: `[ ] ( ) | ! ^ $ \` are reserved in every pattern, and a backslash writes them as text** (`DOC-15`).
+  Affected: a document, a route map or a change whose path, typed resource or action pattern holds one of them, which
+  an earlier preview read as text; one whose service or verb of an action holds `?`, `{` or `}`, which it read as text
+  too and which are now written escaped as well; and one whose path pattern can match no request path. A pattern that
+  holds one of them unescaped now fails to compile, naming the character and its position. Write the character
+  escaped: `http:path:/odata/\$metadata`, `http:path:/files/a\(1\).txt`, the backslash doubled in JSON
+  ([Reserved characters](../policies/language.md#reserved-characters)). A path pattern holding a `;`, a control
+  character, a `.` or `..` segment, or a segment longer than 256 characters matched no request path before, so a DENY
+  written so denied nothing, and now fails to compile: name the path as the pipeline sees it.
+  - **A pattern written before this preview with a backslash changes meaning without an error.** 8.0.0-beta.8 read a
+    backslash as a character; this version reads it as an escape before `[ ] ( ) | ! ^ $ \`, and before `? { }` in an
+    action and `* ? { }` in a path, so such a pattern compiles and means another thing, and nothing fails. (In a path,
+    `\\` is refused, since no request path holds a backslash, and so is a backslash before any other character;
+    `cosec-migrate check-patterns` names each of these.) In a typed resource or an action,
+    a DENY on `doc/a\(b` denied the id `a\(b` and now denies `a(b`: the id it was written for is permitted wherever an
+    ALLOW covers it. In a path, an ALLOW on `http:path:/files/\$x` matched nothing, since no request path holds a
+    backslash, and now grants `/files/$x`. `cosec-migrate check-patterns` names every pattern that holds a backslash;
+    rewrite each before the upgrade, as below.
+  - **Upgrade in this order; no other works.** After the upgrade, a pattern with an unescaped reserved character
+    fails its whole document, and every request that reads the document is answered `503`; a pattern with a backslash
+    means another thing. Before it, 8.0.0-beta.8 reads the escaped form as a backslash and the character: in a path
+    pattern a path with a backslash in it, which no request path holds, so an escaped DENY matches nothing there; in a
+    typed resource or an action another id or verb, one that holds the backslash, so an escaped DENY denies that one
+    instead. So:
+    1. **On the version you run**, find the patterns with the new release's
+       [`cosec-migrate check-patterns`](./upgrading.md#check-the-patterns-before-an-upgrade). For each, it prints the
+       form this version reads as the stored pattern was meant (a reserved character escaped, and a backslash that was
+       a character escaped too), and what to publish for the window:
+       - **a DENY or a rate limit rule with an unescaped reserved character:** the bridge both versions read alike,
+         which matches more, never less: the reserved character as `?` in a path pattern, and the action's name or the
+         typed resource's segment that holds it as `*` (a wildcard inside a segment or a name is refused by both). No
+         wildcard stands in for a resource's type: keep such a DENY as it is, and an upgraded instance fails its document
+         closed (`503`) until the exact form is published.
+       - **a DENY or a rate limit rule with a backslash** (in a typed resource's type or id, or in an action): keep the
+         stored pattern and add the exact form beside it, in the same statement or rule. Each version matches what was
+         meant with one of the two; the other matches a little more on this version, and nothing that was meant on
+         8.0.0-beta.8. Never narrow or remove a DENY for the window.
+       - **an ALLOW or a catalog permission:** narrow or remove it for the window, since a wildcard would grant more.
+       - **a path pattern with a backslash:** it matched nothing before. Remove an ALLOW so written before the upgrade,
+         or it starts granting; a DENY so written only denies more after it.
+
+       It names the open changes that hold such a pattern as well, whose publish would fail or mean another thing after
+       the upgrade: rewrite them, or abandon them and propose again once every instance is upgraded. Publish.
+    2. **Upgrade every instance that compiles documents** (the gateways, the services and the control-plane hosts), in
+       the order at the top of this section.
+    3. **Publish the exact form `check-patterns` printed**, without a stored pattern kept beside it, and restore the
+       ALLOWs.
+
+    A route map is each instance's own file: ship its escaped form with the upgraded instance.
+  - `cosec-migrate` escapes a 7.x path pattern's reserved characters, which 7.x read as text, and, from this preview, a
+    7.x method's (an HTTP method may hold `!`, `$`, `^` or `|`), so a converted policy means what it meant.
+    `cosec-openapi` escapes every such character of a spec path outside its templates, `*` and `?` included: before, a
+    `*` or `?` in a spec path became a wildcard of the generated route, which mapped other paths to that operation.
+    Generate route maps again.
+- **Breaking: logging out of a switched session ends the login it came from** (`IDN-40`). Affected: a user who
+  switches tenant and then logs out. A logout ended only the session it was given: after a switch, the login's own
+  session lived on on the server, refreshable by whoever held its pair, until its refresh token expired, though the
+  client no longer held it. Now a logout of a switched session, by the served route or `TokenRevoker.revoke` of the
+  access token or of the pair, revokes the login's session first, then the switched one: the user is signed out of that
+  login on every device, and every other session switched from it ends at its next refresh or switch. The answers do not
+  change (`204`, `401`, `503`: `contract/` is the same); a `503` now also means the login could not be revoked, and the
+  client logs out again as before. A switched session already logged out under 8.0.0-beta.8 keeps its login: a second
+  logout of it is answered as done without revoking anything. That login ends when it is logged out itself, revoked
+  ([`revokeSubject`](../integration/authentication.md#revoking-every-token-of-a-principal)) or past its lifetime
+  ([Switching tenant and app](../integration/authentication.md#switching-tenant-and-app)).
+- **Breaking: a stored record's `crit` names what a reader must understand** (`SNP-27`, `SNP-28`, `SNP-29`, `OBS-12`). Affected:
+  nothing stored by 8.0.0-beta.8, which writes no `crit`; this preview writes none either. A session record whose `crit`
+  names a member this version does not know, which a later version may write, is refused: the refresh, logout or switch
+  that read it is answered `503` and the session kept, never rewritten, until an upgraded instance reads it. The same
+  holds for a later format, which `IDN-31` described as ending the session: it was always a `503`, and the session was
+  kept. A record of the control plane (a change, a staging slot, a revision index, the app list) or of a shadow window
+  is read the same way: one a later version wrote makes the control API answer `503` without detail, where a later
+  format was a `500`, and the record is never rewritten. Format numbers change only with a major version: within 8.x a
+  session is format 2 at most and every other record format 1. New meter: `cosec.stored.refused{record, reason}`
+  ([Storage](./storage.md#record-formats), [Observability](./observability.md)).
+- **Every CoSec process with `cosec-cocache` writes its status, with its release** (`SNP-25`, RFC 0014 R5). Affected:
+  the Redis users of a control-plane host (the `cosec-control` image), of an IAM service behind a gateway
+  (`cosec.pipeline.mode=gateway` with JWT on), and of a data-plane instance with `cosec.authorization.shadow.enabled=false`
+  whose user was trimmed to leave out the shadow keys. Each now writes `<s>:shadow:status:<instance>`,
+  `<s>:shadow:resident:<instance>` and `<s>:shadow:instances:*` (with shadowing off, `shadows: false`: no window waits
+  for it). Give their users write permission on those keys
+  ([Who may write which keys](./storage.md#who-may-write-which-keys)). One without it keeps serving and starting: it logs
+  the missing permission once at `ERROR`, counts `cosec.instance.status.failed`, and the control plane cannot see it.
+  A status is now kept an hour (it was two minutes); an instance is still live only with a status from the last minute,
+  one that does not decode included: its key's remaining life says when it was written (`CTL-73`). `GET /instances` lists the readers and
+  their releases ([Testing policies](../policies/testing.md#instances)); `propagation` now counts a control-plane host and
+  the documents it holds. `InstanceStatus` (`cosec-spi`) takes the release as its last parameter, `release`, which is
+  null, an unknown release, unless given: code that builds one compiles as before and names no release, so a status
+  rebuilt from what another instance wrote never claims the reading process's; code compiled against 8.0.0-beta.8 that
+  calls its constructor is compiled again.
+- **`cosec.control.instances.releases` is current on every control-plane host** (`CTL-89`): each host reads the store's
+  readers at each of its shadow passes, whether or not it holds the pass's lease, so the gauge no longer waits for a call
+  of `GET /instances`. It reads `0` until the host's first pass, up to one shadow check interval (at most a minute)
+  after it starts, and keeps its last value while the readers cannot be read.
+- **`@ahoo-wang/cosec-fetcher`: the token pair goes only to an endpoint the client trusts.** A refresh, a logout or a
+  tenant switch to an endpoint the client does not trust (`isTrusted`, resolved against the `Fetcher`'s `baseURL`) is
+  refused before anything is sent. Before, a switch sent the pair to any endpoint it was given, and a refresh or logout
+  on the configured `Fetcher` sent it, in its body, to another origin. Such a refresh or logout now needs that origin in
+  `isTrusted`; one on a `Fetcher` of its own, whose `baseURL` is the auth service, is unchanged. The predicate is asked
+  about the `POST` that is sent, so one that trusts an origin for reads only refuses it. A refresh, a switch or a logout
+  through a redirect now fails instead of following it (a `307` or `308` would re-send the pair), and the session is
+  kept; CoSec's routes never redirect ([Clients](../integration/clients.md)).
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
@@ -1121,7 +1388,7 @@ changed, and the gateway and control-plane images differ only by their version.
   on a misplaced document; `PipelineFixture.load` reads a directory by the same rules. Name the fields, move the files.
 - **The `cosec-gateway-server` image: no JMX agent, the actuator on a management port, and the image's defaults kept
   under a mounted file** (`UB-2`, `UB-21`). Affected: whoever runs the image. A service on one preview of the library
-  behind a gateway image of another: [Upgrading a running deployment](./upgrading.md#upgrading-a-running-deployment).
+  behind a gateway image of another: the **Upgrade in this order** of each later preview ([Start here](#start-here)).
   - Through beta.3 the start script started a JMX agent on port 5555 with no authentication, on every interface. It no
     longer starts one. To attach, set it in `JAVA_OPTS`, bound to loopback ([the image](./deployment.md#the-image)); the
     `-Dcom.sun.management.jmxremote.host=127.0.0.1` the Kubernetes base set is gone with it.

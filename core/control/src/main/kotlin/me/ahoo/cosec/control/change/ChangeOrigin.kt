@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.control.change
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.http.RequestSecurity
 
@@ -27,7 +26,6 @@ import me.ahoo.cosec.runtime.http.RequestSecurity
  * not choose (the client address a request states is the caller's). A change records the origin of its author, and each
  * event that of the step's operator; a step no request drives (a maintenance pass) has none.
  */
-@ExperimentalCoSecApi
 class ChangeOrigin(
     val asserted: Boolean,
     val via: Via? = null,

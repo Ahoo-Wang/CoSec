@@ -1,0 +1,21 @@
+{
+  "id": "CTL-68",
+  "source": "RFC 0007 §10.2 (control-server-design.md §0.8 and §9 row 9: the listing route)",
+  "statement": "GET /documents?kind= lists which tenant or app documents exist from the store's list of the documents it indexes, never by reading a document: every document of the layer to a caller holding cosec:read on the layer (doc/tenant, doc/app), which grants no document's own read and which no document's read grants, apart from a pattern whose ** covers the layer; its own tenant's document to a tenant's principal that may read it, from one read of whether the store indexes that document and never the whole list; and to anyone else a 403 without detail, with no decision per listed document. A kind other than tenant or app is a 400, and a store that cannot answer is a 503, never an empty page. Its cursor is a token of the convention the change listing uses (contract/control/cursor.json): one that does not decode, belongs to another listing or names a document of the other kind is a 400.",
+  "level": "control",
+  "guards": [
+    "control:DocumentListingTest#the documents of a kind are listed for one who may read them all - CTL-68",
+    "control:DocumentListingTest#a tenant's principal sees its own tenant's document if it may read it, and nothing else - CTL-68",
+    "control:DocumentListingTest#anyone else is refused as the policies refuse, telling nothing of which documents exist - CTL-68",
+    "control:DocumentListingTest#a page is cut after the filter, and its cursor names the last document shown - CTL-68",
+    "control:ListingCursorTest#the routes refuse a cursor that is not theirs with a 400, before listing anything",
+    "control:OwnDocumentListingTest#its own document is one decision and one index read, never the document list - R3-4",
+    "control:OwnDocumentListingTest#its own document not indexed, or a cursor past it, is an empty page - R3-4",
+    "control:DocumentListingTest#a kind other than tenant or app is a 400 - CTL-68",
+    "control:DocumentListingTest#a document list the store cannot read is the store's failure, never an empty page - CTL-68",
+    "control:DocumentListingTest#a full paging reads the document list once, and a failed read is never kept - CTL-68",
+    "control:DocumentListingTest#a store that cannot answer is a 503, never an empty page - CTL-68",
+    "control:ClientContractTest#a document listing holds exactly the members of its contract file - CTL-68"
+  ],
+  "pending": null
+}

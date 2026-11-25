@@ -38,6 +38,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -112,7 +113,7 @@ class PipelineStarterRedisTest {
 
     private fun token(context: ApplicationContext, tenant: String, id: String, app: String = "order"): String =
         context.getBean(TokenConverter::class.java)
-            .toToken(TokenSubject(id, app = app, tenant = tenant))
+            .toToken(TokenSubject(id, Identity.Credential.Kind.PERSON, app = app, tenant = tenant))
             .accessToken
 
     private fun publish(context: ApplicationContext, key: SnapshotKey, kind: DocumentKind, owner: String, body: String) {

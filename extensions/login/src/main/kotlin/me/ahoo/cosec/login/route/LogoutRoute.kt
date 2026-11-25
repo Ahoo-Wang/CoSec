@@ -11,11 +11,10 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.login.route
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.http.ProblemType
@@ -26,8 +25,8 @@ import kotlin.coroutines.cancellation.CancellationException
 /**
  * The logout route the starter serves at `cosec.authentication.login.logout.path` (`IDN-24`): the pair in the body,
  * as a refresh takes it, so a client logs out whether or not its access token has expired ([TokenRevoker.revoke] of the
- * pair). `204` when the session is now ended, and when it already was (`token-revoked`): the end the caller asked
- * for, so a logout whose answer was lost can be sent again. A pair that is not one is `401`, an unavailable store
+ * pair). `204` when the session is now ended, with the login it was switched from (`IDN-40`), and when it already was
+ * (`token-revoked`): the end the caller asked for, so a logout whose answer was lost can be sent again. A pair that is not one is `401`, an unavailable store
  * `503`, an error `500`.
  */
 @InternalCoSecApi

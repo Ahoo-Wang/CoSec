@@ -11,11 +11,10 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.migrate
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.nio.file.Files
 import java.nio.file.Path
@@ -57,7 +56,7 @@ internal class Options(
         private val VALUED = setOf(
             "from-redis", "from-files", "key-prefix", "out", "partition", "to-redis", "in",
             "rate-limit-rules", "platform-admin", "redis", "role-prefix", "app",
-            "memberships", "blacklist", "grant-to-principal", "file", "document", "revision", "confirm",
+            "memberships", "blacklist", "grant-to-principal", "file", "document", "revision", "confirm", "prefix", "limit",
         )
         private val FLAGS = setOf("resume", "force", "dry-run", "cluster")
         private val REDIS_URIS = listOf("to-redis", "from-redis", "redis")

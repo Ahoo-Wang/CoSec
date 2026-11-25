@@ -19,7 +19,9 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
+import me.ahoo.cosec.control.authz.EngineAuthority
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
@@ -47,6 +49,9 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import java.util.concurrent.atomic.AtomicInteger
@@ -85,11 +90,46 @@ val NO_MEMBERSHIPS = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyLis
 /** Permits every control-plane action: for tests of the change flow, where only the hard rule stands. */
 val PERMIT_ALL = ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT }
 
+/**
+ * [actor] as a person who signed in with CoSec's own token, in the request a host pipeline permitted: a person's
+ * credential with an id, principal bindings and break-glass, as an [Operator] reads it (`IDN-44`). A test operator that
+ * stands for someone stands on this, never on [Operator]'s defaults without a request, which are a workload's.
+ */
+fun person(
+    actor: Actor,
+    memberships: Memberships = NO_MEMBERSHIPS,
+    attributes: Map<String, Any> = emptyMap()
+): Operator =
+    Operator(
+        actor,
+        memberships,
+        attributes,
+        security = EngineAuthority.permitted(
+            AuthenticatedPrincipal(
+                actor.principal,
+                actor.tenant,
+                MembershipSource.Claims(memberships),
+                attributes,
+                Identity.Credential(
+                    Identity.Method.JWT,
+                    Identity.Credential.Kind.PERSON,
+                    "token-${actor.principal.value}",
+                    null
+                ),
+                breakGlass = true,
+                issuedAt = null,
+                apiKeyCredential = false,
+                app = PipelineControlAuthorizer.CONTROL_APP,
+                session = null,
+            )
+        ),
+    )
+
 /** Alice of acme, as she proposes and publishes acme's document. */
-val ALICE_OP = Operator(ALICE, NO_MEMBERSHIPS)
+val ALICE_OP = person(ALICE)
 
 /** A principal of the platform tenant: the only one the hard rule lets write the platform and app documents. */
-val PLATO = Operator(Actor(TenantId.PLATFORM, PrincipalId("plato")), NO_MEMBERSHIPS)
+val PLATO = person(Actor(TenantId.PLATFORM, PrincipalId("plato")))
 
 /**
  * An operator who publishes [key] alone: a platform principal, the trust root of every document (RFC 0007 §7.3); a

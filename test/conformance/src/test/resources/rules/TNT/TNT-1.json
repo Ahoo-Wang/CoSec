@@ -1,0 +1,13 @@
+{
+  "id": "TNT-1",
+  "source": "RFC 0004 §10",
+  "statement": "Another tenant's document never changes a decision for this tenant's principals (P12).",
+  "level": "engine",
+  "properties": [
+    "engine:EnginePropertyTest#P12 another tenant's document never changes a decision"
+  ],
+  "guards": [
+    "runtime:DocumentSnapshotViewsTest#tenants whose ids differ only in case each have their own document"
+  ],
+  "pending": null
+}

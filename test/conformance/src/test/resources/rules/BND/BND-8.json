@@ -1,0 +1,7 @@
+{
+  "id": "BND-8",
+  "source": "RFC 0004 §4.2, §7.1 (#1029 review)",
+  "statement": "A binding whose shape the candidate order can never reach (a subject or scope no request of that document can match) does not compile, so no DENY is lost silently.",
+  "level": "engine",
+  "pending": null
+}

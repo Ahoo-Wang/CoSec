@@ -83,6 +83,16 @@ class TypeScriptWorkspaceTest {
             .assert().isEqualTo(json(Projects.root.resolve("wiki/package.json"))["packageManager"].asString())
     }
 
+    /**
+     * The build's version is what npm publishes too, and semver orders pre-release identifiers in ASCII: an uppercase
+     * `8.0.0-RC1` sorts below `8.0.0-beta.9`, so every client on the beta would see the candidate as a downgrade. A
+     * pre-release is spelled `alpha.n`, `beta.n` or `rc.n`, in lowercase (CONTRIBUTING.md §7).
+     */
+    @Test
+    fun `the version of the build is a release or a lowercase alpha, beta or rc pre-release`() {
+        version().assert().matches("""\d+\.\d+\.\d+(-(alpha|beta|rc)\.\d+)?""")
+    }
+
     @Test
     fun `every package is a published cosec package, in its own directory, at the version of the build`() {
         for (directory in packages()) {

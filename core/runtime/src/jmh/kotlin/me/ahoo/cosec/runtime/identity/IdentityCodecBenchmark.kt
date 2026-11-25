@@ -49,7 +49,7 @@ open class IdentityCodecBenchmark {
                 app = "order",
                 space = "",
                 roles = setOf("reader"),
-                credential = Identity.Credential(Identity.Method.API_KEY, "k-7f3a", now.plusSeconds(86_400)),
+                credential = Identity.Credential(Identity.Method.API_KEY, Identity.Credential.Kind.WORKLOAD, "k-7f3a", now.plusSeconds(86_400)),
                 issuedAt = now,
                 requestId = "0f8e2c1d9b7a4e65",
             )
@@ -61,6 +61,7 @@ open class IdentityCodecBenchmark {
                 roles = setOf("clerk", "reviewer", "approver"),
                 credential = Identity.Credential(
                     Identity.Method.JWT,
+                    Identity.Credential.Kind.PERSON,
                     "9c1d7e3a-5b2f-4a8e-b6d0-3f1e2a9c4b7d",
                     now.plusSeconds(3_600),
                     issuedAt = now.minusSeconds(60),
@@ -76,7 +77,7 @@ open class IdentityCodecBenchmark {
                 app = "order",
                 space = "team-b",
                 roles = List(20) { "role-$it" }.toSet(),
-                credential = Identity.Credential(Identity.Method.JWT, "jti-large", now.plusSeconds(3_600)),
+                credential = Identity.Credential(Identity.Method.JWT, Identity.Credential.Kind.PERSON, "jti-large", now.plusSeconds(3_600)),
                 issuedAt = now,
                 requestId = "0f8e2c1d9b7a4e65",
                 claims = List(8) { "claim$it" to "值-$it-ünïcødé" }.toMap(),

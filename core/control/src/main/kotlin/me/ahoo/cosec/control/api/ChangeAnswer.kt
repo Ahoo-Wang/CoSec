@@ -137,6 +137,8 @@ object ChangeAnswer {
             node.set("approver", actorTree(approval.approver))
             node.put("at", approval.at.toString()).put("candidate", approval.candidate)
             node.putArray("covers").apply { approval.covers.forEach { add(it) } }
+            // Whose the approval was, when the host that recorded it said (APR-9): only a person's counts.
+            approval.kind?.let { node.put("kind", it.name) }
         }
     }
 }

@@ -15,13 +15,13 @@
 
 package me.ahoo.cosec.control.change
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.time.Instant
 
 /** Where a document's staging slot is (RFC 0007 §5.5): the change holding it, `null` when it is free. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 data class StageSlot(val holder: ChangeId?, val since: Instant?) {
+    @InternalCoSecApi
     companion object {
         val FREE: StageSlot = StageSlot(null, null)
     }

@@ -1,0 +1,10 @@
+{
+  "id": "CTL-18",
+  "source": "RFC 0007 §5.6; round-2 review R5",
+  "statement": "A rollback needs cosec:read on its document before it says whether a revision exists or shows its entries.",
+  "level": "control",
+  "pending": null,
+  "guards": [
+    "control:ControlRoundTwoFixesTest#a rollback needs cosec read before it says which revisions exist"
+  ]
+}

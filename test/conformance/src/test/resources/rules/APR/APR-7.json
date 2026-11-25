@@ -1,0 +1,14 @@
+{
+  "id": "APR-7",
+  "source": "RFC 0007 §7.5 (2026-10-30 revision)",
+  "statement": "An approval is a person's: a principal authenticated by a workload's credential (an API key, or a service's own identity, IDN-34) never approves (403), whatever it holds. A workload is told by the kind its credential declares (IDN-44), a forwarded identity's `auth.kind` among them (absent or unknown, a workload's), by having no credential, and by provenance (CoSec's API key authenticator); never by the method's name.",
+  "level": "control",
+  "pending": null,
+  "guards": [
+    "control:ApprovalB2Test#an API key never approves",
+    "control:ApprovalB2Test#an API key is never the trust root - review M2",
+    "runtime:ApiKeyAuthenticatorTest#aValidKeyIsItsPrincipal",
+    "runtime:IdentityGateTest#the gateway's credential decides principal and break-glass bindings behind it",
+    "control:ApprovalB2Test#a service's own identity never approves - IDN-34"
+  ]
+}

@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.document.identity
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.identity.Identity
 
@@ -28,17 +27,16 @@ import me.ahoo.cosec.spi.identity.Identity
  * gateway and the named services alone can reach, which the receiver's statement says (`STA-7`); the receiver still
  * authorizes and records every call as the principal it names.
  */
-@ExperimentalCoSecApi
 object IdentityHeader {
     /** The header's name. */
     const val NAME: String = IdentityCodec.HEADER
 
     /**
-     * The header value of [identity]. Throws [IllegalStateException] when the value would be longer than [maxBytes] (8 KiB
-     * by default, the receiver's default limit), a claim is of a kind the header does not carry, or the credential never
+     * The header value of [identity]. Throws [IllegalStateException] when the value would be longer than [maxBytes] (6 KiB
+     * by default, the writer's limit, below the 8 KiB every 8.x receiver reads, `IDN-43`), a claim is of a kind the header does not carry, or the credential never
      * expires; and [IllegalArgumentException] when a receiver would refuse what it wrote (an empty id, a time out of
      * range): a header written is a header read.
      */
-    fun write(identity: Identity, maxBytes: Int = IdentityCodec.DEFAULT_MAX_BYTES): String =
+    fun write(identity: Identity, maxBytes: Int = IdentityCodec.WRITE_MAX_BYTES): String =
         IdentityCodec.encode(identity, maxBytes)
 }

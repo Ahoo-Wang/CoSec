@@ -80,7 +80,9 @@ starter 注册的监听器：
 ## 审计事件 {#audit-events}
 
 审计监听器把每个决策事件映射为一个 `AuditEvent`。它保留响应体省略的内容：显式拒绝和隐式拒绝的区别、凭证被拒绝的
-原因，以及请求为什么是 `503`。
+原因，以及请求为什么是 `503`。它那些看似封闭的取值会在次版本中增长：决策事件增加成员时，`kind`、`authorization.decision`、
+`authorization.reasonCode` 和 `authorization.source.via` 也随之增加，所以接收器、日志读取方或 Kafka 消费者要接受它不认识的值
+（[会增长的集合](../architecture/extending.md#sets-that-grow)）。
 
 | 字段 | 内容 |
 |---|---|
@@ -157,7 +159,7 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 
 ## 启动摘要 {#startup-summary}
 
-所有 bean 创建完毕后，starter 记录一行 INFO，说明 CoSec 被配置成什么样，例如 `CoSec 8.0.0-beta.8: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), token-cache=on (max-bytes=134217728), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`。每一项都是请求实际遇到的东西，按认证器解析的方式得出：吊销读取器是应用的 bean、CoCache 令牌存储的读取器，或 `RevocationReader.NONE`（这一行会明确写出，因为此时被吊销的令牌在过期前都会被接受）；没有令牌校验（`jwt=off`）时没有读取器可写。`token-cache` 说明请求令牌是否从[已校验令牌缓存](../integration/authentication.md#the-verified-token-cache)作答：配置关闭时，或使用你自己的 `TokenVerifier` Bean 时为 `off`。应用声明了 `Authenticator` bean 时，它会替换 starter 自带的（[扩展](../architecture/extending.md)）：这一行会写成 `authenticator=<类名> (replaces CoSec's: tokens, revocation and API keys are its own)`，并且不再列出 `jwt`、`revocation-reader` 和 `api-keys`，因为它们都没有生效。写成 `false` 的开关会以 `switched-off-by-configuration=[...]` 追加。名为 `LocalRateLimiter` 的限流器按实例计数：有多个实例时，限额按实例数倍增。`cosec.enabled=false` 时这一行换成一条 WARN：`CoSec is off ... nothing is protected by CoSec`（[故障排查](./troubleshooting.md#the-log-says-cosec-is-off)）。
+所有 bean 创建完毕后，starter 记录一行 INFO，说明 CoSec 被配置成什么样，例如 `CoSec 8.0.0-rc.1: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), token-cache=on (max-bytes=134217728), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`。每一项都是请求实际遇到的东西，按认证器解析的方式得出：吊销读取器是应用的 bean、CoCache 令牌存储的读取器，或 `RevocationReader.NONE`（这一行会明确写出，因为此时被吊销的令牌在过期前都会被接受）；没有令牌校验（`jwt=off`）时没有读取器可写。`token-cache` 说明请求令牌是否从[已校验令牌缓存](../integration/authentication.md#the-verified-token-cache)作答：配置关闭时，或使用你自己的 `TokenVerifier` Bean 时为 `off`。应用声明了 `Authenticator` bean 时，它会替换 starter 自带的（[扩展](../architecture/extending.md)）：这一行会写成 `authenticator=<类名> (replaces CoSec's: tokens, revocation and API keys are its own)`，并且不再列出 `jwt`、`revocation-reader` 和 `api-keys`，因为它们都没有生效。写成 `false` 的开关会以 `switched-off-by-configuration=[...]` 追加。名为 `LocalRateLimiter` 的限流器按实例计数：有多个实例时，限额按实例数倍增。`cosec.enabled=false` 时这一行换成一条 WARN：`CoSec is off ... nothing is protected by CoSec`（[故障排查](./troubleshooting.md#the-log-says-cosec-is-off)）。
 
 运行控制面的宿主在启动完成后再记录一行 INFO：控制面提供什么、它的调用方从哪里来，例如 `Control plane: HTTP routes on /cosec/control (port 8080; service port 8082), caller from the forwarded identity (statement: only-trusted-callers-can-reach)`；在只从进程内访问控制面的应用里则是 `Control plane: no HTTP routes (cosec.control.http.enabled=false), caller from the credential`。端口是服务器实际绑定的端口。
 
@@ -222,7 +224,8 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 | 指标 | 标签 | 计数 |
 |---|---|---|
 | `cosec.problem.render.failed` | 无 | 因应用的 `ProblemRenderer` 抛出异常或没有返回字节、而用 CoSec 自己的响应体回答的每个拒绝（`PIP-34`）；请求仍被拒绝，状态码是 CoSec 的。任何非零速率都说明渲染器需要修复（[故障排查](./troubleshooting.md#a-refusal-is-answered-with-cosecs-body-though-a-renderer-is-declared)） |
-| `cosec.identity.refused` | `problem`：`invalid-request`、`token-invalid`、`token-expired` | 服务拒绝的每个 `CoSec-Identity` 头，包括日志没有打印的那些；原因以 `WARN` 记录，每种问题最多每分钟一次（[故障排查](./troubleshooting.md#a-service-behind-the-gateway-refuses-requests)），从不出现在响应中 |
+| `cosec.identity.refused` | `problem`：`invalid-request`、`token-invalid`、`token-expired`、`unavailable`（`crit` 点了名而服务不认识的成员：读方比写方旧，`IDN-41`） | 服务拒绝的每个 `CoSec-Identity` 头，包括日志没有打印的那些；原因以 `WARN` 记录，每种问题最多每分钟一次（[故障排查](./troubleshooting.md#a-service-behind-the-gateway-refuses-requests)），从不出现在响应中 |
+| `cosec.stored.refused` | `record`：`session`、`change`、`staging_slot`、`revision_index`、`app_list`、`candidate`、`shadow_report`、`instance_status`、`resident_documents`、`instance_index`、`reporters`；`reason`：`later`、`malformed` | 读取方规则拒绝的每条存储记录（`OBS-12`）：`later` 是更新的版本写的记录（更晚的格式，或其 `crit` 列出而本版本不认识的成员），滚动升级期间出现属于正常，所有实例都运行新版本后就会消失；`malformed` 是不成其为该类记录的记录，要去检查存储（[存储](./storage.md#record-formats)、[故障排查](./troubleshooting.md#a-record-a-later-version-wrote)） |
 
 在网关模式下，任何非零速率都意味着某一跳配置错误，或者有请求没有经过网关；请对它告警。
 
@@ -369,7 +372,9 @@ break-glass 等待 broker 的确认（把生产者配置为 `acks=all`）。设�
 | `cosec.control.listener.dropped` | 因队列已满而丢弃的 BEST_EFFORT 事件 |
 | `cosec.control.listener.lost` | REQUIRED 监听器错过的已存储步骤的事件，因队列已满或调用失败：任何一个都应告警 |
 
-`cosec.control.shadow.status.unreadable`（无标签）统计控制面主机读到的、无法解码的实例状态：每个这样的实例在其状态能读取或过期之前，都会挡住所有影子窗口（`CTL-73`），日志会点名它（[故障排查](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)）。任何一个都应告警。
+`cosec.control.shadow.status.unreadable`（无标签）统计控制面主机读到的、无法解码的实例状态：每个这样的实例在最后一次写入后一分钟内挡住所有影子窗口（由键剩下的寿命得知，与任何实例的状态一样，`CTL-73`），日志会点名它（[故障排查](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)）。任何一个都应告警。
+
+**存储的读方**（`SNP-25`）。每个带 `cosec-cocache` 的 CoSec 进程都写自己的状态，带上它运行的发布版本。`cosec.instance.status.failed`（计数器，无标签，在该进程上）统计它写状态失败的次数：控制面在读方中看不见它，通常是 Redis 用户没有对自己的 `<s>:shadow:status:<instance>` 的写权限（[存储](./storage.md#who-may-write-which-keys)）。任何一次都应告警。`cosecInstanceStatus` 健康指标显示它的 `instance`、`release`、`lastWritten`，写入失败时还有 `failingSince` 与 `failedWrites`；它总是 `UP`，不属于任何就绪分组。在控制面主机上，`cosec.control.instances.releases`（仪表，无标签）是本主机上次读取时最近一小时读方运行的版本数，`GET /instances` 也用这次读取作答（[测试策略](../policies/testing.md#instances)）。每个控制面主机在它的每次影子巡检时读取它们（启动日志行里的影子巡检间隔，至多一分钟；至多每 5 秒读一次），不论它是否持有这次巡检的租约（`CTL-89`）：不必有人调用这个路由，每个副本报告自己的读取。在主机的第一次巡检之前（启动后至多一个间隔）仪表为 `0`；读方无法读取时，它保留上一次的值，不论多旧（失败会写进日志）。持续高于 1 的时间超过一次滚动升级，说明还有旧版本的实例在读存储。
 
 `cosec.control.revisions.records` 与 `cosec.control.revisions.bytes`（量规，无标签）是各文档保留的修订记录数与它们的存储字节数，`cosec.control.changes.open` 是未结束的变更数（`CTL-84`）。回收任务每小时设置它们：只有持有这一轮租约的实例读取每个文档，所以只有它报告所见；它在这一轮结束时替换数值，在此之前报告上一轮的（中间不会出现 `0`）。由别的实例领这一轮的实例报告 `0`；这一轮起不来（列不出文档）的实例保留它上次所见。**跨实例取最大值**：它是截至上一轮的存储总量。求和在租约换手后的那一轮可能把同一轮计两次。那一轮跳过的文档（某个未结束变更读不到）不计入；旧版本写的索引项，要等某一轮得出它的大小后才计入 `bytes`。在 `bytes` 接近 Redis 能容纳的量时告警。
 

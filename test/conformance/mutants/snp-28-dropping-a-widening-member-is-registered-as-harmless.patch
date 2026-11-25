@@ -1,0 +1,17 @@
+# Rule: SNP-28
+# Mutant: the session's root is registered as a member an older reader may drop, though dropping it leaves the session outliving its login
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.TokenFamilyMembersTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/TokenFamilyMembers.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/TokenFamilyMembers.kt
+index 893eb4892..cebb2398a 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/TokenFamilyMembers.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/TokenFamilyMembers.kt
+@@ -41,7 +41,7 @@ internal object TokenFamilyMembers {
+             required("revoked"),
+             // A switched session lives only while its login does (IDN-36): ignored or dropped, it would outlive it. In the
+             // 8.0 baseline, written as format 2, which no reader before it read (IDN-31).
+-            Member("root", WhenAbsent.NONE, ignoringWidens = true, droppingWidens = true),
++            Member("root", WhenAbsent.NONE, ignoringWidens = true, droppingWidens = false),
+         ),
+     )
+ }

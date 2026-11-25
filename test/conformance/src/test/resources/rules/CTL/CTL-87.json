@@ -1,0 +1,7 @@
+{
+  "id": "CTL-87",
+  "source": "RFC 0007 §7.4.4 (DR1-E-3, RC review round 1 area E; direction decided by the maintainer's coordinator, 2026-11-24)",
+  "statement": "A DENY of a tenant's document is the tenant's: an administrator of the tenant may remove or relax it within what it may write, whoever wrote it, a platform principal included, and the change is decided as any write of that document is. No entry of a document is protected. A restriction the platform means a tenant not to lift is the tenant's boundary, which only a platform principal sets (BDY-2), or the platform document, which a tenant cannot write (TNT-3); a DENY the platform writes into a tenant's document is advisory.",
+  "level": "control",
+  "pending": null
+}

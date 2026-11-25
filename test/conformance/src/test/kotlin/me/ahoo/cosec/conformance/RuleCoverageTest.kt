@@ -11,11 +11,10 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class, InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.conformance
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.testkit.ScenarioJson
 import me.ahoo.test.asserts.assert
@@ -44,7 +43,6 @@ class RuleCoverageTest {
 
     private val p1 = "engine:SomePropertyTest#P1 holds"
     private val guard = "engine:SomeTest#P2 holds"
-    private fun allow(level: String, vararg references: String) = mapOf(level to references.toSet())
 
     private fun rule(
         id: String,
@@ -73,14 +71,14 @@ class RuleCoverageTest {
 
     @Test
     fun `a rule with a positive and a negative scenario is covered`() {
-        RuleCoverage.check(listOf(rule("ALG-1")), covered, tests, emptyMap()).errors.assert().isEmpty()
+        RuleCoverage.check(listOf(rule("ALG-1")), covered, tests).errors.assert().isEmpty()
     }
 
     @Test
     fun `a rule without a negative or positive scenario fails`() {
-        RuleCoverage.check(listOf(rule("ALG-1")), covered.take(1), tests, emptyMap()).errors.assert()
+        RuleCoverage.check(listOf(rule("ALG-1")), covered.take(1), tests).errors.assert()
             .containsExactly("Rule ALG-1 has no negative scenario")
-        RuleCoverage.check(listOf(rule("ALG-1")), emptyList(), tests, emptyMap()).errors.assert()
+        RuleCoverage.check(listOf(rule("ALG-1")), emptyList(), tests).errors.assert()
             .containsExactly("Rule ALG-1 has no negative or positive scenario")
     }
 
@@ -90,8 +88,7 @@ class RuleCoverageTest {
         val report = RuleCoverage.check(
             rules,
             listOf(scenario("a", "positive", "ALG-3"), scenario("b", "negative", "ALG-3")),
-            tests,
-            emptyMap()
+            tests
         )
         report.errors.assert().isEmpty()
         report.pending.map { it.id }.assert().containsExactly("ALG-1")
@@ -101,7 +98,7 @@ class RuleCoverageTest {
     fun `a scenario of an unknown or superseded rule fails`() {
         val rules = listOf(rule("ALG-1"), rule("ALG-2", superseded = "ALG-1"))
         val scenarios = covered + scenario("old", "positive", "ALG-2") + scenario("typo", "negative", "ALG-9")
-        RuleCoverage.check(rules, scenarios, tests, emptyMap()).errors.assert().containsExactlyInAnyOrder(
+        RuleCoverage.check(rules, scenarios, tests).errors.assert().containsExactlyInAnyOrder(
             "Scenario old names rule ALG-2, superseded by ALG-1",
             "Scenario typo names rule ALG-9, which is not registered",
         )
@@ -113,8 +110,7 @@ class RuleCoverageTest {
         RuleCoverage.check(
             listOf(rule("ALG-1")),
             scenarios,
-            tests,
-            emptyMap()
+            tests
         ).errors.assert().containsExactlyInAnyOrder(
             "Scenario p has unknown polarity maybe",
             "Scenario l has unknown level build",
@@ -128,7 +124,7 @@ class RuleCoverageTest {
             properties = listOf("engine:SomePropertyTest#P1 holds", "engine:SomePropertyTest#P2 holds"),
             guards = listOf("engine:SomePropertyTest", "model:SomePropertyTest", "SomePropertyTest"),
         )
-        RuleCoverage.check(listOf(rule), covered, tests, emptyMap()).errors.assert().containsExactlyInAnyOrder(
+        RuleCoverage.check(listOf(rule), covered, tests).errors.assert().containsExactlyInAnyOrder(
             "Rule ALG-1 names test engine:SomePropertyTest#P2 holds, which does not exist",
             "Rule ALG-1 names test model:SomePropertyTest, which does not exist",
             "Rule ALG-1 names test SomePropertyTest, which does not exist",
@@ -137,13 +133,12 @@ class RuleCoverageTest {
 
     @Test
     fun `a build rule needs a test rather than scenarios`() {
-        RuleCoverage.check(listOf(rule("SCP-5", level = "build")), emptyList(), guardTests, emptyMap()).errors.assert()
+        RuleCoverage.check(listOf(rule("SCP-5", level = "build")), emptyList(), guardTests).errors.assert()
             .containsExactly("Build rule SCP-5 names no test")
         RuleCoverage.check(
             listOf(rule("SCP-5", level = "build", guards = listOf(guard))),
             emptyList(),
             guardTests,
-            allow("build", guard),
         )
             .errors.assert().isEmpty()
     }
@@ -153,43 +148,27 @@ class RuleCoverageTest {
         RuleCoverage.check(
             listOf(rule("SNP-3", level = "startup")),
             emptyList(),
-            guardTests,
-            emptyMap()
+            guardTests
         ).errors.assert()
             .containsExactly("Startup rule SNP-3 names no test")
         RuleCoverage.check(
             listOf(rule("SNP-3", level = "startup", guards = listOf(guard))),
             listOf(scenario("s", "positive", "SNP-3", level = "startup")),
             guardTests,
-            allow("startup", guard),
         )
             .errors.assert().containsExactly("Scenario s has unknown level startup")
     }
 
     @Test
     fun `a timing rule needs a test rather than scenarios, and no scenario runs at that level`() {
-        RuleCoverage.check(listOf(rule("SNP-1", level = "timing")), emptyList(), guardTests, emptyMap()).errors.assert()
+        RuleCoverage.check(listOf(rule("SNP-1", level = "timing")), emptyList(), guardTests).errors.assert()
             .containsExactly("Timing rule SNP-1 names no test")
         RuleCoverage.check(
             listOf(rule("SNP-1", level = "timing", properties = listOf(p1))),
             listOf(scenario("s", "positive", "SNP-1", level = "timing")),
             guardTests,
-            allow("timing", p1),
         )
             .errors.assert().containsExactly("Scenario s has unknown level timing")
-    }
-
-    @Test
-    fun `a guarded rule is covered only by a test the allowlist lists for its level`() {
-        val rule = rule("SCP-5", level = "build", guards = listOf(guard))
-        RuleCoverage.check(listOf(rule), emptyList(), guardTests, emptyMap()).errors.assert()
-            .containsExactly("Build rule SCP-5 names $guard, which is not a build guard of GuardAllowlist")
-        // Listed for another level is not listed for this one.
-        RuleCoverage.check(listOf(rule), emptyList(), guardTests, allow("startup", guard)).errors.assert()
-            .containsExactlyInAnyOrder(
-                "Build rule SCP-5 names $guard, which is not a build guard of GuardAllowlist",
-                "GuardAllowlist lists $guard, which no startup rule names",
-            )
     }
 
     @Test
@@ -200,7 +179,6 @@ class RuleCoverageTest {
             listOf(rule("SCP-5", level = "build", guards = listOf(wholeClass, helper))),
             emptyList(),
             guardTests,
-            allow("build", wholeClass, helper),
         ).errors.assert().containsExactlyInAnyOrder(
             "Build rule SCP-5 names $wholeClass, a class: a guard is one test",
             "Build rule SCP-5 names $helper, which is not an enabled test",
@@ -213,28 +191,16 @@ class RuleCoverageTest {
             listOf(rule("SNP-1", level = "timing", guards = listOf(guard))),
             emptyList(),
             guardTests,
-            allow("timing", guard),
         ).errors.assert().containsExactly("Timing rule SNP-1 names no property test")
         val unscaled = "engine:SomeTest#P1 holds"
         RuleCoverage.check(
             listOf(rule("SNP-1", level = "timing", properties = listOf(unscaled))),
             emptyList(),
             guardTests,
-            allow("timing", unscaled),
         ).errors.assert().containsExactly(
             "Timing rule SNP-1 names $unscaled, whose class does not read ${RuleCoverage.ITERATIONS}, so " +
                 "propertyStress does not scale it"
         )
-    }
-
-    @Test
-    fun `an allowlist entry no rule names, or of an unknown level, fails`() {
-        RuleCoverage.check(listOf(rule("ALG-1")), covered, guardTests, allow("build", guard) + allow("engine", p1))
-            .errors.assert().containsExactlyInAnyOrder(
-                "GuardAllowlist lists $guard, which no build rule names",
-                "GuardAllowlist has unknown level engine",
-                "GuardAllowlist lists $p1, which no engine rule names",
-            )
     }
 
     @Test
@@ -290,7 +256,7 @@ class RuleCoverageTest {
                 rule("alg-2", pending = "x"),
                 rule("ALG-3", level = "ui", pending = "x")
             )
-        RuleCoverage.check(rules, covered, tests, emptyMap()).errors.assert().containsExactlyInAnyOrder(
+        RuleCoverage.check(rules, covered, tests).errors.assert().containsExactlyInAnyOrder(
             "Rule ALG-1 is registered twice",
             "Rule id alg-2 is not PREFIX-number",
             "Rule ALG-3 has unknown level ui",

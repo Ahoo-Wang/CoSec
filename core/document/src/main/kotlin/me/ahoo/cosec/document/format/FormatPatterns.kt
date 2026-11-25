@@ -27,6 +27,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  * - whether a time zone id exists, and dates such as February 30;
  * - a time window whose from equals its to, and `notBefore` after `notAfter`;
  * - path variable scope, capture names that are not Java identifiers, and a variable captured twice;
+ * - a path pattern's dot segment, and a segment longer than a request path's, which match no path (`DOC-15`);
  * - the attribute catalog and the types of condition operands;
  * - which documents a principal binding must name its tenant in: all but a tenant's own.
  */
@@ -86,7 +87,16 @@ internal object FormatPatterns {
     private const val CATCH_ALL_IN_THE_MIDDLE = """.*[^/].*/(\*\*|\{\*[^/]*\})/"""
 
     private const val NO_SPACE = """\s\x00-\x1F\x7F-\x9F"""
-    private const val NAME = "[^:*$NO_SPACE]+"
+
+    /** `DOC-15`: the characters reserved for a future syntax, refused unescaped (`PatternEscapes.RESERVED`). */
+    private const val RESERVED = """\[\]()|!^$\\"""
+
+    /** A backslash and what it escapes, a reserved character or `*?{}` (`PatternEscapes.ESCAPABLE`). */
+    private const val ESCAPE = """\\[$RESERVED*?{}]"""
+
+    /** In a path, an escape but of a backslash, which no request path holds (PIP-14). */
+    private const val PATH_ESCAPE = """\\[\[\]()|!^$*?{}]"""
+    private const val NAME = "([^:*?{}$RESERVED$NO_SPACE]|$ESCAPE)+"
 
     /**
      * An 8.0 action: `service:verb`, `service:*` or `*` (`ActionPattern`), but no `http` action no request can have
@@ -99,6 +109,9 @@ internal object FormatPatterns {
         ":read",
         "order:read:all",
         "or*der:read",
+        "order:re!ad",
+        "order:re\\dad",
+        "or(der):read",
         "order: read",
         "http:HEAD",
         "http:get",
@@ -107,9 +120,12 @@ internal object FormatPatterns {
 
     /** A capture name: not empty, not starting with a digit or `-` (a looser form of a Java identifier). */
     private const val CAPTURE = """[^/{}*?:\s\d-][^/{}*?:\s]*"""
-    private const val TYPE = "[^/*?{}:$NO_SPACE]+"
-    private const val SEGMENT = """(\*|\{$CAPTURE\}|[^/*?{}$NO_SPACE]+)"""
-    private const val HTTP = """http:path:(?!$CATCH_ALL_IN_THE_MIDDLE)([^{}]|\{\*?$CAPTURE\})+"""
+    private const val TYPE = "([^/*?{}:$RESERVED$NO_SPACE]|$ESCAPE)+"
+    private const val SEGMENT = """(\*|\{$CAPTURE\}|([^/*?{}$RESERVED$NO_SPACE]|$ESCAPE)+)"""
+
+    /** A path holds no `;` and no control character either: no request path does (PIP-5, PIP-30, `DOC-15`). */
+    private const val HTTP_PART = """[^{}$RESERVED;$CONTROL]|$PATH_ESCAPE|\{\*?$CAPTURE\}"""
+    private const val HTTP = """http:path:(?!$CATCH_ALL_IN_THE_MIDDLE)($HTTP_PART)+"""
     private const val TYPED = """(?!http(/|$))$TYPE(/$SEGMENT)*(/\*\*)?"""
 
     /** An 8.0 resource: `type/segment/...` with a final `**`, or `http:path:<pattern>` (`ResourcePattern`). */
@@ -117,5 +133,7 @@ internal object FormatPatterns {
     val RESOURCE_PATTERN_COUNTER_EXAMPLES = listOf(
         "", "order/**/items", "or*der/1", "order/{}", "order/{1st}", "http/orders", "http:path:",
         "http:path:/orders/**/items", "http:path:/orders/{id", "http:path:/orders/{id:\\d+}",
+        "order/a(1)", "order/a\\db", "or|der/1", "http:path:/odata/${'$'}metadata", "http:path:/a[b]",
+        "http:path:/a\\\\b", "http:path:/a\\d", "http:path:/a;b", "http:path:/a\u0001",
     )
 }

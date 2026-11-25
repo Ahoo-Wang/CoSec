@@ -159,7 +159,6 @@ class Pipeline internal constructor(
      * (`evaluate(facts).use { … }`, or `close()` from the response's completion callback), which ends the request
      * (`PIP-26`). CoSec's adapters end the requests they bind themselves.
      */
-    @ExperimentalCoSecApi
     override suspend fun evaluate(facts: HttpFacts): Outcome {
         // The trace the bridge captured (§7.5): its id goes into problem bodies and decision events.
         val trace = currentCoroutineContext()[TraceContext]

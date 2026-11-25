@@ -67,7 +67,7 @@ object ShadowCodec {
 
     fun decodeCandidate(bytes: ByteArray): StoredCandidate = guarded {
         val node = read(bytes)
-        StoredFormat.of(node, "staged candidate")
+        StoredFormat.read(node, ShadowMembers.CANDIDATE, "staged candidate")
         val header = HEADER.firstOrNull(node::has)
         if (header != null) throw malformed("a candidate's header is its document's: [$header] beside it")
         StoredCandidate(
@@ -92,13 +92,15 @@ object ShadowCodec {
                 status.windows?.let { windows -> node.putArray("windows").apply { windows.sorted().forEach(::add) } }
                 // Only when false (CTL-10): absent is an instance that shadows, as an older one does.
                 if (!status.shadows) node.put("shadows", false)
+                // RFC 0014 R5 (SNP-25): absent is an unknown release, which nothing in 8.0 counts or waits on.
+                status.release?.let { node.put("release", it) }
             }
         },
     )
 
     fun decodeStatuses(bytes: ByteArray): Map<String, InstanceStatus> = guarded {
         read(bytes).properties().associate { (instance, node) ->
-            StoredFormat.of(node, "instance status")
+            StoredFormat.read(node, ShadowMembers.INSTANCE_STATUS, "instance status")
             instance to InstanceStatus(
                 instance,
                 // A status of 8.0.0-beta.5 also carries its documents: a member this version does not read (CTL-53).
@@ -111,6 +113,8 @@ object ShadowCodec {
                 node.get("windows")?.let(::windows),
                 node.get("shadows")?.let { if (it.isBoolean) it.asBoolean() else throw malformed("shadows is not a boolean") }
                     ?: true,
+                // Optional (SNP-25): a status of a release before it does not say; it reads as an unknown release.
+                node.get("release")?.let { if (it.isString) it.asString() else throw malformed("release is not a string") },
             )
         }
     }
@@ -133,7 +137,7 @@ object ShadowCodec {
 
     fun decodeResident(bytes: ByteArray): ResidentDocuments = guarded {
         val node = read(bytes)
-        StoredFormat.of(node, "resident documents")
+        StoredFormat.read(node, ShadowMembers.RESIDENT_DOCUMENTS, "resident documents")
         ResidentDocuments(
             node.need("instance").text(),
             Instant.parse(node.need("at").text()),
@@ -162,7 +166,7 @@ object ShadowCodec {
     }
 
     private fun report(node: JsonNode): ShadowReport {
-        StoredFormat.of(node, "shadow report")
+        StoredFormat.read(node, ShadowMembers.SHADOW_REPORT, "shadow report")
         val instance = node.need("instance").text()
         if (!ShadowReport.isInstanceId(instance)) {
             throw malformed("[${SnapshotKeyText.quoted(instance)}] is not an instance id")
@@ -215,8 +219,9 @@ object ShadowCodec {
     private inline fun <T> guarded(block: () -> T): T = try {
         block()
     } catch (error: SnapshotFormatException) {
-        // The document format's codecs, which read a candidate's document, quote what they read as they found it.
-        throw SnapshotFormatException(SnapshotKeyText.message(error.message.orEmpty()))
+        // The document format's codecs, which read a candidate's document, quote what they read as they found it. A
+        // record a later version wrote keeps its marker, which quotes nothing (SNP-27).
+        throw SnapshotFormatException(SnapshotKeyText.message(error.message.orEmpty()), StoredFormat.later(error))
     } catch (error: JacksonException) {
         throw SnapshotFormatException("A shadow value is malformed${error.at}.")
     } catch (error: IllegalArgumentException) {

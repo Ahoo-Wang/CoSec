@@ -101,7 +101,10 @@ A bean that is both is registered once, as the `DecisionListener` it is.
 ## Audit events
 
 The audit listeners map each decision event to an `AuditEvent`. It keeps what the response body leaves out: explicit
-and implicit denies apart, why a credential was rejected, and why a request was `503`.
+and implicit denies apart, why a credential was rejected, and why a request was `503`. Its closed-looking values grow in a
+minor release: `kind`, `authorization.decision`, `authorization.reasonCode` and `authorization.source.via` gain a member
+when the decision event does, so a sink, a log reader or a Kafka consumer accepts a value it does not know
+([Sets that grow](../architecture/extending.md#sets-that-grow)).
 
 | Field | Contents |
 |---|---|
@@ -185,7 +188,7 @@ which ties a response to its trace.
 ## Startup summary
 
 Once every bean exists, the starter logs one INFO line of what CoSec is configured as, for example
-`CoSec 8.0.0-beta.8: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), token-cache=on (max-bytes=134217728), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`.
+`CoSec 8.0.0-rc.1: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), token-cache=on (max-bytes=134217728), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`.
 Each entry is what a request meets, resolved as the authenticator resolves it: the revocation reader is the application's bean, the CoCache token store's, or `RevocationReader.NONE`, which the line spells out because revoked tokens are then accepted until they expire; with no token verification (`jwt=off`) there is no reader to name. `token-cache` says whether a request's token is answered from [the verified-token cache](../integration/authentication.md#the-verified-token-cache): `off` when configured off, or for a `TokenVerifier` bean of your own. When the application declares an `Authenticator` bean, it replaces the starter's ([extending](../architecture/extending.md)): the line then says `authenticator=<class> (replaces CoSec's: tokens, revocation and API keys are its own)` and lists no `jwt`, `revocation-reader` or `api-keys`, since none of them is in force.
 A switch written `false` is added as `switched-off-by-configuration=[...]`. A rate limiter named `LocalRateLimiter` counts
 per instance: with several instances the limit is multiplied by their number. When `cosec.enabled=false` the line is
@@ -266,7 +269,8 @@ meters above. It counts the forwarded identities it refuses:
 | Meter | Tag | Counts |
 |---|---|---|
 | `cosec.problem.render.failed` | none | every refusal answered with CoSec's own body because the application's `ProblemRenderer` threw or answered no bytes (`PIP-34`); the request was still refused, with CoSec's status. Any non-zero rate is a renderer to fix ([Troubleshooting](./troubleshooting.md#a-refusal-is-answered-with-cosecs-body-though-a-renderer-is-declared)) |
-| `cosec.identity.refused` | `problem`: `invalid-request`, `token-invalid`, `token-expired` | every `CoSec-Identity` header the service refused, including those its log does not print; the reason is logged at `WARN`, at most once a minute for each problem ([Troubleshooting](./troubleshooting.md#a-service-behind-the-gateway-refuses-requests)), never in the response |
+| `cosec.identity.refused` | `problem`: `invalid-request`, `token-invalid`, `token-expired`, `unavailable` (a member `crit` names that the service does not know: a reader older than its writer, `IDN-41`) | every `CoSec-Identity` header the service refused, including those its log does not print; the reason is logged at `WARN`, at most once a minute for each problem ([Troubleshooting](./troubleshooting.md#a-service-behind-the-gateway-refuses-requests)), never in the response |
+| `cosec.stored.refused` | `record`: `session`, `change`, `staging_slot`, `revision_index`, `app_list`, `candidate`, `shadow_report`, `instance_status`, `resident_documents`, `instance_index`, `reporters`; `reason`: `later`, `malformed` | every stored record the reader's rule refused (`OBS-12`): `later` for one a later version wrote (a later format, or a member its `crit` names that this version does not know), expected during a rolling upgrade and over once every instance runs the later version; `malformed` for one that is not a record of its kind, a store to look at ([Storage](./storage.md#record-formats), [Troubleshooting](./troubleshooting.md#a-record-a-later-version-wrote)) |
 
 In gateway mode any non-zero rate means a hop that is misconfigured or a request that did not come through the gateway;
 alert on it.
@@ -510,8 +514,22 @@ Meters, each tagged `listener`:
 | `cosec.control.listener.lost` | events of stored steps a REQUIRED listener missed, its queue full or its call failed: alert on any |
 
 `cosec.control.shadow.status.unreadable` (no tags) counts the instance statuses a control host read that did not
-decode: each such instance holds every shadow window until its status reads or expires (`CTL-73`), and the log names it
+decode: each such instance holds every shadow window for a minute after its last write, which its key's remaining life tells, as any instance's status (`CTL-73`), and the log names it
 ([Troubleshooting](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)). Alert on any.
+
+**The readers of the store** (`SNP-25`). Every CoSec process with `cosec-cocache` writes its status, with the release it
+runs. `cosec.instance.status.failed` (a counter, no tags, on that process) counts its status writes that failed: the
+control plane cannot see it among the readers, usually a Redis user without write permission on its own
+`<s>:shadow:status:<instance>` ([Storage](./storage.md#who-may-write-which-keys)). Alert on any. The
+`cosecInstanceStatus` health indicator shows its `instance`, `release`, `lastWritten`, and `failingSince` with
+`failedWrites` while writes fail; it is always `UP` and belongs in no readiness group. On a control host,
+`cosec.control.instances.releases` (a gauge, no tags) is how many releases the readers of the last hour ran at this
+host's last read of them, the read `GET /instances` answers from too ([Testing policies](../policies/testing.md#instances)).
+Every control-plane host reads them at each of its shadow passes (the shadow check interval of its startup line, at most
+a minute; at most once every 5 seconds), whether or not it holds the pass's lease (`CTL-89`): each replica reports its
+own reading without anyone calling the route. The gauge is `0` until the host's first pass, up to one interval after it
+starts, and keeps its last value, however old, while the readers cannot be read (the failure is logged). Above 1 for longer than a
+rolling upgrade takes is an instance of an old release still reading the store.
 
 `cosec.control.revisions.records` and `cosec.control.revisions.bytes` (gauges, no tags) are the revision records the
 documents retain and their stored bytes, and `cosec.control.changes.open` the open changes (`CTL-84`). The reclamation

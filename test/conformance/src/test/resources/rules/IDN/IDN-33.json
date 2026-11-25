@@ -1,0 +1,12 @@
+{
+  "id": "IDN-33",
+  "source": "Coordinator's brief for 8.0.0-beta.6, 2026-11-21 (the properties review, items 22, 23 and 26; memory by heap share); RFC 0006 §9.3",
+  "statement": "Each revocation table's local copy (`RevokedTokenCache`, `RevokedSubjectCache`) holds the revocation tables' share of the heap (`STA-12`), counted in entries of their measured size (290 and 230 bytes): the starter declares the count, and CoSec locks it, so neither `cocache.defaults.store.*` nor a customizer changes it, and a `cocache.caches.[name]` property that sets it fails startup. A smaller copy only sends more revocation reads to Redis; it never answers \"not revoked\" for longer.",
+  "level": "startup",
+  "pending": null,
+  "guards": [
+    "cocache:CacheTtlPolicyTest#revocationTablesKeepTheirDeclaredCount",
+    "spring-boot:RevocationCachePrecedenceTest#each table holds the revocation tables' share of the heap, over cocache defaults",
+    "spring-boot:RevocationCachePrecedenceTest#a per-cache property cannot set the count"
+  ]
+}

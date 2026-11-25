@@ -176,6 +176,7 @@ internal class ApprovalRules(
             return null
         }
         val approval = change.approval ?: return "it needs an approval"
+        kindProblem(approval)?.let { return it }
         val memberships = approval.memberships ?: return "the approval does not say what its approver held"
         if (publisher.security == null) {
             return "the approver's right to approve cannot be checked again"
@@ -189,6 +190,19 @@ internal class ApprovalRules(
             approverTenantProblem(change)?.let { return it }
         }
         revoked(approval)?.let { return it }
+        return stillHolds(change, approval, memberships, publisher)
+    }
+
+    /**
+     * Why the recorded approver of [change], as [approval] says they approved with [memberships], no longer holds
+     * `cosec:approve` on its document when [publisher] publishes it; null when they still do (review K3).
+     */
+    private suspend fun stillHolds(
+        change: ChangeRequest,
+        approval: Approval,
+        memberships: Memberships,
+        publisher: Operator,
+    ): String? {
         // As the approver authenticated: memberships from the provider are asked about again, so an approver it no
         // longer knows, or knows as deactivated, does not count (RFC 0009 §4.2); claimed ones stand as recorded.
         val source = if (memberships.source == Memberships.Source.PROVIDER) {
@@ -206,6 +220,8 @@ internal class ApprovalRules(
             approval.attributes,
             Identity.Credential(
                 if (approval.breakGlass) Identity.Method.JWT else RECORDED_METHOD,
+                // A person's, as the approval says it was (checked above, APR-9).
+                Identity.Credential.Kind.PERSON,
                 RECORDED_APPROVAL,
                 null,
                 capped = !approval.principalBindings,
@@ -224,12 +240,25 @@ internal class ApprovalRules(
         return if (permitted) null else "the approver no longer holds cosec:approve on the document"
     }
 
-    /** Whether a workload's credential authenticated [operator] (`IDN-34`): by provenance or by its name (fail closed). */
-    fun workload(operator: Operator): Boolean = operator.security?.principal?.workload == true
+    /**
+     * Only a person's approval counts (`APR-7`), and only one that says so (`APR-9`): an approval recorded before kinds,
+     * or by a host that read its approver as a workload's, does not, and the change is approved again.
+     */
+    private fun kindProblem(approval: Approval): String? =
+        if (approval.kind == Identity.Credential.Kind.PERSON) null else KIND_REFUSAL
+
+    /**
+     * Whether a workload's credential authenticated [operator] (`IDN-34`): as its credential declares (`IDN-44`), and an
+     * operator without a request, or without a principal, is a workload's: what says nothing is read as the less.
+     */
+    fun workload(operator: Operator): Boolean = operator.security?.principal?.workload ?: true
 
     private companion object {
         /** The id of the credential a recorded approver is checked with again: not a credential anyone presented. */
         const val RECORDED_APPROVAL = "recorded-approval"
+
+        /** Why an approval that does not say it was a person's does not count at publication (`APR-9`). */
+        const val KIND_REFUSAL = "the approval does not say its approver was a person: approve the change again"
 
         /** Why a workload's credential does not approve, as the refusal and the log say. */
         const val WORKLOAD_REFUSAL = "a workload's credential (an API key, a service) cannot approve: an approval is a person's"

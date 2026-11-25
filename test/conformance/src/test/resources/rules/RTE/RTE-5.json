@@ -1,0 +1,11 @@
+{
+  "id": "RTE-5",
+  "source": "RFC 0005 §5.3 (UC-1); review round 2 of beta.4 (R2E-1)",
+  "statement": "A host with a route map warns, once per installed revision, for a DENY statement or rate limit rule on every action and every resource whose condition reads action.verb, resource.id or resource.var.*: a mapped request has the business action's verb and the route's resource, so such a statement, as a converted 7.x DENY on request.path or request.method is, may stop applying to a mapped route. A statement on a particular action or resource, an ALLOW, and a condition reading anything else are not warned about. The ids it prints are escaped and cut as the escapes of http: statements are (DOC-12).",
+  "level": "build",
+  "pending": null,
+  "guards": [
+    "spring-boot:RouteEscapeReviewTest#a DENY or rate limit rule on every action reading action verb or resource id is warned about",
+    "spring-boot:RouteEscapeReviewTest#a statement that is not on every action and resource, an ALLOW, or one reading something else is not"
+  ]
+}

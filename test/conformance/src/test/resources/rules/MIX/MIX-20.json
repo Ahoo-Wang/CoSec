@@ -1,0 +1,10 @@
+{
+  "id": "MIX-20",
+  "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on phase 2 of the cross-version fixture); the red-team inventory, row 20",
+  "statement": "Kafka events are not exchanged between versions of CoSec: CoSec writes decision and change events for consumers outside it and reads none back, so their payload is a contract with those consumers only.",
+  "level": "build",
+  "guards": [
+    "compat:LocalStateCompatTest#no module of CoSec consumes Kafka"
+  ],
+  "pending": null
+}

@@ -29,6 +29,7 @@ import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
 import me.ahoo.test.asserts.assert
@@ -181,7 +182,7 @@ class ManagementPortTest {
         }
     }
 
-    private fun backend(): HttpServer = HttpServer.create(InetSocketAddress("localhost", 0), 0).apply {
+    private fun backend(): HttpServer = HttpServer.create(InetSocketAddress(LOOPBACK, 0), 0).apply {
         createContext("/") { exchange ->
             exchange.sendResponseHeaders(200, 0)
             exchange.responseBody.use { it.write("backend".toByteArray()) }
@@ -201,7 +202,9 @@ class ManagementPortTest {
                 app
             }
             val token = context.getBean(TokenConverter::class.java)
-                .toToken(TokenSubject("plato", app = "cosec-control", tenant = "(platform)")).accessToken
+                .toToken(
+                    TokenSubject("plato", Identity.Credential.Kind.PERSON, app = "cosec-control", tenant = "(platform)")
+                ).accessToken
             val before = Observation(probes(app, stack, token), probes(management, stack, token))
             publish(context)
             // The platform document is installed once the application's own public route answers (a gateway has none:
@@ -250,6 +253,9 @@ class ManagementPortTest {
             }
         }
         val properties = buildList {
+            // One address for the binds and the requests (#1962): bound to every address on a port the system chose, a
+            // server shares that port with any process bound to one address on it, which then takes its connections.
+            add("server.address=$LOOPBACK")
             add("server.port=0")
             add("cocache.backend=memory")
             add("cosec.jwt.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_")
@@ -260,10 +266,10 @@ class ManagementPortTest {
             if (stack.gateway) {
                 // A gateway host: one route, to the test's own backend.
                 add("spring.cloud.gateway.server.webflux.routes[0].id=token")
-                add("spring.cloud.gateway.server.webflux.routes[0].uri=http://localhost:$backendPort")
+                add("spring.cloud.gateway.server.webflux.routes[0].uri=http://$LOOPBACK:$backendPort")
                 add("spring.cloud.gateway.server.webflux.routes[0].predicates[0]=Path=/token")
                 add("spring.cloud.gateway.server.webflux.routes[1].id=closed")
-                add("spring.cloud.gateway.server.webflux.routes[1].uri=http://localhost:$backendPort")
+                add("spring.cloud.gateway.server.webflux.routes[1].uri=http://$LOOPBACK:$backendPort")
                 add("spring.cloud.gateway.server.webflux.routes[1].predicates[0]=Path=/closed")
                 // springdoc is on this module's test classpath: its document endpoint would be a handler of the host's
                 // own, which a gateway does not serve without a decision (STA-13). The gateway image has no springdoc.
@@ -275,7 +281,10 @@ class ManagementPortTest {
             }
             // A port Spring Cloud Gateway can compare with: it leaves a request on a management port that differs from
             // the application's alone, which it cannot do for the random port 0.
-            if (separate) add("management.server.port=${if (randomManagementPort) 0 else freePort()}")
+            if (separate) {
+                add("management.server.address=$LOOPBACK")
+                add("management.server.port=${if (randomManagementPort) 0 else freePort()}")
+            }
         }
         return SpringApplicationBuilder(if (stack.gateway) GatewayApplication::class.java else Application::class.java)
             .web(if (stack.servlet) WebApplicationType.SERVLET else WebApplicationType.REACTIVE)
@@ -289,7 +298,8 @@ class ManagementPortTest {
             .filter { it.startsWith("org.springframework.cloud.gateway.") }
             .toList()
 
-    private fun freePort(): Int = java.net.ServerSocket(0).use { it.localPort }
+    private fun freePort(): Int =
+        java.net.ServerSocket(0, 1, java.net.InetAddress.getByName(LOOPBACK)).use { it.localPort }
 
     private fun publish(context: ConfigurableApplicationContext) {
         val revisions = context.getBean(Revisions::class.java)
@@ -314,14 +324,14 @@ class ManagementPortTest {
 
     private fun post(port: Int, path: String): Int =
         CLIENT.send(
-            HttpRequest.newBuilder(URI.create("http://localhost:$port$path")).timeout(Duration.ofSeconds(10))
+            HttpRequest.newBuilder(URI.create("http://$LOOPBACK:$port$path")).timeout(Duration.ofSeconds(10))
                 .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.noBody()).build(),
             HttpResponse.BodyHandlers.discarding(),
         ).statusCode()
 
     private fun get(port: Int, path: String, token: String? = null): Int =
         CLIENT.send(
-            HttpRequest.newBuilder(URI.create("http://localhost:$port$path")).timeout(Duration.ofSeconds(10))
+            HttpRequest.newBuilder(URI.create("http://$LOOPBACK:$port$path")).timeout(Duration.ofSeconds(10))
                 .apply { token?.let { header("Authorization", "Bearer $it") } }.GET().build(),
             HttpResponse.BodyHandlers.discarding(),
         ).statusCode()
@@ -414,6 +424,8 @@ class ManagementPortTest {
     }
 
     private companion object {
+        /** The address the servers bind and the requests go to. */
+        const val LOOPBACK = "127.0.0.1"
         const val CONTROL = "/cosec/control/v1"
         const val LOGOUT = "/auth/logout"
         val CLIENT: HttpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()

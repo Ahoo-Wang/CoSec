@@ -11,11 +11,8 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class)
-
 package me.ahoo.cosec.webflux
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import org.springframework.web.server.ServerWebExchange

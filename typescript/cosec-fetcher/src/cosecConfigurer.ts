@@ -27,8 +27,10 @@ import {
   JwtTokenManager,
 } from './jwtTokenManager.js';
 import { ResourceAttributionRequestInterceptor } from './resourceAttributionRequestInterceptor.js';
+import { rememberTrust } from './sessionTrust.js';
 import type { TokenRefresher } from './tokenRefresher.js';
 import type { TokenRevoker } from './tokenRevoker.js';
+import type { CoSecTenantSwitcher } from './tenantSwitcher.js';
 import { TokenStorage } from './tokenStorage.js';
 import { UnauthorizedErrorInterceptor } from './unauthorizedErrorInterceptor.js';
 import type { DeviceIdStorageCapable } from './types.js';
@@ -176,6 +178,13 @@ export interface CoSecConfig
    * `tokenRefresher`.
    */
   readonly tokenRevoker?: TokenRevoker;
+
+  /**
+   * What sends a tenant or app switch on `tokenManager.switchTenant()`:
+   * {@link CoSecTenantSwitcher} over the `Fetcher` this configurer is applied
+   * to. Used only with a `tokenRefresher`.
+   */
+  readonly tenantSwitcher?: CoSecTenantSwitcher;
 
   /**
    * Provider for resolving space identifiers from requests.
@@ -474,6 +483,7 @@ export class CoSecConfigurer implements FetcherConfigurer {
           refreshRetryDelays:
             config.refreshRetryDelays ?? DEFAULT_REFRESH_RETRY_DELAYS,
           tokenRevoker: config.tokenRevoker,
+          tenantSwitcher: config.tenantSwitcher,
         },
       );
     }
@@ -534,6 +544,8 @@ export class CoSecConfigurer implements FetcherConfigurer {
    * ```
    */
   applyTo(fetcher: Fetcher): void {
+    // A refresh, a logout or a switch on this Fetcher sends the token pair only where this trust accepts.
+    rememberTrust(fetcher, this.config.isTrusted);
     // Register CoSec request interceptor for security headers
     fetcher.interceptors.request.use(
       new CoSecRequestInterceptor({

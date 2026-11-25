@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.runtime.http
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
@@ -32,7 +31,6 @@ import me.ahoo.cosec.spi.identity.Identity
  * them never closes anything.
  */
 @OptIn(InternalCoSecApi::class)
-@ExperimentalCoSecApi
 class Outcome internal constructor(
     /** The status to write; 200 when [proceed]. */
     val status: Int,

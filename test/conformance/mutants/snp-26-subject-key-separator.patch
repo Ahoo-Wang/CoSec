@@ -1,0 +1,17 @@
+# Rule: SNP-26
+# Mutant: a principal's revocation is keyed with / between tenant and principal, which another release does not read
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.FrozenLayoutTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/RevokedSubjectCache.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/RevokedSubjectCache.kt
+index 0b57bf25f..976c221f2 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/RevokedSubjectCache.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/RevokedSubjectCache.kt
+@@ -50,7 +50,7 @@ interface RevokedSubjectCache : Store<String, Long> {
+                 "Principal [${Identifiers.printable(principal.value)}] of tenant [${Identifiers.printable(tenant.value)}] " +
+                     "names no key: an unpaired UTF-16 surrogate would share it with another id."
+             }
+-            return "${tenant.value.length}:${tenant.value}:${principal.value}"
++            return "${tenant.value.length}:${tenant.value}/${principal.value}"
+         }
+     }
+ }

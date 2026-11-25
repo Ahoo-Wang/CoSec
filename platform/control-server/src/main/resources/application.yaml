@@ -57,8 +57,10 @@ cosec:
     enabled: false
 management:
   server:
-    # Probes and the scrape endpoint, outside CoSec like the gateway's: the application port is decided by the pipeline, so
-    # a kubelet would be refused there. Keep this port inside the cluster or the host; nothing in CoSec authorizes it.
+    # Probes and the scrape endpoint. On WebFlux this port is under CoSec's identity gate too (the management server
+    # collects the application's web filters), unlike the gateway's: the gate decides nothing for a request without
+    # CoSec-Identity, so the probes pass, and it still refuses a malformed identity header here. Keep this port inside the
+    # cluster or the host; nothing in CoSec authorizes it.
     port: 8081
   endpoint:
     health:

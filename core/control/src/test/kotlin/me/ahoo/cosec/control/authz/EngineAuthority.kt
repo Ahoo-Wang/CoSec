@@ -104,7 +104,7 @@ class EngineAuthority(
             MembershipClaims.parse(roles, policies),
             attributes,
             // A credential with an id, as an approval records it (review item 4).
-            Identity.Credential(Identity.Method("test"), "token-$id", null),
+            Identity.Credential(Identity.Method("test"), Identity.Credential.Kind.PERSON, "token-$id", null),
             app = PipelineControlAuthorizer.CONTROL_APP,
         )
     )
@@ -149,8 +149,22 @@ class EngineAuthority(
         }
     }
 
-    private companion object {
-        val FACTS = HttpFacts(
+    companion object {
+        /**
+         * The request a host pipeline permitted for [principal], with no membership provider: what an [Operator] of a
+         * test stands on when it stands for someone who authenticated, rather than relying on [Operator]'s defaults.
+         */
+        fun permitted(principal: AuthenticatedPrincipal): me.ahoo.cosec.runtime.http.RequestSecurity {
+            val host = Pipeline.builder(
+                Authenticator { AuthnResult.Authenticated(principal, Identity.Method("test")) },
+                SuspendingSnapshotSource(HOST_VIEWS),
+            ).engine(PERMITTING).build()
+            val outcome = runBlocking { host.evaluate(FACTS) }
+            check(outcome.proceed) { "The host pipeline did not permit the control API: ${outcome.status}" }
+            return outcome.security!!
+        }
+
+        private val FACTS = HttpFacts(
             method = "POST",
             rawPath = "/cosec/control/v1/changes",
             rawQuery = null,
@@ -161,7 +175,7 @@ class EngineAuthority(
         )
 
         /** The host's coarse rule, "the control API is open to authenticated principals", stands in as a permit. */
-        val PERMITTING = object : Engine {
+        private val PERMITTING = object : Engine {
             override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel): Evaluation =
                 Evaluation(
                     Decision.Permit(
@@ -176,7 +190,7 @@ class EngineAuthority(
                 )
         }
 
-        val HOST_VIEWS = object : SnapshotViews {
+        private val HOST_VIEWS = object : SnapshotViews {
             private val view = { key: ViewKey ->
                 SnapshotView(
                     CompiledDocument.platform(emptyList(), emptyList()),

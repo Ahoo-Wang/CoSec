@@ -1,0 +1,21 @@
+{
+  "id": "SNP-4",
+  "source": "RFC 0007 §3.1 N3; RFC 0008 §4.4 (review finding S4)",
+  "statement": "Once the platform's limits or attributes change, every app and tenant document installed afterwards was compiled with them or is compiled again, including one whose load was in flight; one that cannot be compiled again fails closed. A compilation the full compile queue refuses is not one that cannot be compiled: the load keeps its read and compiles again until `coldLoadTimeout` since it began, the previous compilation serving meanwhile, and fails closed only then (R2D-12).",
+  "level": "timing",
+  "properties": [
+    "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily",
+    "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder"
+  ],
+  "pending": null,
+  "guards": [
+    "runtime:SnapshotRecompileTest#a load that compiled with the old inputs while they changed is compiled again before anyone is served it",
+    "runtime:SnapshotRecompileTest#a document that cannot be compiled again fails closed until a retry compiles it",
+    "runtime:SnapshotRecompileTest#a document failed by a recompile keeps retrying while the store stays down",
+    "runtime:PlatformCompilerInFlightTest#a document compiled against the previous platform while it changed is compiled again",
+    "runtime:SnapshotRecompileTest#a recompile the full compile queue refuses serves the previous compilation until it compiles",
+    "runtime:KeyTransitionsTest#aRefusedRecompileKeepsTheInstalledEntryAndCompilesItsReadAgainWhenDue",
+    "runtime:KeyTransitionsTest#aRecompileRefusedForItsWholeBudgetFailsClosed",
+    "runtime:KeyTransitionsTest#aRefusedRecompileKeepsWhatIsInstalledWhereOneThatTimesOutFailsClosed"
+  ]
+}

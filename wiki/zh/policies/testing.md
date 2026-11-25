@@ -208,7 +208,7 @@ flowchart LR
 每个应答一个变更的路由（`POST /changes`、`GET /changes/{id}`、推进变更的每一步、`:apply`、`:rollback`，以及 break-glass
 的申请与审批）应答相同的成员：`id`、`key`（它的文档）、`base`（`revision` 和 `digest`）、`operations`（与你发送的一致）、
 `author`、`note`、`kind`、`state`、`findings`、`candidate`（审批所针对的候选的摘要）、`createdAt`、`updatedAt`；有了之后还有
-`skipShadow`（原因）、`publishedRevision`、`escalations`、`approval`（`approver`、`at`、`candidate`、`covers`）、`shadow`
+`skipShadow`（原因）、`publishedRevision`、`escalations`、`approval`（`approver`、`at`、`candidate`、`covers`，以及 `kind`，`PERSON` 或 `WORKLOAD`，即审批人凭证属于谁，种类出现之前记下的审批没有它，`APR-9`）、`shadow`
 （`window`，即发布者确认的窗口 id，`startedAt`，关闭后还有 `closed`）和 `confirmations`。窗口未关闭时，`GET /changes/{id}` 在 `shadow` 中加上确认该窗口的存活实例数（`acknowledged`）以及尚未确认的实例（`waitingFor`：`instances`，最多 20 个 id，已排序，`more` 为其余的数目），读自各实例的状态（[在影子模式下试运行变更](#trying-changes-in-shadow-mode)）。存储为自身工作保留的内容不出现在
 任何应答中：候选检查时所依据的各文档头、在其窗口上报过的实例，以及审批人持有的内容（`CTL-61`）。
 
@@ -301,14 +301,14 @@ flowchart LR
 - 经过 `cosec.control.shadow.min-duration`（15 分钟），实例上报的非 `BASE_MISMATCH` 样本达到 `cosec.control.shadow.min-samples`（1,000），且每个存活实例都确认了该窗口（见下文）时；
 - 到达 `cosec.control.shadow.max-duration`（24 小时）而样本不足时，状态为*证据不足*。
 
-**窗口通过之前，每个存活实例都要确认它**（`CTL-10`）。实例在暂存列表中读到窗口并编译了它的候选（或报告了 `CANDIDATE_ERROR`）之后，就在每隔一个报告间隔（默认 10 秒）写一次的状态中确认该窗口。只要还有最近一分钟内写过状态、且参与影子比较的实例没有确认，窗口就不会通过（关闭了影子比较的宿主不写状态；`CandidateSource` 是你自己的实现的宿主声明它不参与，不会被等待），并记录 `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`，`GET /changes/{id}` 在 `shadow.waitingFor` 中点名这些实例。确认不是样本：样本仍只来自报告。两种不同的等待，以及各自的处理：
+**窗口通过之前，每个存活实例都要确认它**（`CTL-10`）。实例在暂存列表中读到窗口并编译了它的候选（或报告了 `CANDIDATE_ERROR`）之后，就在每隔一个报告间隔（默认 10 秒）写一次的状态中确认该窗口。只要还有最近一分钟内写过状态、且参与影子比较的实例没有确认，窗口就不会通过（关闭了影子比较的宿主，和 `CandidateSource` 是你自己的实现的宿主，都在状态中声明它不参与，不会被等待），并记录 `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`，`GET /changes/{id}` 在 `shadow.waitingFor` 中点名这些实例。确认不是样本：样本仍只来自报告。两种不同的等待，以及各自的处理：
 
 - **在等待某个实例**（`waitingFor` 非空）：该实例运行的版本不发送确认（完成升级），或者它读不到暂存列表：它的日志写着 `The staged list cannot be read`，它的 `cosec.shadow.staged.age` 持续上升（[可观测性](../operations/observability.md#metrics)）。窗口期间启动的实例会在几个上报间隔内确认。
 - **在等待样本**（`waitingFor` 为空，样本低于最小值）：窗口所属文档的流量太少。等到 `max-duration`，或者给出原因跳过窗口。
 
 到达 `max-duration` 时，无论确认情况如何，窗口都以*证据不足*关闭，与样本不足时一样。
 
-**“存活”的含义。** 存活实例是最近一分钟内写过状态的实例。与 Redis 断开超过这一时长的实例不写状态，所以既不被等待，也不算作确认；它重新连上后装入已发布的修订，而它什么都没有比较过。关闭了影子的主机根本不写状态。状态已存储却无法解码的实例（反复崩溃的版本、损坏的值，或滚动升级期间这台控制面主机读不了的格式）在其状态能读取或在最后一次写入两分钟后过期之前是存活的，且什么都不确认：窗口等待它，`shadow.waitingFor` 点名它，而其他每个状态照常读取，`propagation` 把它算作最近的实例，不持有任何文档（`CTL-73`）。
+**“存活”的含义。** 存活实例是最近一分钟内写过状态的实例。与 Redis 断开超过这一时长的实例不写状态，所以既不被等待，也不算作确认；它重新连上后装入已发布的修订，而它什么都没有比较过。关闭了影子的主机写入一个声明它不参与影子的状态。状态已存储却无法解码的实例（反复崩溃的版本、损坏的值，或滚动升级期间这台控制面主机读不了的格式）和任何实例一样，在最后一次写入后一分钟内是存活的（状态键剩下的寿命说明它是何时写入的），且什么都不确认：窗口等待它，`shadow.waitingFor` 点名它，而其他每个状态照常读取，`propagation` 把它算作最近的实例，不持有任何文档（`CTL-73`）。
 
 在窗口上报告过的实例必须一直报告到窗口关闭。报告不见了的实例（它停止服务，或它的报告在 Redis 故障切换中丢失）是缺失的证据，而不是零个决策：看到收窄请求的可能正是它。窗口会等待它，记录 `Shadow window <w> of change <c> is waiting for [<instances>]`，无论其他实例报告了什么；实例每隔一个报告间隔重写一次累计报告，所以仍在服务的实例会回来。到达 `max-duration` 时窗口以*证据不足*关闭，摘要的 `vanished` 点名消失的实例，绝不会通过（`CTL-56`）。
 
@@ -376,7 +376,7 @@ flowchart LR
 
 对文档持有 `cosec:approve` 的平台主体是信任根：其自己的变更不做分析，除非开启了 `cosec.control.approval.four-eyes`，这时它们会像其他人的变更一样被分析。平台授予了其租户文档上 `cosec:approve` 的租户主体，审批别人的变更，它自己的变更要经分析。开启 four-eyes 时，信任根的变更需要审批的部分必须由另一位平台主体审批。租户的边界属于平台：只有平台主体能设置它（否则 `403`），也只有平台主体能审批、驳回或放弃设置边界的变更。
 
-工作负载的凭证无论其主体持有什么，都不是信任根，也从不审批（`IDN-34`）：API key，或服务自己的身份（`ControlCaller.service`），其凭证名为 `service`。CoSec 按校验来源识别自己的 API key，任何名为 `api-key` 或 `service` 的凭证（包括网关转发的身份所带的）也算作工作负载的凭证。你自己的认证器认可的凭证，除非它把凭证命名为 `service`，在 CoSec 看来都是人的凭证：不要给面向工作负载的认证器授予 `cosec:approve` 或 `cosec:platform-admin`，或者让它把凭证命名为 `service`。
+工作负载的凭证无论其主体持有什么，都不是信任根，也从不审批（`IDN-34`）：API key、服务自己的身份（`ControlCaller.service`），以及任何没有声明自己是人的凭证（`IDN-44`）。决定的是种类，从不是凭证的方式：CoSec 签发的令牌带着它（`cosec.kind`），网关转发它（`auth.kind`），不是 `person` 或什么都没写的，都读作工作负载的。你自己的认证器构造的凭证就是它声明的那种（[认证器](../architecture/extending.md#authenticators)）：把机器客户端的凭证声明为工作负载的，并且不要给面向工作负载的认证器授予 `cosec:approve` 或 `cosec:platform-admin`。
 
 分析看不到的东西：
 
@@ -384,7 +384,7 @@ flowchart LR
 - **针对个人的限制。** 绑定到 `Anyone`、带 `subject.id` 条件的 DENY 限制的是该主体能做什么，而不是它能授出什么：分析把 `Anyone` 的 DENY 读作对每个被授予者同样生效。请把这条 DENY 绑定到该主体。
 - **信任根。** 不开启 four-eyes 时，它的变更完全不经分析；这时 break-glass 的两个人和时间上限也都约束不了它（[安全模型](../guide/security-model.md#break-glass)）。
 
-有升级的变更在窗口关闭或被跳过后停留在 `AWAITING_APPROVAL`。另一位持有 `cosec:approve` 的人通过 `POST /changes/{id}:approve` 审批，并带上他们评审过的 `candidate` 摘要（来自 `GET /changes/{id}`）；摘要不同返回 `409`，作者不能审批自己的变更。审批是人的行为：以工作负载的凭证（API key、服务自己的身份）认证的主体不能审批（`403`），凭证不带 id 的主体也不能（`403`），因为发布时不会计入它的审批。审批记录审批人的令牌（`jti` 与 `iat`）；变更发布之前，如果这个令牌，或审批人截至当时签发的全部令牌被吊销，审批就不再算数。没有记下凭证 id 的审批也不算数：升级到本版本之前做的、旧版本实例接受的，或用不带 id 的凭证给出的审批；请重新审批。凭证不说明签发时间时（你的认证器没有设置 `issuedAt`），该主体的令牌只要有一次吊销，其审批就作废。审批人的访问令牌过期之后，`TokenRevoker.revoke` 不再接受它，只有 `revokeSubject` 能收回其审批。吊销按数据面管道的方式判断，但这里无法读取的存储不算"未吊销"：与其他读取失败一样返回 `503`（[认证](../integration/authentication.md#logout-and-revocation)），变更保留其审批，等存储恢复后再发布。吊销保留 `cosec.jwt.token-validity.refresh` 这么久，它不能短于 `cosec.control.approval.expire-after`，否则 starter 不会启动。成员关系来自成员关系提供者的审批人，发布时判定两次：一次按审批时持有且现在仍持有的角色，一次按提供者现在答复的全部内容；两次都必须放行，所以绑定在其后新获得角色上的 DENY 会让审批作废。`:reject` 带上 `reason` 结束该变更。审批在 `cosec.control.approval.expire-after`（72 小时）内有效，且只对该候选有效。`GET /changes/{id}` 显示谁审批、何时、为何审批，不显示审批人的凭证、成员关系、属性，以及其凭证能触及什么；这些只保存在存储中的变更记录里，任何变更事件都不带它们。break-glass 的审批先由 REQUIRED 变更监听器记录，再存入变更：之后存入失败时，记录中会有一条变更上没有的审批，由审批人重新审批。
+有升级的变更在窗口关闭或被跳过后停留在 `AWAITING_APPROVAL`。另一位持有 `cosec:approve` 的人通过 `POST /changes/{id}:approve` 审批，并带上他们评审过的 `candidate` 摘要（来自 `GET /changes/{id}`）；摘要不同返回 `409`，作者不能审批自己的变更。审批是人的行为：以工作负载的凭证（API key、服务自己的身份）认证的主体不能审批（`403`），凭证不带 id 的主体也不能（`403`），因为发布时不会计入它的审批。审批记录审批人的令牌（`jti` 与 `iat`）；变更发布之前，如果这个令牌，或审批人截至当时签发的全部令牌被吊销，审批就不再算数。没有记下凭证 id 的审批也不算数：升级到本版本之前做的、旧版本实例接受的，或用不带 id 的凭证给出的审批；请重新审批。审批还记下审批人的凭证属于谁，以记录它的主机读到的为准（`kind`，`APR-9`），发布时只有写明是人的审批才算数：8.0.0-beta.9 之前，或仍运行它的主机记下的审批没有写明，不算数，它的 `APPROVAL` 发现写着 `the approval does not say its approver was a person`；请重新审批。凭证不说明签发时间时（你的认证器没有设置 `issuedAt`），该主体的令牌只要有一次吊销，其审批就作废。审批人的访问令牌过期之后，`TokenRevoker.revoke` 不再接受它，只有 `revokeSubject` 能收回其审批。吊销按数据面管道的方式判断，但这里无法读取的存储不算"未吊销"：与其他读取失败一样返回 `503`（[认证](../integration/authentication.md#logout-and-revocation)），变更保留其审批，等存储恢复后再发布。吊销保留 `cosec.jwt.token-validity.refresh` 这么久，它不能短于 `cosec.control.approval.expire-after`，否则 starter 不会启动。成员关系来自成员关系提供者的审批人，发布时判定两次：一次按审批时持有且现在仍持有的角色，一次按提供者现在答复的全部内容；两次都必须放行，所以绑定在其后新获得角色上的 DENY 会让审批作废。`:reject` 带上 `reason` 结束该变更。审批在 `cosec.control.approval.expire-after`（72 小时）内有效，且只对该候选有效。`GET /changes/{id}` 显示谁审批、何时、为何审批，不显示审批人的凭证、成员关系、属性，以及其凭证能触及什么；这些只保存在存储中的变更记录里，任何变更事件都不带它们。break-glass 的审批先由 REQUIRED 变更监听器记录，再存入变更：之后存入失败时，记录中会有一条变更上没有的审批，由审批人重新审批。
 
 ### 角色类 {#the-role-class}
 
@@ -423,8 +423,8 @@ flowchart LR
 
 ### 传播 {#propagation}
 
-`GET /documents/{key}/revisions/{revision}/propagation` 根据实例每隔几秒写入的状态（需开启
-[影子窗口](../operations/configuration.md#shadow-windows)），说明一个已发布修订到达了哪些实例。发布从不等待它。
+`GET /documents/{key}/revisions/{revision}/propagation` 根据实例每隔几秒写入的状态（每个带
+`cosec-cocache` 的 CoSec 进程都写，`SNP-25`），说明一个已发布修订到达了哪些实例。发布从不等待它。
 
 ```json
 { "revision": 5, "installed": 3, "holding": 3, "recent": 50, "unknown": 0, "asOf": "2026-11-20T09:00:04Z" }
@@ -437,6 +437,24 @@ flowchart LR
 app 的文档由服务它们的每个实例持有。实例持有的内容变化时，会在下一次写状态之前重写常驻记录，所以应答最多落后实例一个上报
 间隔。控制面主机对状态和常驻记录各自至多每 5 秒读一次，所以应答最多可能是 5 秒前的：`asOf` 说明读取的时间。读取失败时应答
 `503`，从不返回更早的结果（`CTL-62`）。判断影子窗口能否通过只读取很小的状态，从不读取常驻记录（`CTL-74`）。
+
+### 存储的读方 {#instances}
+
+`GET /instances` 列出最近一小时内报告过状态的每个 CoSec 进程（`CTL-89`、`SNP-25`）：每个带 `cosec-cocache` 的进程都报告，不论流水线模式、是否参与影子，并带上它运行的 CoSec 发布版本。这是滚动升级中新的一侧看见旧的一侧：以后的版本从这里读出哪些实例还在运行更早的版本。它属于平台运维人员（按读取平台文档授权）；服务端口不提供它。
+
+```json
+{
+  "instances": [
+    { "instance": "gateway-7c9f.k2", "release": "8.0.0-beta.9", "formatLevel": 1, "at": "2026-11-20T09:00:01Z", "live": true, "shadows": true },
+    { "instance": "iam-0.m4", "formatLevel": 1, "at": "2026-11-20T08:20:13Z", "live": false, "shadows": false }
+  ],
+  "unreadable": [],
+  "releases": { "8.0.0-beta.9": 1, "unknown": 1 },
+  "asOf": "2026-11-20T09:00:04Z"
+}
+```
+
+`live` 表示在 `asOf` 之前一分钟内写过状态，也就是影子窗口和 `propagation` 统计的实例；其余是一小时内报告过、可能仍在用已装入的文档服务的实例。状态里没有写发布版本的实例（8.0.0-beta.9 之前的版本）没有 `release`，`releases` 把它和 `unreadable` 中的每个实例（状态无法解码）一起计为 `unknown`。控制面主机在读方的版本多于一个、且版本集合变化时记一行 `Instances of <n> release(s) read this store in the last hour: ...`，`cosec.control.instances.releases` 是上次读取时的版本数（[可观测性](../operations/observability.md#metrics)）。状态最多每 5 秒读取一次，与 `propagation` 相同。
 
 ## 访问审查 {#access-reviews}
 
@@ -553,7 +571,7 @@ class PolicyTest {
 
 ### 用真实管道测试代码 {#testing-your-code-against-a-real-pipeline}
 
-`PolicyTestKit` 断言文档的决策，`PipelineFixture` 则运行决策前后的其余部分：用你的文档，构建基于每个实例运行的编译器、快照源和引擎的真实 `Pipeline`。当被测代码读取已放行请求的 `SecurityContext`，或处理函数的结果取决于 CoSec 回答的状态码和 problem 时使用它。它是 `@ExperimentalCoSecApi`，与测试工具的其余部分相同。
+`PolicyTestKit` 断言文档的决策，`PipelineFixture` 则运行决策前后的其余部分：用你的文档，构建基于每个实例运行的编译器、快照源和引擎的真实 `Pipeline`。当被测代码读取已放行请求的 `SecurityContext`，或处理函数的结果取决于 CoSec 回答的状态码和 problem 时使用它。它是 `@ExperimentalCoSecApi`，与 `PolicyTestKit` 一样；测试工具中只有请求上下文是稳定的（[测试你的应用](#testing-your-application)）。
 
 ```kotlin
 @file:OptIn(ExperimentalCoSecApi::class)
@@ -589,7 +607,7 @@ class OrderPermissionsTest {
 
 `PipelineFixture.unreadable(routes, listeners)` 是一个无法读取文档的宿主：对存储的每次读取都失败，因此每个请求都是 `503 unavailable`，没有请求被允许。让你的路由在它上面运行，证明存储不可用时它们失败关闭。
 
-`IdentityHeader` 写出网关转发的 `CoSec-Identity` 头，用于在前面没有网关的情况下测试运行在网关之后的服务（`cosec.pipeline.mode=gateway`）。它可以为一个主体、任意一个 `Identity`，或网关为一个真实令牌转发的内容写出头。
+`IdentityHeader` 写出网关转发的 `CoSec-Identity` 头，用于在前面没有网关的情况下测试运行在网关之后的服务（`cosec.pipeline.mode=gateway`）。它可以为一个主体、任意一个 `Identity`，或网关为一个真实令牌转发的内容写出头。`forSubject` 说明的是人的令牌，`forWorkload`（参数相同）说明的是工作负载的令牌（`IDN-44`）：服务、机器、声明为工作负载的登录。工作负载不论角色授予什么，都不能审批变更、不是控制面的信任根，也没有 break-glass；用 `forWorkload` 测试网关后面的服务拒绝它什么。
 
 **每个请求生成一个头。**头在某一时刻生成，只在很短的时间内有效：当它比 `cosec.pipeline.identity.max-age`（默认 `60s`）加 `cosec.authentication.revocation.skew`（`5s`）更旧时，服务会以 `401` `token-expired` 拒绝它，不论里面的凭证还能有效多久（`forSubject` 的 `validFor` 默认是一小时；它是凭证的有效期，不是头的）。保存在字段或常量里的头，对几秒内结束的测试能用，对要等待的测试就会失败，而这个 `401` 看起来像是服务的缺陷。生成头很便宜：每个请求生成一个。`forSubject` 接受 `clock`，用来测试头的年龄本身（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）。
 
@@ -601,7 +619,7 @@ class OrderPermissionsTest {
 
 ### 测试你的应用 {#testing-your-application}
 
-测试处理器或读取调用方的函数，需要一个由 CoSec 管道构造的 `SecurityContext`：自 `PIP-27` 起，读取入口只返回这种上下文，手工构造的上下文读作根本没有上下文。工具包提供三种，都是 `@ExperimentalCoSecApi`：
+测试处理器或读取调用方的函数，需要一个由 CoSec 管道构造的 `SecurityContext`：自 `PIP-27` 起，读取入口只返回这种上下文，手工构造的上下文读作根本没有上下文。工具包提供三种。它们是稳定的，下面的 `IdentityHeader` 和 `CoSecTestBindings` 也是，所以只用到它们的测试不需要 opt-in：
 
 | 形式 | 用途 | 上下文携带什么 |
 |---|---|---|
@@ -622,7 +640,7 @@ dependencies {
 **在 CoSec 自己的过滤器后面测试处理器。** `filter(gate)` 就是 starter 注册的过滤器，运行在测试管道之上。切片测试不需要 CoSec 的自动配置：它需要的是过滤器。在 `@WebFluxTest` 或 `@WebMvcTest` 的测试配置中把它声明为 Bean（Spring MVC 上为 `SecurityContext` 参数加上 `SecurityContextArgumentResolver`），或者像下面这样把它交给 `WebTestClient` 和 `MockMvc`。这些示例就是工具包的测试 `TestingYourWebFluxApplicationTest` 和 `TestingYourWebMvcApplicationTest`：
 
 ```kotlin
-@file:OptIn(ExperimentalCoSecApi::class)
+@file:OptIn(ExperimentalCoSecApi::class)   // 为了 PipelineFixture 和 Pipeline.behindGateway：其余都是稳定的
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.testkit.IdentityHeader

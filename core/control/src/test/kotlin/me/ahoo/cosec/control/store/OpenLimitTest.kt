@@ -26,10 +26,10 @@ import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.IMMEDIATE_WINDOW
-import me.ahoo.cosec.control.change.NO_MEMBERSHIPS
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.PERMIT_ALL
 import me.ahoo.cosec.control.change.allow
+import me.ahoo.cosec.control.change.person
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
@@ -59,7 +59,7 @@ class OpenLimitTest {
     private val clock = MutableClock()
     private val store = InMemoryControlStore(clock)
     private val ids = AtomicInteger()
-    private val bob = Operator(Actor(TenantId("acme"), PrincipalId("bob")), NO_MEMBERSHIPS)
+    private val bob = person(Actor(TenantId("acme"), PrincipalId("bob")))
 
     private fun changes(
         over: ControlStore = store,

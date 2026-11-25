@@ -59,11 +59,18 @@ internal class ScenarioJwt(node: JsonNode) {
     val token: String
 
     init {
-        node.only("jti", "sub", "tenantId", "aud", "claims", "iat")
+        node.only("jti", "sub", "tenantId", "aud", "kind", "claims", "header", "iat")
         val builder = JWT.create()
             .withJWTId(node.get("jti")?.text() ?: "t1")
             .withSubject(node.get("sub")?.text() ?: "alice")
             .withExpiresAt(Instant.now().plusSeconds(3600))
+        // A scenario's token is one CoSec issued, which always says whose it is (IDN-45): a person's unless the scenario
+        // says `workload`, or `none` for a token an earlier preview issued; `claims` can still write any other value.
+        when (val kind = node.get("kind")?.text() ?: "person") {
+            "person", "workload" -> builder.withClaim("cosec.kind", kind)
+            "none" -> Unit
+            else -> throw ScenarioFormatException("Unknown token kind $kind")
+        }
         node.get("iat")?.let { builder.withIssuedAt(Instant.ofEpochSecond(it.asLong())) }
         node.get("tenantId")?.let { builder.withClaim(MembershipClaims.TENANT_KEY, it.text()) }
         node.get("aud")?.let { aud ->
@@ -74,6 +81,11 @@ internal class ScenarioJwt(node: JsonNode) {
             } else {
                 builder.withAudience(aud.text())
             }
+        }
+        // Members of the protected header besides alg and typ, such as crit (IDN-47), signed with the rest.
+        node.get("header")?.let { header ->
+            @Suppress("UNCHECKED_CAST")
+            builder.withHeader(CoSecJson.mapper.treeToValue(header, Map::class.java) as Map<String, Any?>)
         }
         node.get("claims")?.fields().orEmpty().forEach { (name, value) ->
             @Suppress("UNCHECKED_CAST")
@@ -179,7 +191,8 @@ internal object ScenarioRefresh {
 
     /**
      * `"families"`: the records there are, `[{ "id", "tenant", "principal", "authTime", "generation", "rotatedAt",
-     * "revoked", "expiresAt" }]` (`expiresAt` defaults to `authTime` plus the lifetime), or `{ "unavailable": "message" }`.
+     * "revoked", "expiresAt", "root" }]` (`expiresAt` defaults to `authTime` plus the lifetime; `root`, the session a
+     * switched one was switched from, to none), or `{ "unavailable": "message" }`.
      */
     fun familyStore(node: JsonNode?): TokenFamilyStore {
         node?.get("unavailable")?.let { message ->
@@ -196,7 +209,7 @@ internal object ScenarioRefresh {
         }
         val store = InMemoryTokenFamilyStore { NOW }
         node?.values()?.forEach { family ->
-            family.only("id", "tenant", "principal", "authTime", "generation", "rotatedAt", "revoked", "expiresAt")
+            family.only("id", "tenant", "principal", "authTime", "generation", "rotatedAt", "revoked", "expiresAt", "root")
             val authTime = Instant.parse(family.required("authTime").text())
             val record = TokenFamily(
                 id = family.required("id").text(),
@@ -207,6 +220,7 @@ internal object ScenarioRefresh {
                 generation = family.get("generation")?.asLong() ?: 1,
                 rotatedAt = family.get("rotatedAt")?.text()?.let(Instant::parse),
                 revoked = family.get("revoked")?.asBoolean() ?: false,
+                root = family.get("root")?.text(),
             )
             runBlocking { check(store.create(record)) { "Family ${record.id} is listed twice." } }
         }

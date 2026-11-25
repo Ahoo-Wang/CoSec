@@ -1,0 +1,12 @@
+{
+  "id": "DOC-9",
+  "source": "RFC 0005 §3.2 (usability review before RC1, UC-3)",
+  "statement": "An eq or prefix with ignoreCase whose literal holds a character beyond ASCII that has another case does not compile where a miss lets a request through: in a DENY statement's condition under an even number of nots, in an ALLOW statement's condition under an odd number, in a rate limit rule's condition as in a DENY, and in a policy condition in both directions its statements give it (under an even number of nots when the policy has a DENY, under an odd number when it has an ALLOW). The fold is ASCII only, so such an atom matches fewer spellings than it reads. The message names a spelling the fold misses and says to list every spelling in an in (eq) or an or of prefixes (prefix), without ignoreCase. In the other direction the atom only narrows: it compiles, and the control plane's validation reports a WARNING. cosec-migrate refuses the same shape with the same message.",
+  "level": "engine",
+  "guards": [
+    "model:ConditionLintsTest#ignoreCase on a letter beyond ASCII refuses where a miss lets a request through",
+    "model:ConditionLintsTest#the direction flips under each not and is kept by and and or",
+    "engine:PolicyCompilerTest#ignoreCase beyond ASCII does not compile in the DENY direction"
+  ],
+  "pending": null
+}

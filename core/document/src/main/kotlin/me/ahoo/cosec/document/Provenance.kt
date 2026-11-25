@@ -70,7 +70,7 @@ data class ParentRevision(val revision: Long, val digest: String) {
 }
 
 /** How a revision came to be (RFC 0007 §5.3). */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 enum class ProvenanceKind {
     PUBLISH,
     ROLLBACK,

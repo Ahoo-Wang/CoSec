@@ -109,6 +109,9 @@ class MigrateMainTest {
             "verify-chain --document platform",
             "verify-chain --to-redis redis://localhost:6379 --document nope",
             "verify-chain --to-redis redis://localhost:6379 --document app:",
+            "check-patterns",
+            "check-patterns --to-redis redis://localhost:6379 --document nope",
+            "check-patterns --to-redis redis://localhost:6379 --limit 1",
             "convert --from-files a --out x --cluster",
             "api-keys --redis redis://localhost:6379 --out x --cluster",
             "partition plan --out x",
@@ -334,6 +337,37 @@ class MigrateMainTest {
         out.assert().contains("FAILED tenant:broken").contains("Visited 3 document(s); added 0 reference(s).")
     }
 
+    /** DOC-15: before an upgrade, the stored patterns the next version refuses, read from Redis; nothing is written. */
+    @Test
+    fun `check-patterns names a stored pattern the next version refuses, and exits with 1`() {
+        val keyPrefix = "migrate-test:${UUID.randomUUID()}"
+        val acme = SnapshotKey.Tenant("acme")
+        controlStore(keyPrefix) { store ->
+            store.putIndex(acme, null, RevisionIndex()).assert().isTrue()
+            val body = """{"schema":${PolicyDocumentCodec.SCHEMA},"revision":1,"publishedAt":"2026-11-01T00:00:00Z",""" +
+                """"policies":[{"id":"p","statements":[{"effect":"deny","action":"*","resource":"http:path:/a(1)"}]}]}"""
+            store.putHead(acme, null, SnapshotDocuments.read(body.encodeToByteArray()))
+                .assert().isInstanceOf(HeadWrite.Written::class.java)
+        }
+        val args = "check-patterns --to-redis $REDIS --key-prefix $keyPrefix"
+        run(args).let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+            output.assert().contains("PATTERN tenant:acme $.policies[0].statements[0].resource: ")
+                .contains("write http:path:/a\\(1\\)")
+                .contains(
+                    "Checked 1 document(s) and 0 open change(s): 1 pattern(s) to rewrite in 1 of them, 0 could not be read."
+                )
+        }
+        run("$args --document app:order").let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+            output.assert().contains("ok app:order")
+        }
+        run("$args --prefix app:").let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+            output.assert().contains("Checked 0 document(s)")
+        }
+    }
+
     /** RFC 0007 §5.4: a revision record a failover lost is reported, and the run fails; nothing is written. */
     @Test
     fun `verify-chain names a document whose chain lost a record, and exits with 1`() {
@@ -361,6 +395,11 @@ class MigrateMainTest {
                 .contains("ok platform: intact down to revision 1")
         }
         run("$args --document platform").let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+            output.assert().contains("Verified 1 document(s): 0 broken, 0 could not be read.")
+        }
+        // R2C-20's scope, from the command line: the parser knows --prefix and --limit.
+        run("$args --prefix platform --limit 1").let { (code, output) ->
             code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
             output.assert().contains("Verified 1 document(s): 0 broken, 0 could not be read.")
         }

@@ -1,0 +1,13 @@
+{
+  "id": "STA-6",
+  "source": "R1A-6 (2026-11-19); RFC 0006 §7.3",
+  "statement": "A host whose web adapter takes its caller from the `CoSec-Identity` header, which is a host in `cosec.pipeline.mode=gateway`, a host with `cosec.pipeline.caller=forwarded-identity`, or one whose web gate is an `IdentityGate` its application declared, fails to start when a hidden-method filter is on: `spring.mvc.hiddenmethod.filter.enabled=true`, `spring.webflux.hiddenmethod.filter.enabled=true`, or a `HiddenHttpMethodFilter` bean of the application's own, since the gateway decided the method of the request line and the host would run the one a form field `_method` names, which the gateway cannot remove from a body. The failure names the property or the bean and why. A host that decides on the credentials it verifies (`enforce`, `caller=credential`) is not affected: CoSec's filter runs after the hidden-method filter there (`PIP-19`).",
+  "level": "startup",
+  "pending": null,
+  "guards": [
+    "spring-boot:GatewayModeTrustTest#a hidden-method filter in a service behind a gateway fails startup, by property and by bean",
+    "spring-boot:GatewayModeTrustTest#a reactive service is held to the same two statements",
+    "spring-boot:GatewayModeTrustTest#with the statement the service starts, in any letter case of true, and an enforcing host needs none",
+    "spring-boot:ForwardedIdentityCallerTest#a hidden-method filter is refused here as in gateway mode"
+  ]
+}

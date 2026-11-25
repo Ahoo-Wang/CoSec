@@ -11,11 +11,10 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.spring.boot.pipeline
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.engine.TraceLevel
@@ -81,7 +80,9 @@ class PipelineProperties {
         var maxAge: Duration = Duration.ofSeconds(60)
 
         /** A larger header is refused: 400 `invalid-request`. */
-        var maxSize: DataSize = DataSize.ofBytes(IdentityCodec.DEFAULT_MAX_BYTES.toLong())
+        // R of IDN-43: 8 KB, which no 8.x version lowers, since every 8.x gateway writes within it. The web server's
+        // request-header limit is derived from it when the operator does not set one (IdentityHeaderLimit).
+        var maxSize: DataSize = DataSize.ofBytes(IdentityCodec.READ_MAX_BYTES.toLong())
 
         /**
          * The statement that only the gateway can reach this service (`STA-7`). A service in `gateway` mode believes any
@@ -162,7 +163,8 @@ class GatewayIdentityProperties {
     var claims: Set<String> = emptySet()
 
     /** A larger identity fails the request closed (500) rather than being cut. */
-    var maxSize: DataSize = DataSize.ofBytes(IdentityCodec.DEFAULT_MAX_BYTES.toLong())
+    // W of IDN-43: 6 KB, below the 8 KB every 8.x service reads by the room the members a later version adds may take.
+    var maxSize: DataSize = DataSize.ofBytes(IdentityCodec.WRITE_MAX_BYTES.toLong())
 
     /**
      * Whether the client's credentials still go downstream, to the routes that receive the identity: the

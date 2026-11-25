@@ -29,10 +29,11 @@ import java.time.Clock
  * What a gateway forwards to the services behind it about a permitted request (`CoSec-Identity`, [IdentityCodec]):
  * the principal it verified, the scope it decided in with the roles effective there, the rest of its memberships (its
  * roles in every other space and the ids of the policies it attaches, `IDN-39`: always written, empty when there is
- * nothing more), the credential's id, expiry and issue time, the session of CoSec's own token (which a tenant switch
- * behind the gateway issues from, `IDN-22`), and the token claims [claims] names. Never the credential itself, a
- * policy's content, an attribute value or a request header. A host that decides on the identity sees what the gateway
- * decided with: a DENY attached to the principal, or one that reads a role it holds in another space, applies there too.
+ * nothing more, unless the request's own identity was forwarded without them, `IDN-42`), the credential's id, expiry
+ * and issue time, the session of CoSec's own token (which a tenant switch behind the gateway issues from, `IDN-22`),
+ * and the token claims [claims] names. Never the credential itself, a policy's content, an attribute value or a
+ * request header. A host that decides on the identity sees what the gateway decided with: a DENY attached to the
+ * principal, or one that reads a role it holds in another space, applies there too.
  *
  * An anonymous permit forwards nothing, so a service has exactly one way to be anonymous: no header. Nor does a
  * principal whose authenticator names no credential. An identity larger than [maxBytes] fails the request closed.
@@ -47,7 +48,7 @@ class IdentityIssuer(
     /** `cosec.gateway.identity.claims`: the token claims forwarded, strings, numbers and booleans only. */
     private val claims: Set<String> = emptySet(),
     /** `cosec.gateway.identity.max-size`. */
-    private val maxBytes: Int = IdentityCodec.DEFAULT_MAX_BYTES,
+    private val maxBytes: Int = IdentityCodec.WRITE_MAX_BYTES,
     private val clock: Clock = Clock.systemUTC(),
     /** Every attribute of the principal, not only [claims]: a control call relayed to a host (`CTL-77`, DR1-F-1). */
     private val relay: Boolean = false,
@@ -92,8 +93,17 @@ class IdentityIssuer(
          * What [security]'s memberships hold besides the scope's own roles (`IDN-39`): the other spaces that name a role,
          * and the attachments, each once, in their order. [Identity.Memberships.NONE], with nothing built, for a principal
          * whose roles are all in the scope's space and who attaches nothing: most of those the gateway forwards.
+         *
+         * Null when [security] came from a forwarded identity that did not state them (`IDN-42`): a hop never states what
+         * it did not receive. The gate read such an identity as its own space's roles and no attachment, which is not
+         * the principal's whole memberships, so the relay leaves the member out and a host that decides on the identity
+         * refuses the caller as it would refuse the header itself.
          */
-        private fun memberships(security: RequestSecurity): Identity.Memberships {
+        private fun memberships(security: RequestSecurity): Identity.Memberships? {
+            val forwarded = security.identity
+            if (forwarded != null && forwarded.memberships == null) {
+                return null
+            }
             val roles = security.memberships.roles
             val attachments = security.memberships.attachments
             val space = security.scope.space

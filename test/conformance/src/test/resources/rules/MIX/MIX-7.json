@@ -1,0 +1,10 @@
+{
+  "id": "MIX-7",
+  "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 7",
+  "statement": "An API key record is strict (format 3, exactly its fields): what either version saves, the other reads alike.",
+  "level": "build",
+  "guards": [
+    "compat:CredentialCompatTest#an API key either version saves, the other reads alike"
+  ],
+  "pending": null
+}

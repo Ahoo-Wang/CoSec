@@ -54,9 +54,11 @@ private val log = KotlinLogging.logger {}
  *   [reconcileApps], whatever the open changes;
  * - [reconcileApps], also once at startup, marks a complete app list incomplete again when it misses an app document
  *   (RC1-4);
- * - [closeShadowWindows] looks at every shadowing change ([Changes.shadowed], RFC 0007 §6.4) under the
- *   [SHADOW_LEASE], so one instance does it per period, then reconciles the staged list (`CTL-46`). The pass is bounded by [shadowInterval] and the lease lasts
- *   twice that, so it never outlives the lease; it is released when the pass ends.
+ * - [closeShadowWindows] reads the readers of the store on every instance first ([Changes.readers], `CTL-89`), which
+ *   keeps this instance's release count current, then looks at every shadowing change ([Changes.shadowed], RFC 0007
+ *   §6.4) under the [SHADOW_LEASE], so one instance does it per period, then reconciles the staged list (`CTL-46`). The
+ *   pass is bounded by [shadowInterval] and the lease lasts twice that, so it never outlives the lease; it is released
+ *   when the pass ends.
  *
  * The open changes are read once, by [ControlStore.openChanges], and a pass goes by that read (#1219). One past
  * `cosec.control.changes.expire-after` (RFC 0007 §6.1) is expired through [Changes.current]: so a change nobody
@@ -213,6 +215,10 @@ class ControlMaintenance(
      * says how many it looked at.
      */
     suspend fun closeShadowWindows(): List<ChangeRequest> {
+        // The readers of the store, on every instance, lease or not (CTL-89): what `cosec.control.instances.releases`
+        // and the mixed-deployment log line say, kept current without anyone asking GET /instances. A shared read, at
+        // most once per its age, so a pass more often costs nothing more.
+        attempt("read the readers of the store") { changes.readers() }
         // A store that cannot answer is logged and the pass does nothing (CTL-52), as every other read of it here.
         val leased = attempt("take the shadow lease") {
             store.acquireLease(SHADOW_LEASE, holder, shadowInterval.multipliedBy(2))

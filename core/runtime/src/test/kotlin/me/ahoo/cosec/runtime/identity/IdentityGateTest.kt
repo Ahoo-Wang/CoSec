@@ -11,12 +11,11 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.identity
 
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.model.AppId
@@ -45,7 +44,12 @@ class IdentityGateTest {
         app = "order",
         space = "team-a",
         roles = setOf("clerk"),
-        credential = Identity.Credential(Identity.Method.JWT, "t1", now.plusSeconds(3600)),
+        credential = Identity.Credential(
+            Identity.Method.JWT,
+            Identity.Credential.Kind.PERSON,
+            "t1",
+            now.plusSeconds(3600)
+        ),
         issuedAt = now.minusSeconds(1),
         requestId = "r1",
         claims = mapOf("name" to "Alice", "level" to 3L),
@@ -147,7 +151,12 @@ class IdentityGateTest {
             it.principalBindings.assert().isTrue()
             it.breakGlass.assert().isTrue()
         }
-        val key = Identity.Credential(Identity.Method.API_KEY, "k1", now.plusSeconds(3600))
+        val key = Identity.Credential(
+            Identity.Method.API_KEY,
+            Identity.Credential.Kind.WORKLOAD,
+            "k1",
+            now.plusSeconds(3600)
+        )
         subject(key).let {
             it.principalBindings.assert().isTrue()
             it.breakGlass.assert().isFalse()
@@ -157,7 +166,9 @@ class IdentityGateTest {
             it.breakGlass.assert().isFalse()
         }
         // Break-glass is allowed for CoSec's own tokens only: a method of another authenticator never reaches it.
-        subject(Identity.Credential(Identity.Method("ldap"), "s1", now.plusSeconds(3600))).let {
+        subject(
+            Identity.Credential(Identity.Method("ldap"), Identity.Credential.Kind.PERSON, "s1", now.plusSeconds(3600))
+        ).let {
             it.principalBindings.assert().isTrue()
             it.breakGlass.assert().isFalse()
         }
@@ -176,13 +187,46 @@ class IdentityGateTest {
     fun `a forwarded service identity is a workload's credential, without break-glass - IDN-34`() {
         fun principal(credential: Identity.Credential) =
             evaluate(IdentityCodec.encode(identity.copy(credential = credential))).security!!.principal!!
-        val service = principal(Identity.Credential(Identity.Method.SERVICE, "service:svc-iam", now.plusSeconds(30)))
+        val service =
+            principal(
+                Identity.Credential(
+                    Identity.Method.SERVICE,
+                    Identity.Credential.Kind.WORKLOAD,
+                    "service:svc-iam",
+                    now.plusSeconds(30)
+                )
+            )
         service.workload.assert().isTrue()
         service.apiKey.assert().isFalse()
         service.breakGlass.assert().isFalse()
         service.session.assert().isNull()
-        principal(Identity.Credential(Identity.Method.API_KEY, "k1", now.plusSeconds(3600))).workload.assert().isTrue()
+        principal(
+            Identity.Credential(Identity.Method.API_KEY, Identity.Credential.Kind.WORKLOAD, "k1", now.plusSeconds(3600))
+        ).workload.assert().isTrue()
         principal(identity.credential).workload.assert().isFalse()
+    }
+
+    /**
+     * `IDN-44`: behind a gateway the kind the identity states decides: CoSec's own token declared a workload's is a
+     * workload, without break-glass, as a credential of any other method declared one is; declared a person's, it is not.
+     */
+    @Test
+    fun `a forwarded identity's kind decides whether it is a workload and may use break-glass - IDN-44`() {
+        fun principal(credential: Identity.Credential) =
+            evaluate(IdentityCodec.encode(identity.copy(credential = credential))).security!!.principal!!
+        val person = principal(identity.credential.copy(kind = Identity.Credential.Kind.PERSON))
+        person.workload.assert().isFalse()
+        person.breakGlass.assert().isTrue()
+        val machine = principal(identity.credential.copy(kind = Identity.Credential.Kind.WORKLOAD))
+        machine.workload.assert().isTrue()
+        machine.breakGlass.assert().isFalse()
+        val mtls = Identity.Credential(
+            Identity.Method("mtls"),
+            Identity.Credential.Kind.WORKLOAD,
+            "m1",
+            now.plusSeconds(60)
+        )
+        principal(mtls).workload.assert().isTrue()
     }
 
     @Test

@@ -1,6 +1,7 @@
 # Rule: STA-12
 # Mutant: the decision listeners' queues take an 8th of the heap, so the shares together take more than half of it
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.HeapBudgetTest
+# Inlined: HeapBudget.kt: const val DECISION_LISTENERS_SHARE
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/HeapBudget.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/HeapBudget.kt
 index 7072d01..4218600 100644

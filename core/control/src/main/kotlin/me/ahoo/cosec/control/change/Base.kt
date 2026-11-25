@@ -15,12 +15,11 @@
 
 package me.ahoo.cosec.control.change
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 
 /** The head a change was made on: its revision and digest; revision 0 and no digest for a document not yet published. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 data class Base(val revision: Long, val digest: SnapshotDigest?) {
     init {
         require(
@@ -28,6 +27,7 @@ data class Base(val revision: Long, val digest: SnapshotDigest?) {
         ) { "Revision 0 is the only base without a digest." }
     }
 
+    @InternalCoSecApi
     companion object {
         val NONE: Base = Base(0, null)
     }

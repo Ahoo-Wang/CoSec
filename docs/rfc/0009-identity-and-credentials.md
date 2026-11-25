@@ -135,7 +135,9 @@ CoSec 的令牌是签名的：`JwtTokenVerifier` 与 `JwtTokenConverter` 在构�
 **工作负载的凭据**（`IDN-34`）。一个主体是人还是工作负载，只看 `AuthenticatedPrincipal.workload`：API Key（`ApiKeyAuthenticator` 按来源认定，或凭据名为 `api-key`），
 或凭据名为 `service` 的身份，不论这个名字由谁写下（转发的身份、服务声明的身份、应用自己的认证器，失败关闭）。工作负载从不批准变更、不是控制面的信任根
 （`APR-7`、`APR-3`，RFC 0007 §7.3、§7.5），与任何不是 CoSec 自己令牌的凭据一样没有会话、没有 break-glass。`apiKey` 只回答“是不是 API Key”，
-不据它做授权判断：主代码里除定义处之外没有类读它（`WorkloadCredentialTest`）。给应用自己的认证器一个一等的“工作负载”标志留到 8.1，与外部 IdP 一起设计。
+不据它做授权判断：主代码里除定义处之外没有类读它（`WorkloadCredentialTest`）。
+
+**凭据的种类**（`IDN-44` 至 `IDN-46`，RFC 0014 R3；2026-11-25 取代上一段里“凭据名决定人还是工作负载”的读法，以及原先留到 8.1 的“一等的工作负载标志”）。每个凭据声明它是谁的：`Identity.Credential.kind`，`PERSON` 或 `WORKLOAD`，必需参数，没有默认值，谁构造谁选择。方法名（`auth.method`）只是给审计与记录看的标签，是开放集合；决定“人还是工作负载”的只有这个封闭的种类。`api-key` 与 `service` 按构造就是工作负载的，声明成人的即拒绝；没有凭据的主体是工作负载。种类从登录一路带到判定：登录声明它（`TokenSubject.kind`，每个 `Authentication` 必须说），CoSec 的签发方把它写进访问令牌的声明 `cosec.kind`（刷新令牌不带，客户端不得依赖它），校验器读出它（`VerifiedToken.kind`，每个 `TokenVerifier` 必须说），网关把它写进 `CoSec-Identity` 的 `auth.kind`。读方一律取限制性的读法：`person` 是人，缺失、未知的值、不是字符串的值都是工作负载，绝不因此拒绝请求；所以以后新增的种类对不认识它的读方就是工作负载。刷新与租户切换签发的令牌沿用所出示访问令牌的种类，不问应用的钩子：种类只在登录时选一次，没带声明签发的会话在用户重新登录之前一直是工作负载的。break-glass 只给 CoSec 自己的、读作人的令牌（`BRK-8`）。
 
 **网关之后同样成立**：转发的 `CoSec-Identity` 为有上限的凭据带 `auth.capped: true`，后面的服务据此不取主体绑定；break-glass 只给方法为 `jwt` 的身份（§5）。
 
@@ -195,13 +197,13 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 | `auth.method` | 认证器 | 与 `Identity.Method` 一致（约定 `jwt`、`api-key`、`service`）；匿名请求为 `anonymous` | 不会缺失 |
 
 - 两者登记进属性目录（`Attribute.Kind`），可用于条件，也可作限流 `key`。
-- `CoSec-Identity` v1 增加 `sub_type`（即 `principal.type`）；`auth.method` 已在。v1 已随 8.0 发布，解码是严格的，所以加成员时遵守 RFC 0010 §1 的约束 4。
+- `CoSec-Identity` v1 增加 `sub_type`（即 `principal.type`）；`auth.method` 已在。v1 已随 8.0 发布：读方忽略它不认识的成员，除非 `crit` 点了它的名（`IDN-41`），所以加一个被忽略也不会放宽判定的成员是纯新增；被忽略会放宽判定的成员，写方要把它列进 `crit`，并且只在读方集合都认识它之后才写（[RFC 0014](0014-mixed-version-compatibility.md) R1、R5）。
 - 不在 `Subject` 上加枚举：开放属性让新类型（例如以后的 `device`）不成为破坏性变更；引擎不因类型改变求值方式。
 
 **8.0 的 `CoSec-Identity`**。网关把验证过的身份放进 `CoSec-Identity`（格式 v1，`IdentityCodec`，`schema/8.0/cosec-identity.schema.json`）转给后面的服务，
 后面的服务据此认证（`Pipeline.behindGateway`）。其中出自本 RFC 的成员：
 
-- `auth.method`：认证方式。后面的服务只给 `jwt` 的身份 break-glass（§4.2）。
+- `auth.method`：认证方式，只是标签。`auth.kind`：凭据是谁的（`person` 或 `workload`，`IDN-44`）；后面的服务只给 CoSec 自己的、读作人的令牌的身份 break-glass（§4.2）。
 - `auth.capped`：有上限的凭据为 `true`，其余不出现；后面的服务据此不取主体绑定（§4.2）。
 - `auth.iat`（可选）：凭据的签发时间，不晚于 `auth.exp`。
 - `auth.session`（可选）：CoSec 自己的令牌的会话，`sid`、`auth_time`（登录时间）、`generation`（代数）三者都必填；只属于 `method` 为 `jwt` 的身份，
@@ -209,7 +211,7 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
   登录时间，租户切换凭它取会话（§11.4）。
 
 读取对形式是严格的：缺成员、类型不对、代数不是正整数、`api-key` 的身份带了会话、有会话而没有 `iat`，一律按格式错误拒绝（400），绝不读成“没有会话”。
-服务对未知成员同样严格，所以**先升级网关后面的服务，再升级网关**。不带这两个成员的身份（API Key 的，或旧网关发来的）照旧可读，只是不能据此切换租户。
+服务忽略它不认识的成员（`IDN-41`），所以网关与其后的服务之间没有升级顺序；`crit` 点了名而服务不认识的成员以 503 拒绝（升级该服务即可，不答 401：那会让客户端结束会话）。不带这两个成员的身份（API Key 的，或旧网关发来的）照旧可读，只是不能据此切换租户。
 
 **登录时间与签发时间不比较先后。** 两者出自两个时钟：登录时间由受理登录的实例写进会话家族，签发时间由做刷新或切换的实例写进令牌；两台实例差几毫秒又恰好跨秒时，
 合法令牌的登录时间就晚于签发时间。没有任何规则依赖这个先后：会话到期按 `auth_time` 加寿命算，家族校验比较 `auth_time` 是否相等，撤销只读 `iat`。
@@ -220,6 +222,8 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 - 带 `act` 声明的 token 在验证器里被拒（`JwtTokenVerifier`，验证与刷新两条路径；`TokenAuthenticator` 只看到验证结果 `VerifiedToken`，读不到原始声明），
   结果是 `RejectReason.DELEGATION_UNSUPPORTED`：按匿名求值，拒绝时为 `token-invalid`（401），审计原因码 `DELEGATION_UNSUPPORTED`。自定义的
   `TokenVerifier` 或自行解析 token 的 `Authenticator` 承担同样的义务。`may_act` 只表示"允许被谁代理"，不改变主体，忽略。
+- JWS 头里的 `crit` 列了校验器不理解的参数的 token 不读（`IDN-47`，RFC 0014 R1）：`TokenNotUnderstoodException`，管线答 `503` `unavailable`，刷新、切换、登出三个路由同样；8.0 一个也不理解。格式不对的 `crit` 是 `token-invalid`。
+  这个检查在签名校验之后，所以只有签发方签过的 token 才会被判为“看不懂”；缓存只留校验成功的结果，命中不会替这样的 token 作答。
 - 与外部 IdP 无关地成立：CoSec 自己永远不签发带 `act` 的 token，直到 §7 落地。
 
 ## 7. 委托（8.1，另开 RFC）
@@ -236,7 +240,7 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 
 ## 8. 一致性规则（新族 `IDN`）
 
-规则登记在 `test/conformance/src/test/resources/rules/IDN.json`，措辞与守卫以登记表为准。下表是出自本 RFC 的各条；族里的其他规则出自别处：
+规则登记在 `test/conformance/src/test/resources/rules/IDN/`（一条规则一个文件），措辞与守卫以登记表为准。下表是出自本 RFC 的各条；族里的其他规则出自别处：
 `IDN-7` 至 `IDN-9`（RFC 0006 §7.3）、`IDN-11`（RFC 0004 §4.5.1）、`IDN-12`（RFC 0001 D5）、`IDN-25` 至 `IDN-27`、`IDN-29`、`IDN-33`。
 
 | 规则 | 级别 | 内容 |
@@ -259,9 +263,10 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 | IDN-21 | build | 主体的属性在认证器交出后不可改（§3） |
 | IDN-22 | pipeline | 租户切换只从活着的会话、凭它的令牌对签发；刷新在同一处检查（§11.4） |
 | IDN-23、IDN-24 | pipeline | starter 提供的刷新路由与登出路由（§11.3） |
+| IDN-40 | pipeline | 登出切换出的会话，连同它出自的登录一起结束；先根、再会话、最后令牌 id（§11.4） |
 | IDN-28 | startup | CoSec 的令牌是签名的：验证器与签发器拒绝 `Algorithm.none()`（§4.2） |
 | IDN-30 | pipeline | 令牌不得冒充别的凭据：`attributes` 里带 `apiKeyId` 的令牌无效，也不签发（§4.3） |
-| IDN-31 | build | 会话记录带格式号，按读者的规则读，更晚的格式拒绝（§11.3） |
+| IDN-31 | build | 会话记录带格式号，按读者的规则读，更晚的格式拒绝（503，会话保留）（§11.3） |
 | IDN-32 | build | 缓存的验证结果就是再验证一遍会得到的结果（§11.5） |
 
 每条规则配正反场景；变异体在 `test/conformance/mutants/idn-*`，由 `mutation.yml` 运行。
@@ -340,8 +345,8 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 7. 族记录只在签发（登录、租户切换）、刷新与登出时读写，并失败关闭：读不到或写入无法确认时不签发（503），不存在时拒绝刷新（401）（`IDN-19`）。
    记录自每次写入起保留它剩余的寿命与刷新令牌有效期（`cosec.jwt.token-validity.refresh`）中较短的一段，所以没人刷新的会话随它最后一个刷新令牌离开存储。
    存储为每个租户里的每个主体保留最近开始的 64 个会话（`TokenFamilyStore.SESSIONS_PER_PRINCIPAL`）：再开始一个就删除（不是标记）最早开始的那个的记录，
-   不论它活着、已撤销还是已结束，它的下一次刷新按未知会话拒绝（`IDN-35`，DR1-G-2）。记录带格式号，按 RFC 0007 §5.2 的读规则读：更晚版本加的成员忽略，没有格式号的是格式 1，更晚的格式拒绝，那个会话因此结束，
-   绝不读成另一个会话（`IDN-31`）。
+   不论它活着、已撤销还是已结束，它的下一次刷新按未知会话拒绝（`IDN-35`，DR1-G-2）。记录带格式号，按 RFC 0007 §5.2 的读规则读：更晚版本加的成员忽略，没有格式号的是格式 1；更晚的格式、或 `crit` 列出而读方不认识的成员，使这条会话记录被拒绝：刷新、登出、切换答 503，会话保留，
+   由升级后的实例读取，绝不读成另一个会话，也绝不被改写（`IDN-31`、`SNP-27`，[RFC 0014](0014-mixed-version-compatibility.md) R1）。
 8. 撤销主体阻止它之前签发的任何令牌对刷新（§11.2）。
 9. 切换租户开始一个新族，继承登录时间（§11.4）。
 
@@ -361,10 +366,14 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
   代际按刷新的同一条规则、同一段代码判断：当前代际接受，上一代只在 `rotation-leeway` 内接受；更早的令牌对被出示来切换，就是令牌对被再次出示，像刷新那样吊销会话。切换不推进它所出自的会话。
 - 会话仍从管道认证过的请求里取（`SwitchTenantCredentials.context`）。`AuthenticatedPrincipal` 的会话只有 CoSec 自己的令牌认证器能设置；
   网关之后，会话是网关验证过、随 `CoSec-Identity` 转发的 `auth.session`（§5）。
-- 切换开始一个新会话，继承原会话的登录时间，所以它在原会话结束时结束（`IDN-17`）；原会话的内容不变，登出只结束交给它的那一对令牌。
+- 切换开始一个新会话，继承原会话的登录时间，所以它在原会话结束时结束（`IDN-17`）；原会话的内容不变。
 - 切换开始的会话记着它的根，即用户登录开始的那个会话（被切换会话的根，或登录本身的会话），只在根活着时活着：它的刷新、轮换宽限期内的重试与从它再切换都读根，
   根已结束、已撤销或不在时撤销它并拒绝（401 `token-revoked`）；每次这样的回答都以条件写把根原样写回，所以根保留得与依赖它的会话一样久。
   切换读回它新建的会话，存储没有保留根时拒绝并结束它；这样的记录写为格式 2，读格式 1 的读者拒绝它（`IDN-36`、`IDN-31`）。
+- 登出切换出的会话，连同它出自的登录（它的根）一起结束（`IDN-40`，维护者 2026-11-24：“一起结束”）：先以条件写撤销根，再结束该会话，最后记录令牌 id；
+  某一步失败，后面的都不做，回答 503，重试从头开始，所以没有“登出答了成功而登录还活着”。根从会话记录里读，只凭访问令牌登出也一样。
+  已撤销或已不在的根保持原样；属于另一主体的根不动并记 WARN；登录自己的会话登出只结束它自己。
+  收不回的：根与其他切换出的会话已签发的访问令牌到过期为止，那些会话在下一次刷新或切换时结束；记录已被挤出（每主体每租户 64 个，`IDN-35`）的切换会话找不到它的根。
 - 新令牌的 App 由签发方的 `TenantSwitch` 回答决定，不取自请求（`SCP-12`，RFC 0013 §7.3）。
 - 守卫有两层：`cosec-login` 内，每个读旧凭据的认证都持有这处检查（`LiveSessionsGuardTest`）；跨模块，从编译产物看，只有这处检查调用会话家族的轮转、
   按旧登录时间新开与有效性查询（`LiveSessionCallersTest`），别的 CoSec 模块即使 opt-in 也不能绕开。
@@ -394,3 +403,4 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 - 2026-11-24（#1953）：主体 id 不是空白（`IDN-38`）。
 - 2026-11-24（#1970）：被 DENY 或黑名单点名的主体的 key 不迁到专用主体（`MIG-6`）。
 - 2026-11-24（#1977、#1984）：签发的有效期不超过配置的（`IDN-37`）；租户切换出示令牌对，代际按刷新的规则（`IDN-22`）。
+- 2026-11-24（#1996）：登出切换出的会话连同登录一起结束（`IDN-40`）。

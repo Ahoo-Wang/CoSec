@@ -1,0 +1,14 @@
+{
+  "id": "STA-11",
+  "source": "RFC 0007 §10.2 (control-typed-api decisions of 2026-11-21: the control plane called on a host, one ControlService bean)",
+  "statement": "An application has one `ControlService`. The starter's is the in-process implementation (`LocalControlService`) where the instance runs the control plane, the HTTP implementation (`HttpControlService`, `cosec-control-http`) where `cosec.control.service-url` names a control-plane host's control API, and none otherwise. An instance that runs the control plane and names a host as well does not start, and says which to remove; a host named without `cosec-control-http` on the classpath fails startup naming the artifact (`STA-1`).",
+  "level": "startup",
+  "pending": null,
+  "guards": [
+    "spring-boot:ControlServiceChoiceTest#an instance that runs the control plane gets the in-process ControlService - STA-11",
+    "spring-boot:ControlServiceChoiceTest#an instance that names a control-plane host gets the HTTP ControlService - STA-11",
+    "spring-boot:ControlServiceChoiceTest#an instance that neither runs the control plane nor names a host has no ControlService - STA-11",
+    "spring-boot:ControlServiceChoiceTest#an instance that runs the control plane and names a host does not start - STA-11",
+    "spring-boot:ControlServiceChoiceTest#a host named without cosec-control-http fails naming the artifact - STA-1"
+  ]
+}

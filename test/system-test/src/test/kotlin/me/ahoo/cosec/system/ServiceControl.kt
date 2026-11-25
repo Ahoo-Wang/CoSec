@@ -29,12 +29,23 @@ object StatedIdentity {
     /** The platform tenant: a service acts in it, as every principal that is not a tenant's. */
     const val PLATFORM = "(platform)"
 
+    /**
+     * The kind CoSec's writer states for a credential of [method] (`IDN-44`): a person's for CoSec's own token, as the
+     * scenarios' administrators sign in, and a workload's for anything else.
+     */
+    fun kindOf(method: String): String = if (method == "jwt") "person" else "workload"
+
+    /**
+     * [kind] is `auth.kind`, written as given; null leaves it out, as a writer before kinds did, which every reader takes
+     * as a workload's.
+     */
     @Suppress("LongParameterList")
     fun header(
         subject: String,
         tenant: String = PLATFORM,
         app: String = SignIn.CONTROL_APP,
         method: String = "api-key",
+        kind: String? = kindOf(method),
         jti: String = subject,
         roles: List<String> = emptyList(),
         issuedAt: Instant = Instant.now(),
@@ -48,13 +59,14 @@ object StatedIdentity {
             "roles" to roles,
             // A control host decides on the identity, so it needs the caller's whole memberships (IDN-39): none more.
             "memberships" to linkedMapOf("spaces" to emptyMap<String, Any>(), "attachments" to emptyList<String>()),
-            "auth" to linkedMapOf(
-                "method" to method,
-                "jti" to jti,
-                "exp" to credentialExpiresAt.epochSecond,
+            "auth" to buildMap {
+                put("method", method)
+                kind?.let { put("kind", it) }
+                put("jti", jti)
+                put("exp", credentialExpiresAt.epochSecond)
                 // A credential is never issued after it expires: the host reads such a header as malformed.
-                "iat" to minOf(issuedAt, credentialExpiresAt).epochSecond,
-            ),
+                put("iat", minOf(issuedAt, credentialExpiresAt).epochSecond)
+            },
             "iat" to issuedAt.epochSecond,
             "rid" to "system" + UUID.randomUUID().toString().replace("-", ""),
         )
@@ -72,6 +84,8 @@ class ServiceControl(
     private val subject: String,
     private val tenant: String = StatedIdentity.PLATFORM,
     private val method: String = "api-key",
+    /** The credential's kind as the caller states it (`auth.kind`), null for none: see [StatedIdentity.header]. */
+    private val kind: String? = StatedIdentity.kindOf(method),
     /** The credential's id as the caller states it, which the record keeps as `via.credential`. */
     private val jti: String = subject,
     /** Headers a caller states besides the identity, none of which the host may believe (the peer is the connection's). */
@@ -80,7 +94,7 @@ class ServiceControl(
     private fun uri(path: String): URI = URI.create("$root/cosec/control/v1$path")
 
     private fun headers(): List<Pair<String, String>> =
-        listOf("CoSec-Identity" to StatedIdentity.header(subject, tenant, method = method, jti = jti)) + extra
+        listOf("CoSec-Identity" to StatedIdentity.header(subject, tenant, method = method, kind = kind, jti = jti)) + extra
 
     fun get(path: String): Exchange = Http.send("GET", uri(path), headers(), null)
 
@@ -110,7 +124,7 @@ class ServiceControl(
     ): Exchange = post("/changes/$id:$verb", body)
 
     /** The same principal as another that states the same: this one on [other]'s port. */
-    fun on(other: URI): ServiceControl = ServiceControl(other, subject, tenant, method, jti, extra)
+    fun on(other: URI): ServiceControl = ServiceControl(other, subject, tenant, method, kind, jti, extra)
 
     companion object {
         /** An operation that puts a policy of one statement allowing GET of [path]: a change that grants nobody anything. */

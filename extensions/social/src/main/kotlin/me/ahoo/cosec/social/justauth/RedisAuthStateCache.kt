@@ -55,6 +55,13 @@ class RedisAuthStateCache(
     @InternalCoSecApi
     companion object {
         private val DEFAULT_TIME_OUT = Duration.ofMinutes(3).toMillis()
-        private const val DEFAULT_KEY_PREFIX = "cosec:oauth:state:"
+        private const val STATE_FAMILY = "oauth:state"
+        private const val DEFAULT_KEY_PREFIX = "cosec:$STATE_FAMILY:"
+
+        /**
+         * Where a deployment keeps JustAuth's states: `<keyPrefix>:oauth:state:`, followed by the state. Frozen within
+         * 8.x (RFC 0014 R6, `SNP-26`): a callback reaching a release that derives it otherwise finds no state.
+         */
+        fun keyPrefix(cosecKeyPrefix: String): String = "${cosecKeyPrefix.trimEnd(':')}:$STATE_FAMILY:"
     }
 }

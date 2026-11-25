@@ -1,0 +1,13 @@
+{
+  "id": "PIP-30",
+  "source": "RFC 0006 §5.3.1; review R1A-3 (2026-11-19)",
+  "statement": "A path holding an encoded `;` (`%3B`) or an encoded control character (`%00` to `%1F`, `%7F`), in either case of the hex digits and anywhere in the path, path parameters included, is answered 400 before authentication, mapped route or not: CoSec reads them as text of a segment, but a backend that decodes before it strips path parameters, stops at NUL or drops what follows a control character serves another path than the one decided. A raw control character is answered the same way, whichever server hands the path over; a raw `;` is a path parameter. A double-encoded one (`%253B`, `%2500`) decodes to text, and a trailing dot or space is read as written.",
+  "level": "pipeline",
+  "guards": [
+    "runtime:PathNormalizerTest#encodedSemicolonsAndControlCharactersAreRejected",
+    "runtime:PathNormalizerTest#rawControlCharactersAreRejected",
+    "runtime:PathNormalizerTest#doubleEncodedAndPrintableEscapesAreKept",
+    "runtime:EncodedPathTest#an encoded semicolon or control character is refused before authentication, with its event"
+  ],
+  "pending": null
+}

@@ -1,0 +1,37 @@
+{
+  "rules": [
+    "DOC-15"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A DENY on /odata/$metadata written without its escape does not compile: $ is reserved for a future pattern syntax (an anchor), so a later syntax never compiles here as a literal that matches nothing.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "reserved",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": "http:path:/odata/$metadata"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "reserved",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "reserved"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "'$' is reserved for a future pattern syntax"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "rules": [
+    "IDN-47"
+  ],
+  "level": "pipeline",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "reads",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "reads",
+            "subject": {
+              "principal": "alice",
+              "tenant": "acme"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "reads"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "polarity": "negative",
+  "description": "CoSec's own token for alice with the same header member, cosec.later, that no crit names: a reader ignores a header member it does not know unless crit marks it, so the token reads as before and the binding permits.",
+  "authentication": {
+    "result": "jwt",
+    "jwt": {
+      "jti": "t1",
+      "sub": "alice",
+      "tenantId": "acme",
+      "header": {
+        "cosec.later": true
+      }
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

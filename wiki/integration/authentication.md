@@ -98,6 +98,21 @@ The pipeline reads the request's credentials, then asks one `Authenticator` who 
   the credential method `token`, no session (so no [tenant switch](#switching-tenant-and-app) from it, and none
   forwarded behind a gateway) and no break-glass. Declare one for another issuer's tokens; to keep CoSec's own tokens
   CoSec's, declare none.
+
+  **A token's `crit` header** (`IDN-47`). `JwtTokenVerifier` reads the JWS `crit` header of every token it verifies,
+  access and refresh, once the signature is verified: in the pipeline, on refresh, tenant switch and logout. 8.0
+  understands no critical header parameter, so a token whose `crit` names any is refused, never read without it: the
+  pipeline and the served refresh and logout routes answer `503` `unavailable`, since the instance is older than the
+  issuer and the same token passes once it is upgraded (a client keeps its session and retries). A malformed `crit`
+  (not a non-empty array of distinct names, a name the header does not hold, a parameter the JOSE specifications
+  register) is `401` `token-invalid`; a header member no `crit` names is ignored. A route of your own that switches
+  tenant answers `TokenNotUnderstoodException` with `503`, and so does a refresh or logout endpoint of your own that
+  verifies a token itself: never `401`, which would make a client end a session that a newer instance reads. A
+  `TokenVerifier` of your own must do the same, since a JWT library may not (`java-jwt` ignores `crit`): once the
+  signature is verified, throw `TokenNotUnderstoodException` for a token whose `crit` names anything it does not
+  understand, and `TokenVerificationException` for a malformed one. A library that already refuses an unknown `crit`
+  does it with its own error: catch that one and throw `TokenNotUnderstoodException`, not `TokenVerificationException`,
+  so that the token is answered as unavailable (`503`), not as invalid (`401`).
   CoSec's own verifier answers a token it already verified from [its cache](#the-verified-token-cache).
 - **`ApiKeyAuthenticator`**, only with `cosec.api-key.enabled=true`, looks up the [API key](#api-keys).
 
@@ -255,7 +270,7 @@ class PasswordAuthentication(private val users: UserService) :
 
     override suspend fun authenticate(credentials: PasswordCredentials): TokenSubject {
         val user = users.verify(credentials.username, credentials.password)
-        return TokenSubject(id = user.id, app = "order", roles = user.rolesIn("order"))
+        return TokenSubject(id = user.id, kind = Kind.PERSON, app = "order", roles = user.rolesIn("order"))
     }
 }
 
@@ -267,8 +282,14 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 }
 ```
 
-`TokenSubject("alice", "acme")` is the tenant `acme`: `tenant` comes before `app`, as it does in every other CoSec API
-(`TokenFamilies.start(tenant, principal)`). The samples write every argument after `id` by name, which reads better still.
+`kind` (`Identity.Credential.Kind`, `IDN-45`) is required: whose the token is, a person's or a workload's. Declare a
+user's sign-in a person's and a machine's (client credentials, a service account) a workload's: a workload never
+approves a change, is never the control plane's trust root and has no break-glass. CoSec writes it into the access
+token as `cosec.kind`, its verifier reads it back (`IDN-46`), and a refresh or a tenant switch keeps the kind of the
+token presented, whatever its hook answers. A token without the claim, which an earlier 8.0 preview issued, reads as a
+workload's, and so does every token refreshed from it, until its user signs in again. `TokenSubject("alice", Kind.PERSON, "acme")` is the
+tenant `acme`: `tenant` comes before `app`, as it does in every other CoSec API (`TokenFamilies.start(tenant,
+principal)`). The samples write every argument after `id` by name, which reads better still.
 
 `authenticate` refuses a login by throwing: it has no empty answer, and no token is issued for a login that failed or
 whose caller has gone. It runs on the caller's thread, an event loop in WebFlux, so an implementation over a blocking
@@ -515,7 +536,8 @@ under CoSec like every route, so a document must permit an anonymous `POST` of i
 pair in the body, whether or not the access token has expired, `204` when the session is ended, and when it already was.
 A body that is not the pair is `400`, a pair that does not verify (an expired refresh token included) `401`, a store that
 cannot answer `503`. Otherwise, from your logout endpoint, call `TokenRevoker.revoke(accessToken)`. It verifies the
-token, ends its session, and records its `jti` in Redis for the refresh token's lifetime. A token already revoked
+token, ends the login a switched session came from ([Switching tenant and app](#switching-tenant-and-app), `IDN-40`),
+then its session, and records its `jti` in Redis for the refresh token's lifetime. A token already revoked
 throws `TokenRevokedException`: answer it as done, as the served route does. A store that cannot be written throws
 `SessionStoreUnavailableException`: answer `503`; the client keeps its pair and logs out again. From then on every instance rejects that access token as
 `token-revoked`, and no pair of the session refreshes, the pairs it was refreshed from included: a pair copied earlier
@@ -543,7 +565,9 @@ Every request with a token checks revocation, without blocking. Four properties 
   worse. Keep access tokens short-lived so this window stays small, or set
   `cosec.authentication.revocation.fail-closed: true` to answer `503` instead. Each token so accepted is counted
   (`cosec.revocation.unchecked`, [Metrics](../operations/observability.md#metrics)) and logged at `WARN`, at most every
-  10 seconds.
+  10 seconds. The starter states the choice from that property; a `TokenAuthenticator` you build states it too, as its
+  third parameter, `acceptUnavailableRevocations`, which has no default (`PIP-7`): `true` accepts as above, `false`
+  answers `503` ([Authenticators](../architecture/extending.md#authenticators)).
 - **A refresh fails while Redis cannot be read.** A token is never issued on a revocation read that failed (`IDN-14`):
   issued then, it would be named by no revocation, neither the old token's nor its principal's, and outlive both.
   `RefreshTokenAuthentication` throws the `RevocationUnavailableException`; answer it `503`, as the served route does.
@@ -788,6 +812,18 @@ is kept while a session switched from it is in use, and switching back to a sess
 64 sessions a principal keeps ([Sessions](#sessions)). A `TokenFamilyStore` of your own must save `TokenFamily.root`: a
 switch reads the new session back, and is refused when the root was not kept.
 
+**Logging out of a switched session ends the login it came from** (`IDN-40`). Its logout, by the served route or by
+`TokenRevoker.revoke` of the access token or of the pair, revokes the root first, then the session, then records the
+token's `jti`: the login's pair, which the client no longer holds, refreshes no more, on any device. The root is read
+from the session's record, so the access token alone is enough. A logout that fails at a step has done none of the
+later ones and is answered `503` (`SessionStoreUnavailableException`): the client keeps its pair and logs out again, and
+the retry starts from the beginning. It is never answered as done while the login lives on, and a refresh or a switch
+racing it cannot write the login back live: every write of a session is conditional. What it does not reach: the access
+tokens the login and its other switched sessions issued stay valid until they expire, and those sessions are revoked at
+their next refresh or switch, as above. A switched session whose own record is gone, pushed out of the 64 its principal
+keeps in that tenant ([Sessions](#sessions)), cannot find its login, which lives on until it is logged out, revoked or
+ends. A login's own logout ends only itself, and the sessions switched from it at their next refresh or switch.
+
 **The switch issues from the request's session, on its token pair** (`IDN-22`), as CoSec's token proved it to the
 pipeline: the `context` must be the one the pipeline made for the request. The switch opens a session that refreshes,
 so it presents what a refresh presents: the request's own access token and its refresh token, checked as a refresh
@@ -813,8 +849,8 @@ that before it asks your `TenantSwitch`:
 A request whose credential is not CoSec's token, an API key say, has no session and cannot switch
 (`TokenVerificationException`: `token-invalid`). Nothing maps these exceptions for you: the switch is your endpoint, so
 answer them as the [served refresh route](#refreshing-tokens) does.
-The session switched from is left as it is: a logout ends the pair it is given, not the one it was switched from. To
-end every session of a user, [revoke the principal](#revoking-every-token-of-a-principal) in each tenant it has switched
+A switch leaves the session it came from as it is; a logout of the switched session ends that login too (above). To
+end every session of a user on every device, [revoke the principal](#revoking-every-token-of-a-principal) in each tenant it has switched
 into: a switched session belongs to its target tenant. Behind a gateway, the switch issues from the session the gateway
 verified and forwarded with the identity ([Services behind the gateway](./web.md#services-behind-the-gateway)); the
 service that hosts it sets `cosec.jwt.enabled=true`, with the gateway's `cosec.jwt.secret` and `cosec.jwt.algorithm`,

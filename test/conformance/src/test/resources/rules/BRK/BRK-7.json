@@ -1,0 +1,10 @@
+{
+  "id": "BRK-7",
+  "source": "RFC 0007 §5.6, §8; round-2 review R4",
+  "statement": "A rollback is held to every break-glass rule: one that would create, alter or bring back a break-glass binding, or change the policy a live one grants, needs cosec:breakglass and a REQUIRED audit and never checks clean; one that only removes break-glass bindings needs neither and has no shadow window.",
+  "level": "control",
+  "pending": null,
+  "guards": [
+    "control:ControlRoundTwoFixesTest#a rollback is held to every break-glass rule"
+  ]
+}

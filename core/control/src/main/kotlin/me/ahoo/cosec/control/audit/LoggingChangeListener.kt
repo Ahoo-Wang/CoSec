@@ -16,7 +16,6 @@
 package me.ahoo.cosec.control.audit
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
@@ -26,10 +25,9 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  * does not reach it.
  */
 class LoggingChangeListener(override val name: String = "logging") : ChangeListener {
-    @ExperimentalCoSecApi
     override suspend fun onChange(event: ChangeEvent) {
         log.info {
-            "Change ${event.change.value} ${event.kind} on ${event.document} by ${event.operator.principal.value}@" +
+            "Change ${event.change} ${event.kind} on ${event.document} by ${event.operator.principal.value}@" +
                 "${event.operator.tenant.value}: base=${event.base}, candidate=${event.candidate}, " +
                 "escalations=${event.escalations.size}, confirmations=${event.confirmations.size}" +
                 (event.origin?.let { ", origin=$it" } ?: "")

@@ -81,7 +81,7 @@ private val log = KotlinLogging.logger {}
 @InternalCoSecApi
 class IdentityGate(
     /** `cosec.pipeline.identity.max-size`. */
-    private val maxBytes: Int = IdentityCodec.DEFAULT_MAX_BYTES,
+    private val maxBytes: Int = IdentityCodec.READ_MAX_BYTES,
     /** `cosec.pipeline.identity.max-age`. */
     private val maxAge: Duration = DEFAULT_MAX_AGE,
     /** `cosec.authentication.revocation.skew`: how far the gateway's clock may be ahead of this service's. */
@@ -141,6 +141,9 @@ class IdentityGate(
                     ProblemType.TOKEN_INVALID
                 IdentityFormatException.Reason.MALFORMED, IdentityFormatException.Reason.OVERSIZE ->
                     ProblemType.INVALID_REQUEST
+                // A later writer's member this version must understand and does not (IDN-41): it passes once this
+                // service is upgraded, so 503, never 401, which a client takes as the end of its session.
+                IdentityFormatException.Reason.UNSUPPORTED_MEMBER -> ProblemType.UNAVAILABLE
             }
             return reject(requestId, type, e.message.orEmpty(), traceId)
         }
@@ -226,7 +229,8 @@ class IdentityGate(
             MembershipSource.Claims(memberships),
             identity.claims,
             identity.credential,
-            breakGlass = identity.credential.method == Identity.Method.JWT,
+            breakGlass = identity.credential.method == Identity.Method.JWT &&
+                identity.credential.kind == Identity.Credential.Kind.PERSON,
             issuedAt = identity.credential.issuedAt,
             apiKeyCredential = false,
             app = identity.app.takeIf(ScopeResolver::isValidAppId)?.let(::AppId),

@@ -42,23 +42,28 @@ converts 7.x data to the 8.0 format. [Upgrading](../operations/upgrading.md) lis
 
 ## Where 8.0 stands
 
-The architecture above is merged on `main`, and the 7.x code is gone. The current preview is `8.0.0-beta.8`. It is the
-two rounds of deep review planned before the release candidate, with their findings fixed: the first round over eight
-areas of the system, the second over them again with `cosec-migrate`, and no finding of the highest severity in
-either. What changed for you is mostly tighter: the control plane's work and stored records have bounds, the identity
-header a gateway forwards carries every membership, a tenant switch presents the session's token pair, and a principal
-id is never blank ([Upgrading between previews](../operations/upgrading-previews.md#from-8-0-0-beta-7)). It is built on
-Spring Boot 4.2 and CoCache 8.2. Next is the release candidate. What is still open before it is in
+The architecture above is merged on `main`, and the 7.x code is gone. The current release is
+[`8.0.0-rc.1`](https://github.com/Ahoo-Wang/CoSec/releases/tag/v8.0.0-rc.1), the first release candidate: 8.0.0-beta.9
+with its fixes, and the public surface settled for GA. The adapter contract (`RequestGate`, `HttpFacts`, `Outcome` and
+the problems it answers), the test kit's request contexts (`PermittedRequest`, `IdentityHeader`, `CoSecTestBindings`),
+the writer of the identity header and the control plane's change events are stable; the control plane's storage and
+the shadow window's ports are CoSec's own; what stays experimental through 8.0 says so
+([Stability levels](../architecture/extending.md#stability-levels)). It is tested against 8.0.0-beta.9 in mixed runs,
+both releases on one store and one network ([Upgrading between previews](../operations/upgrading-previews.md#from-8-0-0-beta-9)).
+It is built on Spring Boot 4.2 and CoCache 8.2. Next is 8.0 GA. What is still open before it is in
 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md), which is the page that tracks it;
 this one stays at the level of what you can rely on.
 
 ## Release policy
 
-- **The 8.0 pre-releases (alphas and betas; latest `8.0.0-beta.8`) are previews with no compatibility promise.** Public APIs, `cosec.*` properties, the document
-  and wire formats (`schema: 2`, `CoSec-Identity`) and authorization semantics may change in any later alpha or RC,
-  without a migration path between previews. Try it outside production; do not build on it yet.
-- A release candidate waits for the checks above: two review rounds of the whole system (the RC security review, then
-  a review of each module) with their findings fixed, and ABI validation, which freezes the public API at GA (RFC 0011 D4). Only then does semantic versioning apply to 8.0.
+- **The 8.0 alphas and betas were previews with no compatibility promise.** Public APIs, `cosec.*` properties, the
+  document and wire formats (`schema: 2`, `CoSec-Identity`) and authorization semantics changed between them, without a
+  migration path between previews.
+- **A release candidate (latest `8.0.0-rc.1`) is what 8.0 is to be.** Its public API, `cosec.*` properties, formats and
+  authorization semantics change before GA only to fix a defect, and the next candidate's notes list each such change.
+  It came after the checks above: two review rounds of the whole system with their findings fixed, ABI validation, a
+  project of its own on 8.0.0-beta.9, and gates on its commit, a mixed run with 8.0.0-beta.9 among them. Semantic
+  versioning applies to 8.0 from GA, when ABI validation freezes the public API (RFC 0011 D4).
 - **8.0 is not slower than 7.0.** Performance budgets are set from 7.0 measurements: compiled authorization and
   pipeline throughput at least 100 % of 7.0, with no more allocation (RFC 0008 §3.8). They are first measured on the
   end-to-end slice, and they were met before the switch from 7.x merged.
@@ -74,8 +79,8 @@ this one stays at the level of what you can rely on.
 - The latest advisory is
   [GHSA-2293-jx8h-56m8](https://github.com/Ahoo-Wang/CoSec/security/advisories/GHSA-2293-jx8h-56m8), fixed in
   7.0.1 and 6.1.2.
-- What to do now: stay on 7.0.2, the latest 7.0.x, in production. To evaluate 8.0, try the latest pre-release (`8.0.0-beta.8`, Java 21) in a test
-  environment with [Upgrading](../operations/upgrading.md); expect changes before the RC.
+- What to do now: stay on 7.0.2, the latest 7.0.x, in production. To evaluate 8.0, try the release candidate (`8.0.0-rc.1`, Java 21) in a test
+  environment with [Upgrading](../operations/upgrading.md); before GA it changes only to fix a defect.
 
 ## How to follow
 

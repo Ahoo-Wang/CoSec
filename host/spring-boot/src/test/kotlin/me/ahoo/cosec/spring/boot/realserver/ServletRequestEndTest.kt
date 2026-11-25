@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.spring.boot.realserver
 
@@ -19,7 +19,6 @@ import jakarta.servlet.DispatcherType
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.delay
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.runtime.AuthorizationChecker
@@ -177,7 +176,7 @@ class ServletRequestEndTest {
             if (container == "tomcat") OnTomcat::class.java else OnJetty::class.java
         )
             .web(WebApplicationType.SERVLET)
-            .properties("server.port=0", "spring.main.banner-mode=off")
+            .properties("server.address=127.0.0.1", "server.port=0", "spring.main.banner-mode=off")
             .run()
 
     private fun get(context: ConfigurableApplicationContext, path: String): RawResponse {

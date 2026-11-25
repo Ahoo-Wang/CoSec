@@ -1,0 +1,10 @@
+{
+  "id": "CTL-7",
+  "source": "RFC 0007 §5.5, §6.1",
+  "statement": "Every check of a change is bound to its base: a change whose base moved never publishes, and a rebase runs every check again on the new head.",
+  "level": "control",
+  "guards": [
+    "control:ControlFailClosedTest#a moved base conflicts and publishes nothing, a rebase checks again"
+  ],
+  "pending": null
+}

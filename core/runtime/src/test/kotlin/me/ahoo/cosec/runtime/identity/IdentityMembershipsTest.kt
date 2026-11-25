@@ -47,7 +47,12 @@ import java.time.ZoneOffset
 class IdentityMembershipsTest {
     private val now = Instant.parse("2026-11-01T00:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
-    private val credential = Identity.Credential(Identity.Method.JWT, "t1", now.plusSeconds(3600))
+    private val credential = Identity.Credential(
+        Identity.Method.JWT,
+        Identity.Credential.Kind.PERSON,
+        "t1",
+        now.plusSeconds(3600)
+    )
 
     private fun principal(memberships: Memberships) = AuthnResult.Authenticated(
         AuthenticatedPrincipal(

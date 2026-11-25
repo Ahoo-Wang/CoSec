@@ -18,7 +18,6 @@ package me.ahoo.cosec.control.change
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
@@ -93,7 +92,7 @@ class ControlTenantIsolationTest {
 
     private val acme = SnapshotKey.Tenant("acme")
     private val globex = SnapshotKey.Tenant("globex")
-    private val gil = Operator(Actor(TenantId("globex"), PrincipalId("gil")), NO_MEMBERSHIPS)
+    private val gil = person(Actor(TenantId("globex"), PrincipalId("gil")))
     private val compiler = PolicyDocumentCompiler()
 
     init {

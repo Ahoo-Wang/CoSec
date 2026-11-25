@@ -13,14 +13,12 @@
 
 package me.ahoo.cosec.runtime.http
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * The body of an outcome that does not proceed: an RFC 9457 problem (RFC 0006 §6.2). It holds what a client can act on
  * and nothing more: no policy, statement, binding, cause or exception (P16).
  */
-@ExperimentalCoSecApi
 class Problem internal constructor(
     val type: ProblemType,
     /** Equals the `CoSec-Request-Id` response header. */
@@ -40,5 +38,4 @@ class Problem internal constructor(
  * status codes and problem bodies.
  */
 @InternalCoSecApi
-@ExperimentalCoSecApi
 fun routeProblem(type: ProblemType, requestId: String): Problem = StatusMapping.routeProblem(type, requestId)

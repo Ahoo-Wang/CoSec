@@ -22,7 +22,6 @@ import me.ahoo.cocache.api.ConditionalPut
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.CoCacheFactory
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
@@ -85,7 +84,7 @@ private val log = KotlinLogging.logger {}
  */
 // stays: one method per store operation of ControlStore
 @Suppress("TooManyFunctions")
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class CoCacheControlStore internal constructor(
     private val heads: Store<SnapshotKey, SnapshotDocument>,
     private val records: Store<RevisionRecordKey, SnapshotDocument>,
@@ -354,12 +353,14 @@ class CoCacheControlStore internal constructor(
         deleteIf(leases, name) { it == holder }
     }
 
+    @InternalCoSecApi
     companion object {
         /** The document list's key before 8.0.0-beta.5, under the lists. */
-        private const val DOCUMENTS = "documents"
+        internal const val DOCUMENTS = "documents"
 
-        private const val OPEN_CHANGES = "open-changes"
-        private const val APP_LIST = "all"
+        /** The open-change list's key before 8.0.0-beta.5, under the lists. */
+        internal const val OPEN_CHANGES = "open-changes"
+        internal const val APP_LIST = "all"
 
         /** As `ControlDerived.ORPHAN_AGE`: one reclaim pass. */
         val DEFAULT_MISSING_GRACE: Duration = Duration.ofHours(1)

@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.control.change
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.time.Instant
 
@@ -23,7 +22,7 @@ import java.time.Instant
  * A change's shadow window (RFC 0007 §6.4): [window] names it in the candidate and in every instance's report; [closed]
  * is what the reports summed to when it closed, and stays as the evidence the publisher acknowledges.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 data class ShadowState(
     val window: String,
     val startedAt: Instant,

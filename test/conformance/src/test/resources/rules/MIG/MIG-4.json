@@ -1,0 +1,12 @@
+{
+  "id": "MIG-4",
+  "source": "RFC 0007 §5.8; design B of the back-references, beta.5 (#1729)",
+  "statement": "cosec-migrate repair-references converts a store written before 8.0.0-beta.5 and never replaces a back-reference set: it converts only a value CoCache reads in the old format, under a lease two runs share, adds and removes members otherwise, and removes the old document list last, only when nothing failed. A value no head touches stays in the old format and fails closed when a change touches it (CTL-42).",
+  "level": "build",
+  "pending": null,
+  "guards": [
+    "migrate:LegacyConversionTest#a set is never replaced, so a member added after the conversion stays",
+    "migrate:MigrateMainTest#repair-references converts a store written before beta 5 and removes the old document list last",
+    "migrate:ReferenceRepairTest#a repair that fails part-way is reported, and the next run adds every missing member"
+  ]
+}

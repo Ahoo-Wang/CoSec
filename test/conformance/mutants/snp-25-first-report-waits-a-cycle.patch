@@ -1,0 +1,20 @@
+# Rule: SNP-25
+# Mutant: the first status is written a report interval after the start, so an instance reads its documents before it is seen
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.InstanceStatusWiringTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/InstanceReporting.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/InstanceReporting.kt
+index 5e7f05eee..ba9eeb11e 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/InstanceReporting.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/InstanceReporting.kt
+@@ -40,11 +40,6 @@ class InstanceReporting(val reporter: InstanceReporter) : AutoCloseable, Startup
+ 
+     init {
+         // Bounded: a Redis that does not answer delays the start by this much at most, and the loop tries again.
+-        runBlocking {
+-            withTimeoutOrNull(
+-                FIRST_REPORT_BUDGET.toMillis()
+-            ) { reporter.report(windows = null, shadows = false) }
+-        }
+         scope.launch { reporter.run() }
+     }
+ 

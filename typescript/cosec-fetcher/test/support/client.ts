@@ -16,6 +16,7 @@ import { SerialTypedEventBus } from '@ahoo-wang/fetcher-eventbus';
 import { InMemoryStorage } from '@ahoo-wang/fetcher-storage';
 import {
   CoSecConfigurer,
+  CoSecTenantSwitcher,
   CoSecTokenRefresher,
   DefaultSpaceIdProvider,
   DeviceIdStorage,
@@ -91,6 +92,7 @@ export function createClient(
       endpoint: '/auth/refresh',
       timeout: refreshTimeout,
     }),
+    tenantSwitcher: new CoSecTenantSwitcher({ fetcher: client }),
     ...config,
   });
   configurer.applyTo(client);

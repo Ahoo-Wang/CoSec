@@ -11,11 +11,10 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class, InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.conformance
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.TestFactory

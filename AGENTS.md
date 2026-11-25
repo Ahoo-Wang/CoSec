@@ -20,6 +20,7 @@ a change that fails to compile. When unsure, deny, and ask.
 ./gradlew :code-coverage-report:codeCoverageReport
 ./gradlew :conformance:check                      # spec conformance suite: scenarios + verifyRuleCoverage
 ./gradlew :architecture:check                     # RFC 0011 §5: dependency, source and project-list rules
+./gradlew :compat:check                           # the previous release against this build (RFC 0014 T): needs Redis
 ./gradlew propertyStress -PpropertyIterations=1000   # the registered property tests, more cases (not in check)
 gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only, never on a local machine
 ./gradlew :conformance:mutationCheck -Pmutants=a,b  # break a security rule on purpose, expect a test to fail (not in check)
@@ -86,7 +87,11 @@ gh workflow run system-test.yml --ref main -f ref=<sha>   # the system test on a
   `BUILD_FAILED`, to be run again, and a mutant whose tests fail without the patch too is `FAILS_WITHOUT_PATCH`, a
   flaky test or a wrong header to fix. A `--tests` name of a header must match a test class of its task's project
   (`MutationCheckTest`): move a test class and the headers that name it together. A local run leaves a Gradle
-  daemon alive for two minutes. The full run is the `mutation.yml` workflow (`.github/workflows/`), weekly and on
+  daemon alive for two minutes. A verdict counts only on builds that show the patched code compiled (`Recompilation`):
+  a mutant or control build that left the patched project's compilation up to date is `NOT_RECOMPILED`, no kill. A
+  patch that changes code its callers inline (a non-private `inline fun`'s body or defaults, a non-private `const val`)
+  carries `# Inlined: <what>` (`MutationCheckTest` fails otherwise): its builds compile from source without the build
+  cache, since incremental compilation can leave the callers with the old code. The full run is the `mutation.yml` workflow (`.github/workflows/`), weekly and on
   demand, never a local run: a mutant it reports as not killed is either a wrong patch or a missing test. `:conformance:check` requires every patch to apply to the working tree
   (`MutationCheckTest`): a refactoring that moves the code a mutant breaks fails `check` and names the patch. Rewrite
   it to break the same property where the code now lives (its header says what it is for), then run it.
@@ -134,7 +139,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
   (RFC 0011 §3): `api/` (`annotations`, `api`), `core/` (`model`, `engine`, `spi`, `document`, `runtime`, `control`, `control-sdk`), `backends/`
   (`cocache`), `edge/` (`webflux`, `webmvc`, `gateway`, `openapi`), `extensions/` (`jwt`, `social`, `login`,
   `ip2region`, `micrometer`, `opentelemetry`, `cosid`, `kafka`, `control-http`), `host/` (`spring-boot`), `migration/` (`migrate`), `test/` (`testkit`,
-  `conformance`, `architecture`, `e2e`, `client-host`, `system-test`, `system-behind`, `system-auth`, `system-enforcer`,
+  `conformance`, `architecture`, `compat`, `e2e`, `client-host`, `system-test`, `system-behind`, `system-auth`, `system-enforcer`,
   `code-coverage-report`), `bom/` and `platform/` (`gateway-server`, `control-server`). A project
   is named after its directory, without the group or a `cosec-` prefix (`:runtime:check`, `:spring-boot:check`);
   artifact ids keep the prefix (`me.ahoo.cosec:cosec-runtime`). A package belongs to one project
@@ -156,6 +161,15 @@ the adapters, snapshots or the control plane. The parts that take several files 
   workflow ([`wiki/operations/deployment.md#the-system-test`](wiki/operations/deployment.md#the-system-test)). Its `check` runs
   only the harness's own tests; the scenarios run in `systemTest` against a running stack. A scenario waits for a
   property within a bound named after it, never a fixed sleep or a retry.
+  `test/compat` is the cross-version fixture (RFC 0014 T): the previous release, as published (`cosec-previous` in
+  `gradle/libs.versions.toml`), runs beside this build in a class loader of its own, through one side compiled
+  against each (`src/side/kotlin`); the two read what the other wrote, rewrite it and share counters on one Redis,
+  one `MIX-*` rule per cross-version format. A case that holds only from a later release is run and must still fail
+  (`Baseline.from`), so moving `cosec-previous` names the cases that now hold. After a release is published, set
+  `cosec-previous` to it, copy the side into `src/previous/kotlin` if the side changed since, and turn on the cases
+  `Baseline.from` reports. The system test has the same pairing over the network: `system-test.yml -f previous=<release>`
+  runs that release's published gateway and control-plane images in front of the services of the commit
+  (`PreviousRelease.LATER` lists, with its reason, a scenario that holds only from a later release).
   `test/architecture` holds the structural rules that scan several modules (RFC 0011 §5): `DependencyRulesTest`
   (declared main dependencies point inwards, with the reviewed exceptions in `DependencyRules.EXCEPTIONS`;
   `annotations`, `api`, `model` and `engine` resolve only the Kotlin standard library, `spi` adds coroutines and `document` Jackson;
@@ -165,7 +179,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
   starter bring CosId, since CoSec owns its ids through `IdGenerator`), `SourceRulesTest`
   (Reactor only in edge and host, plus cocache's reactive Redis client, never in its public signatures; no Spring, Servlet or Redis client
   in `api/` and `core/`; no backend class references `runtime`; backends reach into `control` only through the listed ports and into
-  `document` only through the mapper, the rule a stored record's format number is read by (`StoredFormat`), the codec of a
+  `document` only through the mapper, the rule a stored record's format number is read by (`StoredFormat`), a record's kind and the table of its members (`StoredRecord`, `StoredMembers`: a record's members, never a document's), the codec of a
   format they store (`ShadowCodec`) and the one way to make the `SnapshotDocument` a store returns (`SnapshotDocuments`, which reads the header only): a backend stores bytes and
   never reads what a document grants; `kafka` reaches into `control` only through the change listener port;
   opt-ins to `InternalCoSecApi` only in CoSec's own Kotlin sources, so never in a doc sample),
@@ -309,7 +323,7 @@ Each one exists for a reason, and each has tests guarding it. Never weaken a tes
 | **Hot-path changes come with a JMH before/after** | Authorization runs on every request | `EngineAuthorizationBenchmark`, `PipelineBenchmark` |
 | **Public signatures change only on purpose**: each published module's ABI is in its `api/<project>.api` dump | Applications compile against CoSec and implement its SPIs | `checkKotlinAbi` (in `check`), `SpiMarkerTest` |
 
-Every normative rule of the RFCs has an id in `test/conformance/src/test/resources/rules/` and the tests that guard it;
+Every normative rule of the RFCs has an id in `test/conformance/src/test/resources/rules/` (one file per rule, `rules/<FAMILY>/<ID>.json`) and the tests that guard it; a `build`, `startup` or `timing` rule's guards are reviewed in its own file, and no list is kept beside the registry;
 `verifyRuleCoverage` fails when a rule loses them.
 
 ## Where a change has to land
@@ -340,8 +354,15 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | A `COSEC_*` environment variable in a page, a manifest or a message | its spelling: Spring joins the words of a key (`eviction-check` is `..._EVICTIONCHECK`); `EnvironmentVariableSpellingTest` (`:spring-boot`) fails when it is not a property the starter reads |
 | A file over 400 lines, a second top-level type in a file, a new package edge inside `runtime`, `control` or `document`, a structure suppression | an entry in `test/architecture`'s ledgers (`SourceSizeLedger`, `TypeLedger`, `PackageLedger`, `DetektSuppressionTest.RECORDED`) with its batch or its reason, reviewed |
 | What a published module brings into a build (a library dependency, `compileOnlyApi`, the BOM) | nothing to register: `PublishedMetadataTest` reads the generated metadata; `:dependencies` is CoSec's internal platform and is not published; `wiki/guide/introduction.md#what-cosec-needs-from-your-build` when a minimum moves (`CatalogTest`) |
-| A public signature of a TypeScript package (a line of its API report) | the report, `wiki/integration/clients.md`, the client's skill; after GA, `!` in the PR title when a line is removed or changed |
-| What a client receives: a problem type, its status, headers or body; a `CoSec-*` header; the token pair; a claim of CoSec's tokens; what the served refresh and logout routes answer | `contract/` (`./gradlew :runtime:updateClientContract :jwt:updateClientContract`, `PIP-25`), `wiki/integration/clients.md` (its claims table is held to `contract/token/claims.json` by `pnpm check:docs`), and `typescript/cosec-fetcher` in the same PR: its tests against `contract/` and the real host fail otherwise. From GA, `!` in the PR title when a file's member, value, status or header is removed or changed |
+| Who reports a status, its members or its life (`InstanceStatus`, `SNP-25`) | `ShadowCodec` and its test (an absent member reads as the narrower answer), `wiki/operations/storage.md` (the key and format tables, who may write which keys), `GET /instances` and `contract/control/instances.json` when the answer changes (`CTL-89`) |
+| A claim or a header parameter added to CoSec's tokens | a restriction goes in a JWS header parameter the `crit` header names, never in a new claim, which an older verifier ignores (`IDN-47`, RFC 0014 R1); `contract/token/`; a verifier of CoSec's reads `crit` after the signature and refuses what it does not understand |
+| A member added to a stored record or to the identity header | its member table (`StoredMembers` of the record, `IdentityMembers`): what its absence means, whether ignoring it or an older writer dropping it would widen; one that would is added only through `crit` (`IDN-41`, `IDN-42`, `SNP-27`, `SNP-28`, RFC 0014 R1, R2) |
+| A key, a channel, a stored field or the way a counter's window is cut that two releases share on one Redis | `FrozenLayout` and its golden samples (`SNP-26`, RFC 0014 R6): frozen within 8.x; a change goes to a new key space |
+| Anything that reads whether a principal is a person or a workload, or a new credential, login or verifier | the closed kind (`Identity.Credential.kind`, `TokenSubject.kind`, `VerifiedToken.kind`; `IDN-44` to `IDN-46`), read through `AuthenticatedPrincipal.workload`; never the method's name, which is a label; a reader takes anything but `person` as a workload's |
+| Anything that crosses between two releases (a header member, a stored record's member or format, a document field, a Redis key, a claim) | `wiki/operations/upgrading.md#how-the-promise-is-kept`: the row of what crosses, and `#what-is-not-supported` when the change adds a case |
+| A format two versions exchange (a header, a token, a stored record, a key layout, a counter) | its `MIX-*` rule and a case in `test/compat`, through the side (`src/side/kotlin`); a case that needs a later reader than `cosec-previous` uses `Baseline.from` |
+| A public signature of a TypeScript package (a line of its API report) | the report, `wiki/integration/clients.md`, `skills/cosec-client`; after GA, `!` in the PR title when a line is removed or changed |
+| What a client receives: a problem type, its status, headers or body; a `CoSec-*` header; the token pair; a claim of CoSec's tokens; what the served refresh and logout routes answer | `contract/` (`./gradlew :runtime:updateClientContract :jwt:updateClientContract`, `PIP-25`), `wiki/integration/clients.md` (its claims table is held to `contract/token/claims.json` by `pnpm check:docs`), and `typescript/cosec-fetcher` in the same PR: its tests against `contract/` and the real host fail otherwise; `skills/cosec-client` where it states the answer. From GA, `!` in the PR title when a file's member, value, status or header is removed or changed |
 | What the control API answers: a change's members, the listing's, a revision's propagation, a closed set it writes (state, kind, severity, escalation reason, decision, cause, reason, effect, outcome, conflict), a problem's members (`conflict`, `heldBy`: `conflict.json`, `CTL-80`), what a check answers (`change-check.json`, `CTL-78`), the audit kind of a route | `contract/control/` (`./gradlew :control:updateClientContract`, `CTL-61`), `wiki/policies/testing.md#what-a-change-answers`: an answer is written member by member by its codec in `control/api/`, never copied from the stored record; `cosec-control-sdk`'s typed answers (`AnswerJson.CHANGE_READ`/`CHANGE_UNREAD` name every member of the change answer as read or left out, and its closed sets equal the vocabularies). From GA, `!` in the PR title when a member or value is removed or changed |
 | The gateway image, the control-plane image, `k8s/`, or what a system-test scenario asserts (`platform/**`, `k8s/**`, `test/system-*/**`) | the system test runs on the PR and must be green; a changed value a scenario reads (a metric tag, an audit field, a port, a probe path) changes its scenario in the same PR |
 | A new TypeScript package | `typescript/AGENTS.md`, `TypeScriptWorkspaceTest`'s `published`, the labeler, `llms.txt`, the publish workflow's package list |
@@ -353,7 +374,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | A bound on memory held for performance (a cache's size, a queue's capacity) | a share in `HeapBudget`, the one table (`STA-12`: the sum stays at or under half the heap; the snapshot documents' quarter is divided by `DocumentBudget`, `SNP-24`), a measured entry size held by a size test, the startup line, `wiki/operations/configuration.md#computed-not-configured`; never a count property, and nothing measured on the request path |
 | Who may write a document without a person (the trust root, the role class `cosec:manage-roles`, anything later) | `CTL-79` and its bounds tests (`RoleClassBoundsTest`): prove the bound by tests before the path admits anything; `wiki/policies/role-permissions.md`, `wiki/policies/testing.md`, `wiki/guide/security-model.md`; ask first |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |
-| A normative rule (an RFC "must / must not / always", RFC 0008 §3.2) | `test/conformance/src/test/resources/rules/<FAMILY>.json` and its scenarios: a positive and a negative one for each rule that is not `pending` (`verifyRuleCoverage`) |
+| A normative rule (an RFC "must / must not / always", RFC 0008 §3.2) | `test/conformance/src/test/resources/rules/<FAMILY>/<ID>.json`, one rule per file, and its scenarios: a positive and a negative one for each rule that is not `pending` (`verifyRuleCoverage`) |
 | Breaking change (public API, `cosec.*` property, authorization semantics) | `wiki/operations/upgrading.md`: what breaks and how to migrate from 7.x; a change between two 8.0 previews goes in `wiki/operations/upgrading-previews.md`, under the preview it comes after |
 
 Docs: link to files, never line numbers; verify claims against code, not other docs. Mermaid labels use

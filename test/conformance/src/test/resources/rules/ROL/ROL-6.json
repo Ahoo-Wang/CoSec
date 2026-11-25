@@ -1,0 +1,7 @@
+{
+  "id": "ROL-6",
+  "source": "RFC 0012 §4.2",
+  "statement": "A short-form permission of a group that is not spaced applies only in the default space.",
+  "level": "engine",
+  "pending": null
+}

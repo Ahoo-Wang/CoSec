@@ -17,9 +17,11 @@ package me.ahoo.cosec.control.api
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.InstanceReaders
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.store.ChangePage
 import me.ahoo.cosec.control.store.ListedChange
+import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
 
@@ -61,6 +63,27 @@ internal object ControlResponseJson {
         .put("recent", propagation.recent)
         .put("unknown", propagation.unknown)
         .put("asOf", propagation.asOf.toString())
+
+    /**
+     * The readers of the store (`CTL-89`): `instances`, each one's `instance`, `release` (absent when its status does not
+     * name one), `formatLevel`, `at`, whether it is `live` (a status in the minute before `asOf`) and whether it `shadows`;
+     * `unreadable`, the instances whose status does not decode; `releases`, how many instances run each release
+     * (`unknown` for both kinds without one); and `asOf`, when the statuses were read.
+     */
+    fun instances(readers: InstanceReaders): ObjectNode {
+        val root = factory.objectNode()
+        val liveSince = readers.asOf.minus(ShadowReportReader.STATUS_TTL)
+        val instances = root.putArray("instances")
+        readers.statuses.sortedBy { it.instance }.forEach { status ->
+            val node = instances.addObject().put("instance", status.instance)
+            status.release?.let { node.put("release", it) }
+            node.put("formatLevel", status.formatLevel).put("at", status.at.toString())
+                .put("live", !status.at.isBefore(liveSince)).put("shadows", status.shadows)
+        }
+        root.putArray("unreadable").apply { readers.unreadable.sorted().forEach(::add) }
+        root.putObject("releases").apply { readers.releases.forEach { (release, count) -> put(release, count) } }
+        return root.put("asOf", readers.asOf.toString())
+    }
 
     /**
      * A page of `GET /documents` (`CTL-68`): each document by its key, `next`, the cursor of the next page or null, and

@@ -11,13 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class, InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.spring.boot.pipeline
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.micrometer.core.instrument.MeterRegistry
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.micrometer.CoSecMeters
 import me.ahoo.cosec.runtime.identity.IdentityGate
@@ -36,6 +35,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.boot.web.server.autoconfigure.ServerProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
@@ -116,6 +116,47 @@ internal class CoSecGatewayModeAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun cosecIdentityRefusals(): IdentityRefusals = IdentityRefusals()
+
+    /**
+     * `IDN-43`: the web server's request-header limit of a host that reads the identity, where a web server reads it
+     * ([ServerProperties] on the classpath): derived from `cosec.pipeline.identity.max-size` on the bound properties
+     * when the operator did not set it ([IdentityHeaderLimit]), and stated at startup as it is in effect.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = [IdentityHeaderLimitConfiguration.SERVER_PROPERTIES])
+    @InternalCoSecApi
+    class IdentityHeaderLimitConfiguration {
+        /**
+         * The limit in effect once every singleton exists, the web server's included, and where it came from: derived,
+         * at INFO, only when it was applied and is still in effect; the operator's at INFO, or at WARN with both numbers
+         * when it is too small for an identity header the gate accepts; anything else named as not derived. The
+         * operator's value stands: it is their choice.
+         */
+        @Bean
+        fun cosecIdentityHeaderLimitCheck(
+            environment: Environment,
+            limit: IdentityHeaderLimit,
+            server: ObjectProvider<ServerProperties>,
+        ): StartupTask = StartupTask.AfterSingletons {
+            val effect = server.ifAvailable?.maxHttpRequestHeaderSize
+            val (warn, line) = IdentityHeaderLimit.line(environment, effect, limit.applied) ?: return@AfterSingletons
+            if (warn) log.warn { line } else log.info { line }
+        }
+
+        @InternalCoSecApi
+        companion object {
+            const val SERVER_PROPERTIES = "org.springframework.boot.web.server.autoconfigure.ServerProperties"
+
+            /**
+             * Static, so Spring creates it with the post-processors, before any configuration or bean: it changes the
+             * server's properties once they are bound, from the environment the application runs with.
+             */
+            @JvmStatic
+            @Bean
+            fun cosecIdentityHeaderLimit(environment: Environment): IdentityHeaderLimit =
+                IdentityHeaderLimit(environment)
+        }
+    }
 
     /**
      * `cosec.identity.refused`, with `cosec-micrometer` and a `MeterRegistry`: without them the count is still kept and

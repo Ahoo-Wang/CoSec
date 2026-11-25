@@ -22,6 +22,7 @@ import me.ahoo.cosec.login.AuthenticationProvider
 import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.LoginCredentials
 import me.ahoo.cosec.login.token.TokenSubject
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
@@ -100,6 +101,6 @@ internal class CoSecAuthenticationAutoConfigurationTest {
         override val credentialsType = ContextCredentials::class.java
 
         override suspend fun authenticate(credentials: ContextCredentials): TokenSubject =
-            TokenSubject(principal)
+            TokenSubject(principal, Identity.Credential.Kind.PERSON)
     }
 }

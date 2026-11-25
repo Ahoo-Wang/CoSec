@@ -3,9 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlHttpTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
+index de8ebfd23..6a22df2c4 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-@@ -141,7 +141,7 @@ class ControlHttp(
+@@ -169,7 +169,7 @@ class ControlHttp(
          log.error(
              e
          ) { "Control API ${request.method} ${request.path} (request $requestId): a stored value does not decode." }
@@ -13,4 +14,4 @@ diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.
 +        return problem(Problem.INVALID_REQUEST, requestId, e.message)
      }
  
-     /** The `503` of a call the work budget refused (`CTL-85`): a retry in a second may fit. */
+     private fun later(request: ControlHttpRequest, requestId: String, e: Exception): Boolean =

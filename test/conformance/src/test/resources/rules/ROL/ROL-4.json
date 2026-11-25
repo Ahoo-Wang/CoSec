@@ -1,0 +1,7 @@
+{
+  "id": "ROL-4",
+  "source": "RFC 0012 §5.1, §7.4",
+  "statement": "`*` is written only in an app document, and a catalog that grows shows as new derived bindings.",
+  "level": "engine",
+  "pending": null
+}

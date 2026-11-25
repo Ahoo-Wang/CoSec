@@ -53,7 +53,7 @@ description: "一个应用有多个仓库或团队时使用空间，以及一个
 
 ```kotlin
 TokenSubject(
-    id = user.id, app = "wms", tenant = "acme",
+    id = user.id, kind = Kind.PERSON, app = "wms", tenant = "acme",
     roles = setOf("wms.manager@wh-01", "wms.manager@wh-02", "wms.clerk"),
 )
 ```

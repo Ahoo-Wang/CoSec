@@ -1,6 +1,6 @@
 ---
 name: cosec-troubleshoot
-description: Diagnose CoSec 8.0 failures - startup failures (unknown cosec.* keys, pipeline mode, Redis eviction check, missing TokenStore or revocation reader, route maps, actuator endpoints on a gateway), instances that stay not ready, services behind a gateway that refuse the forwarded identity, unexpected 400/401/403/429/503 problem responses, Indeterminate decisions, documents that do not compile or lag, rate limits, and control-plane errors - and explain which statement decided. Do not change behavior unless the user asks for a fix.
+description: Diagnose CoSec 8.0 failures - startup failures (unknown cosec.* keys, pipeline mode, Redis eviction check, missing TokenStore or revocation reader, route maps, actuator endpoints on a gateway), instances that stay not ready, services behind a gateway that refuse the forwarded identity, unexpected 400/401/403/429/503 problem responses, Indeterminate decisions, documents that do not compile or lag, rate limits, control-plane errors, and what a browser client sees (@ahoo-wang/cosec-fetcher, @ahoo-wang/cosec-react: the npm placeholder, refreshes that end the session, refused tenant switches, CORS) - and explain which statement decided. Do not change behavior unless the user asks for a fix.
 ---
 
 # CoSec Troubleshooting
@@ -33,6 +33,16 @@ To see why without reproducing traffic, use the control plane (needs `cosec-cont
 returns the decision and its trace; `POST /analyze` with a `query` (`tenant`, `app`, `space`, `action`, `resource`)
 lists the bindings that could permit or deny in that tenant (another tenant's principals and roles are left out). External attributes are not fetched there, so a statement reading one is
 Indeterminate in an explanation.
+
+- **A refresh, logout or switch is 503 during a rolling upgrade, logging `a later CoSec wrote the session record`**
+  (`SNP-27`): a newer instance wrote a session member this older one must understand (its `crit`); the record is
+  refused, never rewritten, and the session kept. Upgrade the instance. `cosec.stored.refused{reason="later"}` counts
+  these; `reason="malformed"` means a broken record, not a version. The control API answers such a record of the
+  control plane or a shadow window `503` without detail, logging `a later CoSec wrote a stored record`. Outside a
+  rolling upgrade the instance is older than the records it meets (a rollback after the newer version wrote them, an
+  older image scaled out, an instance cut off from Redis for over an hour): not supported, and it refuses rather than
+  permits until it runs the newer version; `GET /instances` names each instance's release
+  (https://cosec.ahoo.me/operations/upgrading#what-is-not-supported).
 
 ## Interpret the status
 
@@ -67,6 +77,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **`PIP-34: 2 ProblemRenderer beans of the application, [...]`**: a refusal has one body, so the starter takes one
   `ProblemRenderer`. Keep one, or one that delegates.
   https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-two-problem-renderers
+- **`cosec.pipeline.identity.max-size is <n> bytes, below the 6144 bytes HttpControlService relays this host's callers
+  within`** (IDN-43): a host that reads the identity and calls a control-plane host would relay headers its own gate
+  refuses. Raise `cosec.pipeline.identity.max-size` to at least 6 KB, or unset it (8 KB by default).
+  https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-identity-header-limit
 - **A gateway restarts once right after `kubectl apply`**, and `kubectl logs --previous` ends with
   `RedisConnectionException: Unable to connect to redis/...`: it started before Redis was reachable (the overlay is
   applied whole). Startup fails closed without the store of record, and the kubelet restarts it until Redis answers: no
@@ -87,6 +101,15 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   revocations and API keys copied to the new keys first (`COPY`, or `RENAME`, which keeps the expiry): a revocation
   left under the old prefix is no longer read, so the token it revoked would be accepted again. Then set
   `cosec.key-prefix` to the snapshot documents' prefix and remove the old properties; never suggest only renaming them.
+- **A document or a route map does not compile on a reserved character** (`DOC-15`): `'<c>' is reserved for a future
+  pattern syntax; write \<c> for the character`, at the position given. One of `[ ] ( ) | ! ^ $ \` is unescaped in a
+  path, typed resource or action pattern; write it escaped (doubled backslash in JSON). Patterns that match no request
+  path (a `\`, `;`, control character, dot segment, a segment over 256 characters) are refused the same way. After an
+  upgrade from 8.0.0-beta.8 such a stored document is installed as failed (`503` for what reads it): before upgrading,
+  `cosec-migrate check-patterns --to-redis <uri>` names each such pattern and how to write it.
+- **No error, but after the upgrade from 8.0.0-beta.8 a DENY stopped denying or an ALLOW started granting** (`DOC-15`):
+  a stored pattern holds a backslash, which beta.8 read as a character and this version reads as an escape (`doc/a\(b`
+  denied `a\(b`, now denies `a(b`). `check-patterns` names it and the form that keeps its meaning; publish that.
 - **A document does not compile on a path pattern** (`DOC-4`): over 2,048 characters, a glob segment of more than 16
   parts (consecutive `*` count once), or more than 2,048 glob units in one document (each glob segment's parts and the
   characters of its text, twice after a leading `**`). The control plane answers a
@@ -407,8 +430,15 @@ with the host stopped. Its probes are on the management port 8081, never on 8080
   names, exactly by space; attached policies and principal bindings grant it nothing, but their DENYs still apply
   (IDN-2, BND-9), so a capped key is denied what its principal is denied. A key grants nothing its principal does not
   hold (IDN-1), and no API key ever gets break-glass (BRK-8). `roles: []` leaves only `Anyone`, less those DENYs.
-- Break-glass that does not apply: only a token CoSec's own `JwtTokenVerifier` verified gets it (BRK-8), never a token
-  of a custom `TokenVerifier`, even through `TokenAuthenticator`. An authenticator naming its method `jwt` makes every
+- `503` (`AUTHENTICATOR_UNAVAILABLE`) for every token of one issuer, and its served refresh and logout `503` too: the
+  issuer runs a later CoSec whose tokens mark a header parameter critical (JWS `crit`), which this version does not
+  understand (IDN-47, `TokenNotUnderstoodException`). Upgrade this instance; the same tokens then pass. A malformed
+  `crit` is `401` `token-invalid`.
+- Break-glass that does not apply: only a token CoSec's own `JwtTokenVerifier` verified, and read as a person's, gets it
+  (BRK-8, IDN-46), never a token of a custom `TokenVerifier`, even through `TokenAuthenticator`. A session begun on an
+  earlier 8.0 preview has no `cosec.kind` claim, reads as a workload's (no break-glass, no approving: `a workload's
+  credential ... cannot approve`) and stays so through refreshes, as does one refreshed or switched on a beta.8 replica
+  of the issuer (a rolling upgrade or a rollback of it): sign in again on an upgraded issuer. An authenticator naming its method `jwt` makes every
   request `503` (`The authentication method [jwt] is CoSec's own token's`): that name is reserved.
 - `token-invalid` for a token whose `tenantId` claim is empty or not a string, or whose `attributes` name `apiKeyId` (reserved
   for API keys).
@@ -485,6 +515,80 @@ https://cosec.ahoo.me/operations/troubleshooting#a-refusal-is-answered-with-cose
 - Is the instance on the expected revision? Compare the audit event's snapshot versions with the published head.
 - A break-glass binding permits as `cosec:root` until it expires; audit marks such permits.
 
+### In the browser: `@ahoo-wang/cosec-fetcher` and `@ahoo-wang/cosec-react`
+
+Capture the installed versions (`npm ls @ahoo-wang/cosec-fetcher @ahoo-wang/cosec-react @ahoo-wang/fetcher-cosec`),
+the server's CoSec version, the error's `name` with its `problem` and `status` (never its `exchange`, which holds the
+`Authorization` header), and the order of the calls on the wire (`<path> <status>`). Wiring: `$cosec-client`.
+
+- **The install warns `deprecated ... Placeholder. Install the beta` and the import does not resolve**: installed
+  without a tag before 8.0 GA, which gets `latest`, a `0.0.0` placeholder with no code. Install the server's line:
+  `@beta`, `@rc`, or the exact version.
+- **The client is `8.0.0-beta.n` and the server a release candidate (or the other way)**: a tag stays on its line,
+  so `@beta` still installs the last beta once RCs are out. Install `@rc` or the server's exact version; the client is
+  tested against the `contract/` of its own version.
+- **The old `@ahoo-wang/fetcher-cosec` (or `@ahoo-wang/fetcher-react`'s security hooks) against an 8.0 server**: it
+  speaks CoSec 7's contract. What shows: `403 scope-rejected` on every request of a host with an app though the client
+  sets `appId` (8.0 reads no app header; the app is the token's `aud`); users signed out when the refresh route
+  answers `429` or `503` (the revocations cannot be read, `IDN-14`; a refresh of a switched session that reaches an
+  8.0.0-beta.7 instance mid-upgrade, `IDN-36`), since it ends the session on any failed refresh; a refresh after every
+  `token-revoked` or `token-invalid`. Move to `@ahoo-wang/cosec-fetcher` and `@ahoo-wang/cosec-react`.
+- **Every session ends at its first access-token expiry**, the request failing with `RefreshTokenError` whose
+  `problem` is `token-expired` (or `unauthorized`): the refresh route is closed to anonymous callers (see "Unexpected
+  401"). If the session's lifetime really is over, the same error comes at `cosec.jwt.session.lifetime`.
+- **A refresh is answered `401 token-revoked` and the user is signed out**: one pair was refreshed twice, which ends
+  the session on every tab and device (`IDN-16`). Two holders that refresh on their own: the pair in `sessionStorage` or per-tab memory with
+  several tabs, two processes with one pair, a storage declared `sharedAcrossTabs: true` that the tabs do not share,
+  or a page without `navigator.locks` (not a secure context). Or a retry later than the server's leeway:
+  `rotationLeeway` set above `cosec.jwt.session.rotation-leeway`. The audit records the pair presented again.
+- **A refresh before every request**: the access token is expired by the device's clock as soon as it is stored, so the
+  device clock is ahead of the server's by more than the access token's validity, or `TokenStorage`'s `earlyPeriod`
+  (seconds) is not shorter than that validity. Refresh calls that call themselves: a custom `TokenRefresher` on the
+  configured `Fetcher` that does not set `IGNORE_REFRESH_TOKEN_ATTRIBUTE_KEY`; use `CoSecTokenRefresher`.
+- **Requests fail with `RefreshUnavailableError` and the user stays signed in**: the refresh had no verdict, and the
+  pair is kept. Its `problem`/`status`: `429` (the route is not called again for that pair until its `Retry-After`, at
+  most 60 seconds), `503` (the session or revocation store; retry later), `400 invalid-request` on every request (a
+  custom refresher that sends more than the exact pair, or not as JSON), no status (a network error: see CORS below).
+- **A call to another origin gets no token, and its `401` neither refreshes nor signs out**: `isTrusted` defaults to
+  `sameOriginTrust` (the absolute `baseURL`'s origin and the page's). Name the origin in an `isTrusted` predicate if it
+  must get the token. A `401 unauthorized` from CoSec with a token stored is usually this: the request went bare.
+- **A network error (`TypeError: Failed to fetch`) where a `401`, `403` or `429` was expected**, or
+  `retryAfterSeconds` answering `undefined` on a `429`: a cross-origin refusal without CORS headers, or headers not
+  exposed. The server needs a `CorsConfigurationSource` bean (the starter then puts the CORS filter before CoSec;
+  without it a preflight is decided as an anonymous `http:OPTIONS`) allowing `Authorization`, `CoSec-Device-Id`,
+  `CoSec-Request-Id`, `CoSec-Space-Id` and exposing `CoSec-Request-Id`, `RateLimit-*`, `Retry-After`. The client sends
+  no cookie and reads none: a cookie is never the cause.
+- **`403 scope-rejected` on every spaced request after the user picked a space**: the space kept in `SpaceIdStorage` is
+  one where the principal has no role, and the client keeps sending it by design (`onScopeRejected` is told; it never
+  falls back to another space). The application clears or changes the stored space. On every request: the token is for
+  another app, or none (see the status table).
+- **`NonReplayableRequestError`**: the access token was refreshed after a `401`, and the request's body was a stream
+  that cannot be sent twice. Send it again with a new body.
+- **A tenant switch is refused**: `switchTenant` rejects with `TenantSwitchError`. `sessionEnded: true` (a `401`, the
+  pair removed, `onUnauthorized` called): `token-revoked` when the session was logged out or revoked, or is a session a
+  switch started whose login's session has ended (`IDN-36`), or the pair presented was older than the session's current
+  one, which revokes the session (a switch of the application's own that did not take the lock refreshes take);
+  `token-invalid` when `Authorization` and the body were not one pair (the same cause), or the credential has no session
+  (an API key, a token of a `TokenVerifier` of the application's). An application route that refuses a non-member with
+  `401` ends the session too: it must refuse with another status. A `token-expired` is not on this list: the client
+  refreshes once and switches again (wire: switch `401`, refresh, switch), so a switch that ends in `RefreshTokenError`
+  is a session whose lifetime is over (or ended), and `TenantSwitchError` `token-expired` with `sessionEnded: false`
+  after a refresh that succeeded is a route that refuses the fresh access token: check the server's clock and the
+  route's own answer.
+  `sessionEnded: false` keeps the pair: `503` while the revocation or session store cannot be read (call again), no
+  `status` (network error or timeout: calling again is safe, the switch does not rotate the pair), or the application's
+  own refusal (its `TenantSwitch`). A switch request without the pair in its body fails against an endpoint of
+  8.0.0-beta.8 or later, which reads it (`IDN-22`). `No tenantSwitcher: ...`: the configurer has no
+  `CoSecTenantSwitcher`.
+- **`logout()` rejects with `LogoutUnconfirmedError`**: the pair is gone here, the server did not confirm (`503`,
+  `500`, network error), or the client has no `tokenRevoker` (`No tokenRevoker: ...`) or, in React, the hook has no
+  `tokenManager` (`No tokenManager: ...`).
+- **React: `useSecurityContext must be used within a SecurityProvider`**: the component is outside the provider.
+  **`useSecurity: the tokenManager option manages another TokenStorage than the hook's`**: two `TokenStorage`
+  instances (a second one created, or two copies of `@ahoo-wang/cosec-fetcher` installed); pass
+  `cosec.tokenStorage` and `cosec.tokenManager` of one `CoSecConfigurer`. **`RouteGuard` shows its fallback though a
+  pair is stored**: its access token expired (`authenticated` is false); `RefreshableRouteGuard` refreshes first.
+
 ### Service behind a gateway (`cosec.pipeline.mode=gateway`)
 
 The service reads the caller from `CoSec-Identity`, which only the CoSec gateway sets (it strips the client's own). No
@@ -494,9 +598,19 @@ most once a minute per problem type, DEBUG every time). Gateway mode records no 
 is counted in `cosec.identity.refused{problem}` (with cosec-micrometer), where any non-zero rate is a misconfigured hop
 or a request that bypassed the gateway:
 
-- 400 `invalid-request`: not base64url JSON of format v1, unknown or missing members, an id with an unpaired
+- 400 `invalid-request`: not base64url JSON of format v1, a missing member or a malformed `crit`, an id with an unpaired
   surrogate (IDN-10), a blank `sub`, `tenant` or `rid` (IDN-38), over
   `cosec.pipeline.identity.max-size` (8KB), sent more than once, or a scope that does not resolve here.
+- 431, or a 400 without CoSec's problem body: the web server refused the headers before CoSec read them
+  (`server.max-http-request-header-size`; Reactor Netty and Jetty answer 431, Tomcat 400). On a host that reads the
+  identity it is derived, 16 KB at the defaults, unless set, however the mode is set. The startup line names the limit
+  in effect: `derived from`, the headers really are over it; `below ... as the operator set it`, raise it or unset it;
+  `not derived`, something other than CoSec set or created `ServerProperties` first: set the property explicitly
+  (IDN-43). In 8.0.0-beta.9 a host whose own environment post-processor set the mode late kept 8 KB while the line
+  said `derived`.
+- 503 `unavailable`: a member the header's `crit` names that the service does not know (IDN-41): a later CoSec
+  version wrote it and this service is older; counted as `cosec.identity.refused{problem=unavailable}`, never a store
+  outage. Upgrade the service.
 - 401 `token-invalid`: unsupported version, no `auth.exp`, or issued in the future (beyond
   `cosec.authentication.revocation.skew`).
 - 401 `token-expired`: the credential expired, or the identity is older than `cosec.pipeline.identity.max-age` (60s)
@@ -524,7 +638,7 @@ or a request that bypassed the gateway:
   keeping revision <n>` means Redis could not be read: the installed revision stays until a read succeeds.
   `Snapshot document [<key>] regressed from revision <a> to <b>` means the store lost a write (for example a
   failover); `cosec-migrate verify-chain` names every document whose revision chain lost a record.
-- The control plane's `GET /documents/{key}/revisions/{rev}/propagation` reports, of the recently reporting instances (those with `cosec.authorization.shadow.enabled`, `recent`), how many hold the document (`holding`) and how many of those have installed it (`installed`), as read at `asOf` (at most 5 seconds ago). No instance is behind when `installed` equals `holding`; `holding: 0` means no instance holds the document, and the first request loads it at the published revision.
+- The control plane's `GET /documents/{key}/revisions/{rev}/propagation` reports, of the recently reporting instances (every CoSec process with `cosec-cocache` reports, `SNP-25`; `recent`), how many hold the document (`holding`) and how many of those have installed it (`installed`), as read at `asOf` (at most 5 seconds ago). No instance is behind when `installed` equals `holding`; `holding: 0` means no instance holds the document, and the first request loads it at the published revision.
 
 ### Snapshot log lines missing / housekeeping summary
 
@@ -705,7 +819,7 @@ report interval. Otherwise the window closes insufficient at `cosec.control.shad
 
 A shadow window that does not close while the control plane logs `Shadow window <w> of change <c> is waiting for the
 acknowledgement of [<instances>]` (and `GET /changes/{id}` names them in `shadow.waitingFor`) waits for live instances
-that do not acknowledge it (`CTL-10`): an older version (finish the upgrade; its status expires within two minutes once
+that do not acknowledge it (`CTL-10`): an older version (finish the upgrade; its status is no longer live a minute after
 it is gone) or an instance that cannot read the staged list (`The staged list cannot be read` in its log, a rising
 `cosec.shadow.staged.age`), or one whose status does not decode (`CTL-73`: the control host logs `The status of instance
 [<instance>] does not read`, with why, and `cosec.control.shadow.status.unreadable` counts it; a later format is a
@@ -734,6 +848,17 @@ declared types must match on every instance and the control host; the change is 
   plane's answer is over 20971520 bytes`: something other than a control-plane host answered at the service URL.
   https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-two-control-services
 
+### An instance the control plane cannot see
+
+- `Writing the instance status of instance [<id>] failed: the control plane cannot see this instance among the readers
+  of the store ... Allow its Redis user to write ~<s>:shadow:status:<id>, ~<s>:shadow:resident:<id> and
+  ~<s>:shadow:instances:*` (`ERROR` once, then `WARN` at most once a minute; `cosec.instance.status.failed` counts;
+  `cosecInstanceStatus` shows `failingSince`): every CoSec process with `cosec-cocache` reports its status (`SNP-25`),
+  a control-plane host and an IAM service behind a gateway included. The instance keeps serving, but a publish will not
+  wait for it: give its Redis user write permission on those keys. `GET /instances` lists who the control plane sees,
+  with each one's release; `cosec.control.instances.releases` above 1 is an instance of another release still reading
+  the store (within the last hour).
+
 ### The typed control client does not read a document
 
 - `ControlClient` throws `SnapshotFormatException` (`a <entry> has members this version does not know`): the control
@@ -758,8 +883,8 @@ In this repository, run a focused class first, for example:
 ./gradlew :runtime:test --tests "me.ahoo.cosec.runtime.PipelineTest"
 ```
 
-Use `$cosec-policy-author` to rewrite a confirmed-bad document and `$cosec-integration` to change confirmed-bad Spring
-configuration. For diagnosis-only requests, report the root cause and evidence without modifying files.
+Use `$cosec-policy-author` to rewrite a confirmed-bad document, `$cosec-integration` to change confirmed-bad Spring
+configuration, and `$cosec-client` to change confirmed-bad client wiring. For diagnosis-only requests, report the root cause and evidence without modifying files.
 
 When a control call is `503` with `Retry-After: 1` and `cosec.control.work.refused` counts, it is not the store: the
 control plane's work budget (an eighth of the heap) was full of large documents parsed or compiled at once (`CTL-85`).

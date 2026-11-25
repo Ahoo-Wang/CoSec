@@ -1,0 +1,10 @@
+{
+  "id": "RTL-2",
+  "source": "RFC 0006 §8.3 (R3, Q17)",
+  "statement": "A rate limit rule that cannot be counted refuses the request with 503 unavailable when it is strictFailure, and is skipped otherwise (the documented exception to fail closed).",
+  "level": "pipeline",
+  "guards": [
+    "runtime:RateLimitObligationTest"
+  ],
+  "pending": null
+}

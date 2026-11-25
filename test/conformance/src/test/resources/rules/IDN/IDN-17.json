@@ -1,0 +1,12 @@
+{
+  "id": "IDN-17",
+  "source": "RFC 0009 §11.3; round-2 review M2",
+  "statement": "A family ends cosec.jwt.session.lifetime after its login, however often it was refreshed: a refresh after that is refused and the user signs in again, no pair outlives that end, and a tenant switch, which does not sign the user in again, keeps the login time.",
+  "level": "pipeline",
+  "pending": null,
+  "guards": [
+    "login:TokenFamiliesTest#a family ends at its absolute lifetime",
+    "jwt:RefreshTokenFamiliesJwtTest#a pair never outlives its session",
+    "login:SwitchTenantAuthenticationTest#the new session keeps the login time of the session switched from"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "APR-1",
+  "source": "RFC 0007 §7.5",
+  "statement": "A change with escalations publishes only after a person other than its author, holding cosec:approve on the document, approves the candidate digest they saw.",
+  "level": "control",
+  "guards": [
+    "control:ControlAuthorizationTest#what the analysis cannot prove waits for another person's approval of its digest",
+    "control:StoredApprovalTest#a stored approval counts only when another person approved the candidate published"
+  ],
+  "pending": null
+}

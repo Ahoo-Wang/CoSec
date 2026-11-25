@@ -1,0 +1,11 @@
+{
+  "id": "CTL-4",
+  "source": "RFC 0007 §5.4, §5.5",
+  "statement": "A head is replaced only over the digest of the base it was published on; a stale base conflicts, nothing is overwritten and the change is not rebased automatically.",
+  "level": "control",
+  "guards": [
+    "control:RevisionsTest",
+    "cocache:RevisionChainTest#two instances publishing on the same base never overwrite each other"
+  ],
+  "pending": null
+}

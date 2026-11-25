@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.spring.boot.realserver
 
@@ -19,7 +19,6 @@ import jakarta.servlet.DispatcherType
 import jakarta.servlet.http.HttpServlet
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.gateway.IdentityStripFilter
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
@@ -40,6 +39,7 @@ import org.springframework.boot.tomcat.autoconfigure.TomcatServerProperties
 import org.springframework.boot.tomcat.autoconfigure.TomcatWebServerFactoryCustomizer
 import org.springframework.boot.tomcat.reactive.TomcatReactiveWebServerFactory
 import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory
+import org.springframework.boot.web.server.ConfigurableWebServerFactory
 import org.springframework.boot.web.server.WebServer
 import org.springframework.boot.web.server.autoconfigure.ServerProperties
 import org.springframework.boot.web.server.autoconfigure.reactive.ReactiveWebServerFactoryCustomizer
@@ -58,6 +58,7 @@ import org.springframework.web.server.WebHandler
 import org.springframework.web.server.adapter.WebHttpHandlerBuilder
 import reactor.core.publisher.Mono
 import java.io.ByteArrayOutputStream
+import java.net.InetAddress
 import java.net.Socket
 import java.net.URI
 import java.util.EnumSet
@@ -98,7 +99,7 @@ internal class RealServer(
     val port: Int get() = server.port
 
     /** Sends [request], raw, on a new connection, and reads the whole response. */
-    fun send(request: String): RawResponse = Socket("127.0.0.1", port).use { socket ->
+    fun send(request: String): RawResponse = Socket(LOOPBACK, port).use { socket ->
         socket.soTimeout = TIMEOUT_MILLIS
         socket.getOutputStream().write(request.toByteArray(Charsets.ISO_8859_1))
         socket.getOutputStream().flush()
@@ -109,6 +110,9 @@ internal class RealServer(
 
     private companion object {
         const val TIMEOUT_MILLIS = 10_000
+
+        /** The address every real server binds and every request goes to. */
+        val LOOPBACK: InetAddress = InetAddress.getByName("127.0.0.1")
 
         fun start(
             stack: Stack,
@@ -151,6 +155,10 @@ internal class RealServer(
                     jetty(environment, serverProperties).customize(it)
                 }
             }
+            // One address for the bind and the connection: bound to every address on a port the system chose, a server
+            // shares that port with any process bound to one address on it, which then takes the connections to that
+            // address (#1962).
+            (factory as ConfigurableWebServerFactory).setAddress(LOOPBACK)
             val server = if (factory is ConfigurableServletWebServerFactory) {
                 factory.setContextPath(contextPath)
                 val filter = PipelineServletFilter(gate, remoteIpResolver = remoteIp.servlet)

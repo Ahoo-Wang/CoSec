@@ -110,7 +110,7 @@ class BreakGlassAndShadowTest {
                 TenantId.PLATFORM,
                 MembershipSource.Claims(PipelineFixtures.claims()),
                 emptyMap(),
-                Identity.Credential(Identity.Method.JWT, "t1", null),
+                Identity.Credential(Identity.Method.JWT, Identity.Credential.Kind.PERSON, "t1", null),
                 breakGlass = true,
                 issuedAt = null,
                 apiKeyCredential = false,

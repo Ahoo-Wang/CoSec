@@ -1,6 +1,7 @@
 # Rule: CTL-54
 # Mutant: a change id may hold '#', '@' or '/', so an open-change set's member names another change, or none
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.OpenChangeSetsParseTest
+# Inlined: ChangeId.kt: const val SEPARATORS
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeId.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeId.kt
 index 0000000..0000000 100644

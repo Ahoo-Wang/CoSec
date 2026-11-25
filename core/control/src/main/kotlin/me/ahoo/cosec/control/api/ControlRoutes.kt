@@ -11,14 +11,15 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.control.api
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttpSupport.UNPAIRED_SURROGATE
 import me.ahoo.cosec.control.api.ControlHttpSupport.get
+import me.ahoo.cosec.control.api.ControlHttpSupport.json
+import me.ahoo.cosec.control.api.ControlHttpSupport.methodNotAllowed
 import me.ahoo.cosec.control.api.ControlHttpSupport.notFound
 import me.ahoo.cosec.control.api.ControlRequestJson.query
 import me.ahoo.cosec.control.authz.Operator
@@ -32,7 +33,7 @@ import me.ahoo.cosec.model.Identifiers
  * the path written the one way the routes are, a leaf route of one segment; a path that names no resource is a 404.
  */
 internal class ControlRoutes(
-    plane: ControlPlane,
+    private val plane: ControlPlane,
     private val profile: ControlProfile = ControlProfile.OPERATORS,
     work: WorkBudget,
 ) {
@@ -49,6 +50,10 @@ internal class ControlRoutes(
         "simulate" to RouteHandler { operator, request, _ -> queries.simulate(operator, request) },
         "explain" to RouteHandler { operator, request, _ -> queries.explain(operator, request) },
         "analyze" to RouteHandler { operator, request, _ -> queries.analyze(operator, request) },
+        // `CTL-89`: the readers of the store and their releases (RFC 0014 R5); the operators' only, never the service's.
+        "instances" to RouteHandler { operator, request, _ ->
+            if (request.method != "GET") methodNotAllowed() else json(ControlResponseJson.instances(plane.instances.read(operator)))
+        },
     )
 
     suspend fun route(operator: Operator, request: ControlHttpRequest): ControlHttpResponse {
@@ -84,6 +89,6 @@ internal class ControlRoutes(
 
     private companion object {
         /** The routes of one segment, whose verb is the whole path. */
-        val LEAVES = setOf("simulate", "explain", "analyze", "changes:check")
+        val LEAVES = setOf("simulate", "explain", "analyze", "changes:check", "instances")
     }
 }

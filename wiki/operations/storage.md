@@ -97,7 +97,7 @@ contain `:` or `/`, so a key names one document only.
 | `<s>:candidate-staged:all` | the control plane | the staged list (`CTL-46`): one member `<doc>/<window>` per staged candidate, added before the candidate is written and removed after it is withdrawn, so it lists every staged candidate and may list one already gone. The shadow pass withdraws a listed candidate no shadowing change names (a withdrawal that failed) and removes a member whose candidate is gone, each once two passes in a row found it so. An instance skips a member it cannot read (a later form), which costs samples at most. Then a marker, `.kept`, which says a control plane keeps it. Without the marker no list is kept, and instances read candidates by key. Never expires. A downgrade to a control plane that keeps no list must delete this key: a list nobody keeps can only cost shadow samples, never pass a window. A data-plane instance reads it, from Redis, at the start of each report interval ([10 seconds](./configuration.md#computed-not-configured)) and keeps what it read in memory: with a list, it reads only a listed document's candidate and samples only requests whose view reads a listed document, so with no window open a request does no shadow work at all; without the marker, or while the list cannot be read, it reads every candidate by key and samples as before, never taking an unreadable list for an empty one (`CTL-47`). What it read may be one interval old, which costs samples (a new window is sampled from the next read; a closed one is asked for and gives nothing), never a sample of another window's candidate |
 | `<s>:shadow:report:<window>:<instance>` | data-plane instance `<instance>` only | that instance's cumulative report of one shadow window; each write replaces the previous one; the instance stops writing it once the window's candidate is withdrawn; expires 8 days after its last write |
 | `<s>:shadow:reporters:<window>` | every data-plane instance | the ids of the instances that reported on `<window>`; same expiry |
-| `<s>:shadow:status:<instance>` | data-plane instance `<instance>` only | that instance's liveness, small and with no document in it (`CTL-74`): the shadow windows whose candidate it has compiled, its acknowledgement of them (`windows`, optional, `CTL-10`), and `shadows: false` when its candidate source is not CoSec's own (no window waits for it). Each listed window adds its id to the status, about 20 bytes, so a bulk change of a thousand open windows makes each status about 20 KB larger; a heartbeat writes this one value, whatever the size of the cluster; expires exactly 2 minutes after its last write (no jitter), and a status older than a minute is ignored (an instance is live while it has a status from the last minute). A status that does not decode does not fail the control plane's read: its instance counts as live and acknowledging no window until the status reads or its key expires, two minutes after the instance's last write (a value set by hand with no expiry counts only while the instance's entry in `<s>:shadow:instances:all` is current), and every other status is read (`CTL-73`) |
+| `<s>:shadow:status:<instance>` | CoSec process `<instance>` only: every one with `cosec-cocache`, whatever its pipeline mode and whether it shadows (`SNP-25`) | that instance's liveness and the CoSec release it runs (`release`), small and with no document in it (`CTL-74`): the shadow windows whose candidate it has compiled, its acknowledgement of them (`windows`, optional, `CTL-10`), and `shadows: false` when its candidate source is not CoSec's own (no window waits for it). Each listed window adds its id to the status, about 20 bytes, so a bulk change of a thousand open windows makes each status about 20 KB larger; a heartbeat writes this one value, whatever the size of the cluster; expires exactly an hour after its last write (no jitter): the readers of the store are the instances with a status from the last hour (`SNP-25`, `GET /instances`), while an instance is live, for a shadow window and `propagation`, only with a status from the last minute. A status that does not decode does not fail the control plane's read: its instance counts as live and acknowledging no window for a minute after its last write, which the key's remaining life tells, and as a reader until the key expires (a value set by hand with no expiry counts only while the instance's entry in `<s>:shadow:instances:all` is current), and every other status is read (`CTL-73`) |
 | `<s>:shadow:resident:<instance>` | data-plane instance `<instance>` only | the documents that instance holds, with the revision of each (`CTL-75`): what `propagation` reads, and nothing else does. A gateway holding 16,384 tenants writes about 0.4 to 0.9 MB here, depending on the length of its tenant ids, but only when what it holds changes (an install, an eviction, a new revision), and in any case every 30 minutes; written before the status; expires exactly 1 hour after its last write (no jitter). A write that fails is tried again every report interval |
 | `<s>:shadow:instances:all` | every data-plane instance | the instances that have a status, each with when it listed itself; an instance lists itself when it starts and again every hour, and whoever writes the list drops entries older than 3 hours; expires as the reports |
 | `<s>:token:revoked:<tokenId>` | `TokenRevoker` (logout), through `TokenStore.revoke`, which takes the token's `jti`: an application logs out through `TokenRevoker`, never through the store | `true` for a revoked token id; expires one second after the refresh token lifetime |
@@ -118,6 +118,16 @@ process serving social login needs as `SNP-3` does) counted at 512 bytes a sign-
 sign-ins in progress. Past it a start is refused and writes nothing. When Redis reports neither, the bound is 100,000
 (about 50 MB), with a WARN. The startup line says which. Rate limit the start route at the edge as well.
 
+- **What two releases share on one Redis is frozen within 8.x** (`SNP-26`, RFC 0014 R6): how each key above is derived
+  from its inputs (the rate limit buckets, the revocations, the API keys, the documents, the sessions and their index, the
+  social sign-ins, the instances' status, and what the control plane's replicas share: revisions and their index, the
+  staging slots, changes and their sets, back-references, the document and app lists, leases, candidates and shadow
+  reports), the fields the rate limit, session index and social count scripts store and how they cut a window, the
+  shape of the lists before 8.0.0-beta.5 (`<s>:control:list:*`, which 8.x still reads), and the invalidation channels
+  below. Those lists are bare: a JSON object of entry to time, with no `format` member, so they cannot take a new member
+  and can change only by moving to a new key space. Instances of two releases in one deployment therefore read
+  and write the same keys, so a rolling upgrade never counts a client twice, never misses a revocation the other release
+  wrote, and never loses a document. A later 8.x release that counts or derives a key another way uses a new key space.
 - When several deployments share one Redis, give each its own `cosec.key-prefix`: with different prefixes they share no
   key, so an API key one issues is never accepted by the other, and their rate limit counters stay apart.
 - Every key except the rate-limit counters, the API keys and the OAuth states is a CoCache 8 value. CoCache splits each
@@ -135,29 +145,40 @@ sign-ins in progress. Past it a start is refused and writes nothing. When Redis 
 ### When a reader does not know a record's format {#record-formats}
 
 Every record CoSec keeps in Redis says how it reads when the instance reading it is older or newer than the one that
-wrote it (`CTL-53`, `IDN-31`). Most records carry `"format": <n>`:
+wrote it (`CTL-53`, `IDN-31`, `SNP-27`). Most records carry `"format": <n>`:
 - a record without one was written before formats, and is format 1;
-- of a format the reader knows, it reads the members it knows and ignores the others;
-- a later format is refused, as a format error, never read as absent.
+- of a format the reader knows, it reads the members it knows and ignores the others, unless the record's `crit` names
+  one: a list of the members a reader must understand, each a path from the record's root (`root`, `approval.covers`);
+- a member `crit` names that the reader does not know refuses that one record, as one a later version wrote: it is
+  neither read nor rewritten, and the other records read as before;
+- a later format is refused the same way, as a format error, never read as absent.
 
-A member a minor release adds within a format is optional, and an older instance may drop it when it rewrites the
-record. Anything an older instance must not drop or ignore comes with a new format, which older readers refuse. The
-decision inputs stay strict: they carry no such tolerance.
+A member a minor release adds within a format is optional, and an older instance drops it when it rewrites the
+record. So a member whose being ignored, or dropped in such a rewrite, would widen anything is added with `crit`: an
+older instance refuses the record instead, and the store never holds less than a pure newer deployment would have left
+(RFC 0014 G5). Each kind of record lists every member, what its absence means and whether ignoring or dropping it
+widens, beside its codec (`SNP-28`). Format numbers change only with a major version (`SNP-29`): within 8.x a session
+is format 2 at most and every other record format 1. CoSec's 8.0 writers write no `crit`. Every refusal is counted
+by `cosec.stored.refused` (`OBS-12`), `later` for a record a later version wrote, apart from `malformed`. A record of
+the control plane or of a shadow window that a later version wrote makes the call that read it a `503` without detail,
+never the `500` of a record that does not read, and the instance says so in its log
+([Troubleshooting](./troubleshooting.md#a-record-a-later-version-wrote)). The decision inputs stay strict: they carry
+no such tolerance.
 
-| Record | Format | A member it does not know | A later format, or a value it cannot read |
+| Record | Format | A member it does not know | A value it cannot read |
 |---|---|---|---|
 | Policy document: head and revision record | `schema: 2` | refused | the document fails closed (`503` for the requests that need it) |
-| Change request (`control:change:<id>`) | `format: 1` | ignored | the change is unreadable: `GET /changes/{id}` is a `500`, and no revision is reclaimed while it is listed open |
-| Staging slot (`control:stage:<doc>`) | `format: 1` | ignored | staging that document is refused (`500`) until the slot reads again |
-| Revision index (`control:revisions:<doc>`) | `format: 1` | ignored | that document's publishes and history are a `500` |
-| App list (`control:apps:all`) | `format: 1` | ignored | untrusted: every app a grant reaches is unknown, and the grant waits for approval |
+| Change request (`control:change:<id>`) | `format: 1` | ignored, unless its `crit` names it | the change is unreadable: `GET /changes/{id}` is a `503`, and no revision is reclaimed while it is listed open |
+| Staging slot (`control:stage:<doc>`) | `format: 1` | ignored, unless its `crit` names it | staging that document is refused (`500`) until the slot reads again |
+| Revision index (`control:revisions:<doc>`) | `format: 1` | ignored, unless its `crit` names it | that document's publishes and history are a `500` |
+| App list (`control:apps:all`) | `format: 1` | ignored, unless its `crit` names it | untrusted: every app a grant reaches is unknown, and the grant waits for approval |
 | Back-reference member (`control:refs:*`) | member grammar | refused | the set is unreadable and the check it serves fails closed (`CTL-42`) |
 | Staged-list member (`candidate-staged:all`) | member grammar | skipped | skipped |
-| Staged candidate (`candidate:<doc>`) | `format: 1` | ignored | the instance skips it and reports nothing for its window, which cannot pass on it |
-| Shadow report (`shadow:report:<window>:<instance>`) | `format: 1` | ignored | the window cannot be looked at (`503`) until the report reads or is written again |
-| Reporters of a window (`shadow:reporters:<window>`) | `format: 1` | ignored | the window cannot be judged until it is written again |
-| Instance status and its index (`shadow:status:*`) | `format: 1`, with `formatLevel` | ignored | the propagation of a revision cannot be read (`GET .../propagation`); publishing does not wait for it; no shadow window passes until it can be read (`CTL-10`) |
-| Session (`token:family:<id>`) | `format: 1`; `format: 2` for a session a tenant switch started, which names its `root` (`IDN-36`) | ignored | the session ends: its refresh is refused and the user signs in again |
+| Staged candidate (`candidate:<doc>`) | `format: 1` | ignored, unless its `crit` names it | the instance skips it and reports nothing for its window, which cannot pass on it |
+| Shadow report (`shadow:report:<window>:<instance>`) | `format: 1` | ignored, unless its `crit` names it | the window cannot be looked at (`503`) until the report reads or is written again |
+| Reporters of a window (`shadow:reporters:<window>`) | `format: 1` | ignored, unless its `crit` names it | the window cannot be judged until it is written again |
+| Instance status and its index (`shadow:status:*`) | `format: 1`, with `formatLevel`; `release` from 8.0.0-beta.9, absent read as an unknown release, which nothing in 8.0 counts or waits on | ignored, unless its `crit` names it | the propagation of a revision cannot be read (`GET .../propagation`); publishing does not wait for it; no shadow window passes until it can be read (`CTL-10`) |
+| Session (`token:family:<id>`) | `format: 1`; `format: 2` for a session a tenant switch started, which names its `root` (`IDN-36`) | ignored, unless its `crit` names it: then refused | the refresh, logout or switch that read it is a `503` and the session is kept; an upgraded instance reads it ([Troubleshooting](./troubleshooting.md#a-record-a-later-version-wrote)) |
 | API key (`apikey:*`) | `format: 3` | refused | the key is refused |
 | Revocations, leases, rate-limit counters | none (scalar) | not applicable | as each says above |
 
@@ -297,6 +318,12 @@ read as the loader's answer, so a data-plane credential could grant roles throug
 instance only (`MEM-5`, DR1-D-2); nothing reads those keys, and you may delete them. A Redis ACL can hold each side
 to the table:
 
+- **Every CoSec process with `cosec-cocache` writes its own status** (`SNP-25`): a data-plane instance with shadowing
+  off, the control-plane image, an IAM service behind a gateway (`cosec.pipeline.mode=gateway` with JWT on) as much as a
+  shadowing instance. Its user needs write permission on its own `<s>:shadow:status:<instance>` and
+  `<s>:shadow:resident:<instance>`, and on `<s>:shadow:instances:*`. One without it keeps serving: it logs the missing
+  permission once at `ERROR`, counts each failed write in `cosec.instance.status.failed` and shows `failingSince` on the
+  `cosecInstanceStatus` health indicator; but the control plane cannot see it among the readers of the store.
 - Data-plane credentials: read-only on `<s>:snapshot:*` and `<s>:candidate:*` (`%R~`), write on `<s>:shadow:*`, and
   no access to `<s>:control:*`. An instance that does not run the control plane (no `cosec-control` on its classpath,
   or `cosec.control.enabled=false`) reads the documents and the candidates read-only: CoCache sends those reads as `EVALSHA_RO` (Redis 7.0 or later), so

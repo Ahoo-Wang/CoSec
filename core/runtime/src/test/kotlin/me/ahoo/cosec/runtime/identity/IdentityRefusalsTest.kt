@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.identity
 
@@ -20,7 +20,6 @@ import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.model.scope.HostScope
@@ -119,7 +118,8 @@ class IdentityRefusalsTest {
             """"auth":{"method":"jwt","jti":"t1","exp":${now + 3600}},"iat":$now,"rid":"r1""""
         val headers = listOf(
             "$prefix,\"claims\":{\"$forged\":{}}}",
-            "$prefix,\"$forged\":1}",
+            // A member it does not know is ignored (IDN-41); a forged entry of `crit` is refused unquoted.
+            "$prefix,\"crit\":[\"$forged\"]}",
             "{\"v\":${"a".repeat(5_000)}\nERROR forged}",
         ).map { Base64.getUrlEncoder().withoutPadding().encodeToString(it.encodeToByteArray()) }
         headers.forEach { header ->

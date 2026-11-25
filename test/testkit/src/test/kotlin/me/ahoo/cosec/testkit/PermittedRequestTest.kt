@@ -11,12 +11,9 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class)
-
 package me.ahoo.cosec.testkit
 
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.jwt.JwtSigning
@@ -31,6 +28,7 @@ import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenExpiredException
@@ -75,7 +73,11 @@ class PermittedRequestTest {
     private val password = object : me.ahoo.cosec.login.Authentication<Password> {
         override val credentialsType = Password::class.java
 
-        override suspend fun authenticate(credentials: Password) = TokenSubject(credentials.user, tenant = "acme")
+        override suspend fun authenticate(credentials: Password) = TokenSubject(
+            credentials.user,
+            Identity.Credential.Kind.PERSON,
+            tenant = "acme"
+        )
     }
     private val login = TokenCompositeAuthentication.of(listOf(password, switching), converter, families)
 

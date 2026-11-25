@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
-index 0da6cedc..d261eaf4 100644
+index 3b95ed0e5..0eea440cd 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
-@@ -171,9 +171,6 @@ internal class ApprovalRules(
+@@ -186,9 +186,6 @@ internal class ApprovalRules(
          }
          // An approval by a credential without an id counts for nothing: whether it was revoked cannot be checked.
          approval.credentialId ?: return "the approval does not say what credential its approver approved with"
@@ -14,5 +14,5 @@ index 0da6cedc..d261eaf4 100644
 -            approverTenantProblem(change)?.let { return it }
 -        }
          revoked(approval)?.let { return it }
-         // As the approver authenticated: memberships from the provider are asked about again, so an approver it no
-         // longer knows, or knows as deactivated, does not count (RFC 0009 §4.2); claimed ones stand as recorded.
+         return stillHolds(change, approval, memberships, publisher)
+     }

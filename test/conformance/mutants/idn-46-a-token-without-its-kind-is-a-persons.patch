@@ -1,0 +1,17 @@
+# Rule: IDN-46
+# Mutant: CoSec's verifier reads every token that does not say workload as a person's, so a token an earlier preview issued, or one of a kind it does not know, approves and uses break-glass
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.TokenKindJwtTest
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
+index ad06e44bf..6949ea09d 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
+@@ -75,7 +75,7 @@ internal object Jwts {
+      */
+     fun kindOf(decoded: DecodedJWT): Identity.Credential.Kind {
+         // asString() is null for a missing claim, a null and anything that is not a string
+-        return if (decoded.getClaim(KIND_CLAIM).asString() == PERSON) {
++        return if (decoded.getClaim(KIND_CLAIM).asString() != WORKLOAD) {
+             Identity.Credential.Kind.PERSON
+         } else {
+             Identity.Credential.Kind.WORKLOAD

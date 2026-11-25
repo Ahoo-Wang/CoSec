@@ -1,0 +1,11 @@
+{
+  "id": "IDN-1",
+  "source": "RFC 0009 §4, I2",
+  "statement": "An API key grants nothing of its own: its memberships are its principal's, from the MembershipProvider, narrowed to the key's roles, so a key is never more than its principal.",
+  "level": "pipeline",
+  "pending": null,
+  "guards": [
+    "runtime:ApiKeyAuthenticatorTest#aValidKeyIsItsPrincipal",
+    "runtime:MembershipResolverTest#noCapIsThePrincipalsMemberships"
+  ]
+}

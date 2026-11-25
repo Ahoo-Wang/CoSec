@@ -1,0 +1,10 @@
+{
+  "id": "CTL-17",
+  "source": "RFC 0007 §7.2, §10.2; round-2 review R6",
+  "statement": "When whether the caller may read a change cannot be decided (a store or snapshot read fails), every step that names it is a 503, for a change that exists and for one that does not; 404 stays for a change that does not exist or that the caller may not read.",
+  "level": "control",
+  "pending": null,
+  "guards": [
+    "control:ControlRoundTwoFixesTest#a change whose readability cannot be decided is a 503 at every step, whether or not it exists"
+  ]
+}

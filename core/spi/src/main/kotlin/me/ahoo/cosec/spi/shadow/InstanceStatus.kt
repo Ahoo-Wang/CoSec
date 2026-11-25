@@ -11,11 +11,10 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.spi.shadow
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.time.Instant
 
@@ -24,7 +23,7 @@ import java.time.Instant
  * Small, and written every report interval: the documents it holds are its [ResidentDocuments], a record of their own
  * that only `propagation` reads (`CTL-74`).
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class InstanceStatus(
     val instance: String,
     val at: Instant,
@@ -48,8 +47,16 @@ class InstanceStatus(
      * such member and reads as true: it shadows, and acknowledges nothing.
      */
     val shadows: Boolean = true,
+    /**
+     * The CoSec release this instance runs (`8.0.0-beta.9`, RFC 0014 R5, `SNP-25`): what a later release reads to know
+     * what this one understands, without this one telling it anything else. Null when a status does not say, as one of
+     * a release before it does not: an unknown release, which nothing in 8.0 counts or waits on. Null unless given: a
+     * status rebuilt from what an instance wrote names that instance's release, never the reading process's; the
+     * instance's own reporter passes [RELEASE].
+     */
+    val release: String? = null,
 ) {
-    private fun fields(): List<Any?> = listOf(instance, at, formatLevel, windows, shadows)
+    private fun fields(): List<Any?> = listOf(instance, at, formatLevel, windows, shadows, release)
 
     override fun equals(other: Any?): Boolean = other is InstanceStatus && other.fields() == fields()
 
@@ -57,6 +64,7 @@ class InstanceStatus(
 
     override fun toString(): String = "InstanceStatus(${fields().joinToString()})"
 
+    @InternalCoSecApi
     companion object {
         /**
          * The document format level of this version: 8.0 reads level 1. Not a `const`, so that code compiled against one
@@ -65,5 +73,16 @@ class InstanceStatus(
         @JvmField
         @Suppress("MayBeConst") // on purpose: a const is inlined into the caller's class file
         val FORMAT_LEVEL: Int = 1
+
+        /** Where the build writes the release ([RELEASE]): `cosec-spi`'s own resource, so a repackaged jar keeps it. */
+        const val RELEASE_RESOURCE: String = "META-INF/cosec/release"
+
+        /**
+         * The CoSec release of this process, from [RELEASE_RESOURCE]; null when the resource is not on the class path,
+         * which a status then reports as an unknown release.
+         */
+        @JvmField
+        val RELEASE: String? = InstanceStatus::class.java.classLoader?.getResource(RELEASE_RESOURCE)
+            ?.readText()?.trim()?.takeIf { it.isNotEmpty() }
     }
 }

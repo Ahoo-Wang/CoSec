@@ -1,0 +1,12 @@
+{
+  "id": "CTL-13",
+  "source": "RFC 0007 §6.4, Q1, Q12",
+  "statement": "Creating or revoking a break-glass binding has no shadow window; any other change skips its window only with cosec:skip-shadow and a recorded reason.",
+  "level": "control",
+  "guards": [
+    "control:ShadowWindowTest#break-glass has no window, and skipping one needs a reason that is recorded",
+    "control:ControlAuthorizationTest#an operator who may publish but not skip cannot skip the window",
+    "control:BreakGlassAuthorityTest#skipping a change exempt from the window still needs the right to publish it"
+  ],
+  "pending": null
+}

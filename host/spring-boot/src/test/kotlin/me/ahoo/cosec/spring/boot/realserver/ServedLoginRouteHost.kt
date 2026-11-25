@@ -33,6 +33,7 @@ import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -173,6 +174,7 @@ class ServedLoginRouteHost(
             .web(stack.type)
             .resourceLoader(DefaultResourceLoader(FilteredClassLoader(*(HIDDEN + stack.hidden).toTypedArray())))
             .properties(
+                "server.address=127.0.0.1",
                 "server.port=0",
                 "cocache.backend=memory",
                 "cosec.jwt.secret=served-login-route-secret-served-login-route",
@@ -215,7 +217,9 @@ class ServedLoginRouteHost(
     fun login(user: String): CompositeToken {
         val families = context.getBean(TokenFamilies::class.java)
         val issue = runBlocking { families.start(TenantId.DEFAULT, PrincipalId(user)) }
-        return context.getBean(TokenConverter::class.java).toToken(TokenSubject(user).inSession(issue))
+        return context.getBean(
+            TokenConverter::class.java
+        ).toToken(TokenSubject(user, Identity.Credential.Kind.PERSON).inSession(issue))
     }
 
     fun send(

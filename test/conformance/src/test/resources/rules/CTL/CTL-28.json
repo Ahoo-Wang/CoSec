@@ -1,0 +1,10 @@
+{
+  "id": "CTL-28",
+  "source": "RFC 0007 §10.2; #1275",
+  "statement": "An operation on a document's section reads its fields by the document format's rules: a field of the wrong type or out of range is refused, never made into another value, and an operation states every limit it sets.",
+  "level": "control",
+  "guards": [
+    "control:SectionFieldsHttpTest#a section field of the wrong type is a 400 and proposes nothing - #1275"
+  ],
+  "pending": null
+}

@@ -1,0 +1,12 @@
+{
+  "id": "IDN-18",
+  "source": "RFC 0009 §11.3; round-2 review M2",
+  "statement": "A logout ends the session: TokenRevoker revokes the family and the access token's id, from the access token while it is valid and from the pair (bound as a refresh requires) once it has expired, so no pair of the family refreshes afterwards, the pairs it was refreshed from included. The family is marked revoked, never deleted, until its end.",
+  "level": "pipeline",
+  "pending": null,
+  "guards": [
+    "login:TokenFamiliesTest#logout ends every pair of the family",
+    "cocache:CoCacheTokenFamilyStoreTest#logout on one instance ends the family on the other",
+    "jwt:RefreshTokenFamiliesJwtTest#logout ends every pair of the session"
+  ]
+}

@@ -11,12 +11,11 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.jwt
 
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.route.LoginRouteAnswer
@@ -31,6 +30,7 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.contract.ContractFiles
 import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenExpiredException
@@ -71,7 +71,7 @@ class ClientContractTest {
             .toToken(fullSubject())
         // The smallest subject the converter issues for: no app, no roles, no session (a pair without one is never
         // refreshed). What its tokens carry is always there, the rest is conditional: a client must not assume it.
-        val smallest = converter.toToken(TokenSubject("alice"))
+        val smallest = converter.toToken(TokenSubject("alice", Identity.Credential.Kind.PERSON))
         val file = files.objectNode()
         file.set(
             "access",
@@ -217,6 +217,7 @@ class ClientContractTest {
 
     private fun fullSubject(): TokenSubject = TokenSubject(
         id = "alice",
+        kind = Identity.Credential.Kind.PERSON,
         app = "orders",
         tenant = "acme",
         roles = setOf("reader"),
@@ -225,7 +226,11 @@ class ClientContractTest {
     ).inSession(runBlocking { families.start(TenantId("acme"), PrincipalId("alice")) })
 
     private fun login(user: String = "alice"): CompositeToken = converter.toToken(
-        TokenSubject(user).inSession(runBlocking { families.start(TenantId.DEFAULT, PrincipalId(user)) }),
+        TokenSubject(user, Identity.Credential.Kind.PERSON).inSession(
+            runBlocking {
+                families.start(TenantId.DEFAULT, PrincipalId(user))
+            }
+        ),
     )
 
     private fun body(pair: CompositeToken): ByteArray =
@@ -288,7 +293,7 @@ class ClientContractTest {
         val ACCESS_CLAIMS = mapOf(
             "exp" to READ, "iat" to READ, "sub" to READ, "jti" to READ, "tenantId" to READ, "aud" to READ,
             "attributes" to READ, "roles" to READ, "policies" to READ, "sid" to READ, "auth_time" to READ,
-            "cosec.generation" to IGNORE, "cosec.membership" to IGNORE,
+            "cosec.generation" to IGNORE, "cosec.membership" to IGNORE, "cosec.kind" to IGNORE,
         )
 
         /** Of a refresh token a client reads `exp` alone. */

@@ -16,6 +16,7 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.RegisteredClaims
 import com.auth0.jwt.algorithms.Algorithm
 import com.auth0.jwt.interfaces.DecodedJWT
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.DelegationUnsupportedException
 import me.ahoo.cosec.spi.token.RefreshTokenMismatchException
@@ -53,6 +54,33 @@ internal object Jwts {
      */
     const val TOKEN_USE_CLAIM = "cosec.token"
     const val REFRESH_TOKEN = "refresh"
+
+    /**
+     * Whose the access token is (`IDN-45`): `person`, or `workload`, which every issuer of CoSec writes and a verifier
+     * reads as a workload's when it says anything else or nothing. Not on a refresh token: a refresh keeps the kind of
+     * the access token it is presented with.
+     */
+    const val KIND_CLAIM = "cosec.kind"
+    const val PERSON = "person"
+    const val WORKLOAD = "workload"
+
+    /** [kind] as the [KIND_CLAIM] writes it. */
+    fun kindValue(kind: Identity.Credential.Kind): String =
+        if (kind == Identity.Credential.Kind.PERSON) PERSON else WORKLOAD
+
+    /**
+     * Whose [decoded] is, from its [KIND_CLAIM] (`IDN-46`): a person's only when the claim says exactly `person`. A token
+     * without the claim (one an earlier 8.0 preview issued) or with any other value, a string or not, is a
+     * workload's: the kind that can do less, and never a refusal.
+     */
+    fun kindOf(decoded: DecodedJWT): Identity.Credential.Kind {
+        // asString() is null for a missing claim, a null and anything that is not a string
+        return if (decoded.getClaim(KIND_CLAIM).asString() == PERSON) {
+            Identity.Credential.Kind.PERSON
+        } else {
+            Identity.Credential.Kind.WORKLOAD
+        }
+    }
 
     /** The session a pair belongs to (RFC 0009): OpenID Connect's `sid` and `auth_time`, and CoSec's generation. */
     const val SESSION_CLAIM = "sid"
@@ -92,6 +120,7 @@ internal object Jwts {
             principal = required(decodedAccessToken.subject, "subject"),
             tenant = tenantOf(decodedAccessToken),
             app = appOf(decodedAccessToken),
+            kind = kindOf(decodedAccessToken),
             roles = strings(decodedAccessToken, MembershipClaims.ROLES_KEY),
             policies = strings(decodedAccessToken, MembershipClaims.POLICIES_KEY),
             attributes = attributesOf(decodedAccessToken),

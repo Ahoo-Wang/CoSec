@@ -1,0 +1,11 @@
+{
+  "id": "MEM-2",
+  "source": "RFC 0004 §4.5.2",
+  "statement": "When the MembershipProvider is missing, fails or times out, the decision is Indeterminate(MembershipUnavailable); it never falls back to the token's claims or to no memberships.",
+  "level": "engine",
+  "guards": [
+    "runtime:MembershipResolverTest",
+    "cocache:CoCacheMembershipProviderTest"
+  ],
+  "pending": null
+}

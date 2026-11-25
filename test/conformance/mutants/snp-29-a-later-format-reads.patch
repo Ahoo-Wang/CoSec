@@ -1,0 +1,17 @@
+# Rule: SNP-29
+# Mutant: a format one above the known one reads, as if a format number could change within the major version
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.TokenFamilyMembersTest :document:test --tests me.ahoo.cosec.document.json.StoredCritTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/json/StoredFormat.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/json/StoredFormat.kt
+index 9e1dee986..5d276b241 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/json/StoredFormat.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/json/StoredFormat.kt
+@@ -80,7 +80,7 @@ object StoredFormat {
+             !node.isObject -> "The $what is not an object."
+             format == null -> return 1
+             read == null || read < 1 -> "The $what has a format that is not a positive integer."
+-            read > known -> throw SnapshotFormatException(
++            read > known + 1 -> throw SnapshotFormatException(
+                 "The $what is of format $read, which a later CoSec wrote; this version reads format $known and before.",
+                 Later(null, emptyList()),
+             )

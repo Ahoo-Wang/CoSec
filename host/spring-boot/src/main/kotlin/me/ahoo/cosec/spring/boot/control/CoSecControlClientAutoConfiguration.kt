@@ -20,12 +20,17 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.http.HttpControlService
 import me.ahoo.cosec.control.sdk.ControlService
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.StartupTask
+import me.ahoo.cosec.spring.boot.StartupTaskExclusion
+import me.ahoo.cosec.spring.boot.pipeline.IdentityHeaderLimit
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Import
+import org.springframework.core.env.Environment
 import java.net.http.HttpClient
 
 /**
@@ -39,10 +44,16 @@ import java.net.http.HttpClient
 @ConditionalOnClass(name = [ControlServiceChoice.HTTP_SERVICE])
 @ConditionalOnProperty(ControlServiceChoice.KEY)
 @EnableConfigurationProperties(ControlProperties::class)
+@Import(StartupTaskExclusion::class)
 internal class CoSecControlClientAutoConfiguration {
     /** Replaceable, by a client of the application's own (its `HttpClient`, its TLS). */
     @Bean
     @ConditionalOnMissingBean
     fun cosecControlService(properties: ControlProperties): ControlService =
         HttpControlService(checkNotNull(properties.serviceUrl), HttpClient.newHttpClient(), app = properties.appId)
+
+    /** `IDN-43`: a host that reads the identity relays within what it reads, or does not start. */
+    @Bean
+    fun cosecRelayLimitCheck(environment: Environment): StartupTask =
+        StartupTask.OnCreation { IdentityHeaderLimit.requireRelayWithinReads(environment) }
 }

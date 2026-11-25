@@ -43,7 +43,7 @@ CITATION = re.compile(rf'RFC[ -]?(\d{{4}})\)?(?:\]\([^)]*\))?((?:{SEP}?{REF}(?![
 
 # Rule ids (`ROL-1`, `TNT-3`) are the registry's, whose coverage `:conformance:check` guards; an RFC citation followed
 # by one names the rule, not a label of the RFC.
-RULE_FAMILIES = {p.stem for p in Path('test/conformance/src/test/resources/rules').glob('*.json')}
+RULE_FAMILIES = {p.name for p in Path('test/conformance/src/test/resources/rules').iterdir() if p.is_dir()}
 
 
 def is_rule(ref: str) -> bool:

@@ -1,0 +1,21 @@
+{
+  "id": "CTL-82",
+  "source": "RFC 0007 §5.4, §10.2, §14.2 (maintainer decision 2026-11-23: a control request has no deadline of its own; sentences proposed in the PR)",
+  "statement": "A control request has no deadline of its own: the deadline is its caller's, and it reaches the request by cancellation. In process (LocalControlService) the caller's coroutine runs the request. Over the network, HttpControlService aborts its exchange when its caller is cancelled or its call times out (cancel(true): the JDK client closes an HTTP/1.1 connection, resets an HTTP/2 stream), and the WebFlux control routes, which the service port serves, run the request in a coroutine of the response's subscription, which the server cancels when the connection ends. On a Servlet host the operators' port runs the request to its end on its thread: a servlet container does not tell a handler that its client went away, so a request there ends within its bounded waits, as one cancelled after its head write does. A publish cancelled before its head write publishes nothing and leaves its change as it stood, READY and holding its own slot: a slot belongs to a change, never to a request. What it wrote before the cancellation is left as a failed publish leaves it (RFC 0007 §5.4): a PUBLISHING record with no outcome, a pending entry or record that reclamation removes as an orphan (CTL-72). Publishing the change again publishes it. From the head write on (the write, settling the change, releasing its slot, recording its outcome and what moved meanwhile) it does not respond to cancellation and runs to its end; one that fails there is settled by publishing again, adding no revision (CTL-2). A stage cancelled while it writes its candidate gives its slot back. Every wait of a control request is bounded on its own, those that do not respond to cancellation included, so none outlives its caller by more than its bound: the pipeline's decision by cosec.pipeline.timeout; the forced read of the documents the control checker confirms by the snapshot store read timeout (30 s); a REQUIRED change listener by cosec.pipeline.timeout; the detection of moved heads by its own timeout (1 s); every compare-and-set loop by its attempts (16; 4 authorization batches); each command of the Redis control store by CoCache's command timeout (cocache.redis.command-timeout, 2 s by default), a disconnected client refusing at once. No wait is on another request's release: a held slot is a 409, a held lease is a skipped pass, and an in-process lock is held for one bounded read at most. So no property sets a control request's deadline: what can be computed is not configured, and only the caller knows how long it will wait.",
+  "level": "build",
+  "pending": null,
+  "guards": [
+    "control-http:HttpCallCancellationTest#a cancelled caller closes the exchange it was waiting on - CTL-82",
+    "spring-boot:ControlRequestCancellationTest#a caller that is cancelled cancels the host's request, which publishes nothing and holds nothing - CTL-82",
+    "spring-boot:ControlRequestCancellationTest#a call that times out cancels the host's request, which publishes nothing and holds nothing - CTL-82",
+    "control:ControlServiceCancellationTest#a caller's timeout before the head write publishes nothing and holds nothing more - CTL-82",
+    "control:ControlServiceCancellationTest#a caller cancelled after the head write leaves the change settled, released and recorded - CTL-82",
+    "control:CommittedRevisionTest#a caller cancelled before the head write is cancelled and writes no head - #1263",
+    "control:CommittedRevisionTest#a caller cancelled after the head write stays cancelled, the revision settled - #1263",
+    "control:StageReservationTest#a stage cancelled while writing its candidate gives the slot back and stays cancelled - #1235",
+    "control:ChangeListenersTest#a gated event waits for the REQUIRED listeners, and fails with them",
+    "control:MovedHeadsTest#a detection that does not finish in time is recorded for review",
+    "control:SharedReadTest#calls arriving while a load fails all fail with that one load - CTL-82",
+    "spring-boot:DerivedTimeoutsTest#the values follow the deadlines an operator states"
+  ]
+}

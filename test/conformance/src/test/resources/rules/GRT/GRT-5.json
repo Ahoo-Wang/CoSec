@@ -1,0 +1,14 @@
+{
+  "id": "GRT-5",
+  "source": "RFC 0007 §7.4.3 specialize, 2026-10-30 revision (RC1-2)",
+  "statement": "The analysis reads the grantor's subject.attributes as the engine reads them, the toString() of a value of any JSON type, through the engine's own function.",
+  "level": "control",
+  "properties": [
+    "control:GrantPropertyTest#A5 the grant analysis is sound"
+  ],
+  "guards": [
+    "control:GrantAnalyzerTest",
+    "engine:SubjectAttributesTest"
+  ],
+  "pending": null
+}

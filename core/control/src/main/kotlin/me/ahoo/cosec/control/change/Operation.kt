@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.control.change
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.Catalog
 import me.ahoo.cosec.document.DocumentBudgets
@@ -34,30 +33,34 @@ import me.ahoo.cosec.model.condition.ConditionLimits
  * [me.ahoo.cosec.control.lifecycle.EntryDigest] of the entry as the author last saw it: the operation applies only if
  * the entry is still that, so a replay on a newer head (a rebase) fails instead of overwriting what someone else changed.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 sealed interface Operation {
     /** Adds the policy, or replaces the one of the same id. */
     @InternalCoSecApi
     class PutPolicy(val policy: PolicyDefinition, val ifMatch: String? = null) : Operation
 
+    @InternalCoSecApi
     class RemovePolicy(val id: PolicyId, val ifMatch: String? = null) : Operation
 
     /** Adds the binding, or replaces the one of the same id. */
     @InternalCoSecApi
     class PutBinding(val binding: Binding, val ifMatch: String? = null) : Operation
 
+    @InternalCoSecApi
     class RemoveBinding(val id: BindingId, val ifMatch: String? = null) : Operation
 
     /** Adds the rate limit rule (RFC 0006 §8.1), or replaces the one of the same id. */
     @InternalCoSecApi
     class PutRateLimit(val rule: RateLimitSource, val ifMatch: String? = null) : Operation
 
+    @InternalCoSecApi
     class RemoveRateLimit(val id: String, val ifMatch: String? = null) : Operation
 
     /** Adds the role (RFC 0012 §7.1), or replaces the one of the same id as a whole. */
     @InternalCoSecApi
     class PutRole(val role: RoleDefinition, val ifMatch: String? = null) : Operation
 
+    @InternalCoSecApi
     class RemoveRole(val id: RoleId, val ifMatch: String? = null) : Operation
 
     /** An app document's catalog; `null` removes it. */

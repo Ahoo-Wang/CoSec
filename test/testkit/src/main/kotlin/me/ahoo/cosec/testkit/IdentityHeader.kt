@@ -35,6 +35,7 @@ import me.ahoo.cosec.spi.token.TokenSession
 import me.ahoo.cosec.spi.token.TokenVerifier
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 
 /**
  * The `CoSec-Identity` header ([NAME]) a CoSec gateway forwards to the services behind it, written by CoSec's own
@@ -53,7 +54,6 @@ import java.time.Duration
  * Every form reads what it wrote back as a service does before returning it, so it never hands out a header a
  * service would refuse as malformed.
  */
-@ExperimentalCoSecApi
 object IdentityHeader {
     /** The header's name, `CoSec-Identity`. */
     const val NAME: String = IdentityCodec.HEADER
@@ -88,7 +88,7 @@ object IdentityHeader {
      *
      * @throws IllegalArgumentException when a service would refuse the header as malformed, naming the member (an empty
      * or blank tenant or subject, a role with an unpaired surrogate, a credential issued after it expires), or when it cannot be
-     * written at all (a credential that never expires, a claim that is not a string, number or boolean, more than 8 KB)
+     * written at all (a credential that never expires, a claim that is not a string, number or boolean, more than 6 KB, the writer's limit, `IDN-43`)
      */
     @JvmStatic
     fun of(identity: Identity): String {
@@ -131,30 +131,72 @@ object IdentityHeader {
         roles: Set<String> = emptySet(),
         validFor: Duration = DEFAULT_VALIDITY,
         clock: Clock = Clock.systemUTC(),
+    ): String = forToken(Identity.Credential.Kind.PERSON, validFor, clock) { credential, now ->
+        identity(subject, tenant, app, space, roles, credential, now)
+    }
+
+    /**
+     * What a gateway forwards for a request with CoSec's own token of a workload [subject] (a service, a machine; a login
+     * that declared its token a workload's, `IDN-45`): as [forSubject], with `auth.kind` `workload`. A workload never
+     * approves a change, is never the trust root and has no break-glass, whatever its roles grant (`IDN-34`, `IDN-44`):
+     * the header to test that a service behind the gateway refuses it what only a person may do.
+     *
+     * @throws IllegalArgumentException as [forSubject]
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun forWorkload(
+        subject: String,
+        tenant: String = TenantId.DEFAULT.value,
+        app: String = "",
+        space: String = "",
+        roles: Set<String> = emptySet(),
+        validFor: Duration = DEFAULT_VALIDITY,
+        clock: Clock = Clock.systemUTC(),
+    ): String = forToken(Identity.Credential.Kind.WORKLOAD, validFor, clock) { credential, now ->
+        identity(subject, tenant, app, space, roles, credential, now)
+    }
+
+    /** The header for CoSec's own token of [kind], valid for [validFor] from [clock]'s now, in the scope [scoped] makes. */
+    private fun forToken(
+        kind: Identity.Credential.Kind,
+        validFor: Duration,
+        clock: Clock,
+        scoped: (credential: Identity.Credential, now: Instant) -> Identity,
     ): String {
         require(validFor > Duration.ZERO) { "A credential is valid for a positive duration, not $validFor." }
         val now = clock.instant()
         val credential = Identity.Credential(
             method = Identity.Method.JWT,
+            kind = kind,
             id = RandomIdGenerator.generate(),
             expiresAt = now.plus(validFor),
             issuedAt = now,
             session = TokenSession(RandomIdGenerator.generate(), now, 1),
         )
-        return of(
-            Identity(
-                tenant = tenant,
-                subject = subject,
-                app = app,
-                space = space,
-                roles = roles,
-                credential = credential,
-                issuedAt = now,
-                requestId = RandomIdGenerator.generate(),
-                memberships = Identity.Memberships.NONE,
-            )
-        )
+        return of(scoped(credential, now))
     }
+
+    /** What a gateway forwards of a principal whose roles are all in [space] and who attaches no policy (`IDN-39`). */
+    private fun identity(
+        subject: String,
+        tenant: String,
+        app: String,
+        space: String,
+        roles: Set<String>,
+        credential: Identity.Credential,
+        now: Instant,
+    ): Identity = Identity(
+        tenant = tenant,
+        subject = subject,
+        app = app,
+        space = space,
+        roles = roles,
+        credential = credential,
+        issuedAt = now,
+        requestId = RandomIdGenerator.generate(),
+        memberships = Identity.Memberships.NONE,
+    )
 
     /**
      * What a gateway forwards for a request that carries [token], verified by [verifier] over [revocations] (name
@@ -189,7 +231,13 @@ object IdentityHeader {
             // A routed request: a gateway forwards the identity only to a route that receives it (RC1-49).
             requestAttributes = mapOf(IdentityIssuer.FORWARD_ATTRIBUTE to "true"),
         )
-        val outcome = PermittingHost.pipeline(TokenAuthenticator(verifier, revocations)) {
+        val outcome = PermittingHost.pipeline(
+            TokenAuthenticator(
+                verifier,
+                revocations,
+                acceptUnavailableRevocations = false,
+            )
+        ) {
             forwardIdentity { this.claims = claims }
         }.use { runBlocking { it.evaluate(facts) } }
         check(outcome.status != INTERNAL_ERROR) {

@@ -1,0 +1,15 @@
+{
+  "id": "CTL-50",
+  "source": "Review round 2, R2C-25 (saas-app-change-cost.md); RFC 0007 §7.4.1, §7.4.4",
+  "statement": "What the grant analysis skips as unchanged, a policy or a statement it takes as written before, is identical to the previous version in every member the grant depends on: each member of a policy, a statement and the patterns they hold is compared, or listed with why it need not be, and a statement identical to a previous one narrows it, whatever its condition.",
+  "level": "control",
+  "guards": [
+    "control:GrantPolicyMembersTest#every member is compared or listed with a reason",
+    "control:GrantPolicyMembersTest#a statement's condition removed is analysed",
+    "control:GrantPolicyMembersTest#a path pattern made case insensitive is analysed",
+    "control:GrantPolicyMembersTest#a path pattern matched on the raw path is analysed",
+    "control:GrantPolicyMembersTest#a policy condition removed, or the policy made attachable, is analysed",
+    "control:GrantReflexivityTest#a twin policy is the same policy, and each twin statement narrows its previous one"
+  ],
+  "pending": null
+}

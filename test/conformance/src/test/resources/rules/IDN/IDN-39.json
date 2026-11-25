@@ -1,0 +1,18 @@
+{
+  "id": "IDN-39",
+  "source": "DR2-F-1, DR2-C-1 (the coordinator's ruling and the maintainer's word to add the member, 2026-11-23); RFC 0006 §7, RFC 0007 §10.2 (sentences proposed in the PR)",
+  "statement": "The CoSec-Identity header states the principal's whole memberships: beside `roles` (the roles of the decided space), `memberships` holds its roles in every other space (`spaces`, by space id, the default space's key empty) and the ids of the policies it attaches (`attachments`, in the order its memberships name them). The gateway always writes it, empty when there is nothing more, and so does HttpControlService's relay of a request's caller, unless the identity it relays did not state it (IDN-42); a service identity states it empty. The decided space is never a key of `spaces`, nor `*`; a space names at least one role; a role or an attachment is a non-empty id with no unpaired surrogate, never repeated. A host that decides with policies on the identity (cosec.pipeline.caller=forwarded-identity: a control host, a service port) refuses a header without `memberships` as malformed (400 invalid-request), and builds the caller's memberships from `roles` under the decided space, `memberships.spaces` and `memberships.attachments`, so a DENY attached to the principal, or one that reads a role it holds in another space, applies there as at the gateway and in process; a service that only trusts the gateway does not require it. An identity too large for the header with them is not forwarded: the gateway fails the request (500) and the relay fails the call before it is sent, never cut short.",
+  "level": "pipeline",
+  "pending": null,
+  "guards": [
+    "document:IdentityMembershipsCodecTest#the other spaces and the attachments are read back as written, the default space under its empty key",
+    "document:IdentityMembershipsCodecTest#nothing more is written as empty, never left out, and read back as none",
+    "document:IdentityMembershipsCodecTest#what the reader refuses the writer refuses first, in the same words",
+    "document:IdentityMembershipsCodecTest#too many memberships for the header are counted in the refusal, never cut",
+    "runtime:IdentityMembershipsTest#the gateway forwards every other space's roles and the attachments, each once, in their order",
+    "runtime:IdentityMembershipsTest#a host that decides on the identity reads the memberships the gateway decided with",
+    "runtime:IdentityMembershipsTest#a host that decides on the identity refuses a header that does not state the memberships",
+    "spring-boot:ControlServiceParityTest#a DENY reached through the caller's attachments or other spaces decides alike through both implementations - CTL-77",
+    "spring-boot:ForwardedIdentityCallerTest#a gateway's identity carries the attachments, and a header without memberships is refused - IDN-39"
+  ]
+}

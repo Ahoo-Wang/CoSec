@@ -86,11 +86,12 @@ The rules behind the picture:
   verification and revocation (`TokenVerifier`, `RevocationReader`, `TokenStore`, `TokenRevoker`), API keys, rate
   limiters, attribute providers, authenticators, the forwarded identity, the audit sink, the id generator
   (`IdGenerator`, with its default `RandomIdGenerator`) and the shadow window's candidates and reports
-  (`CandidateStore`, `ShadowReportSink`, `ShadowReportReader`). It depends on
+  (`CandidateStore`, `ShadowReportSink`, `ShadowReportReader`, `@InternalCoSecApi`: CoSec's own, not an extension
+  point). It depends on
   `cosec-model`, `cosec-api`, `cosec-annotations` and kotlinx-coroutines only, so a third party implements a port
   against it alone. A port
   whose signature needs a layer's types stays with that layer: `DecisionListener` and `RequestGate` in
-  `cosec-runtime`; `ControlStore` and `ChangeListener` in `cosec-control`
+  `cosec-runtime`; `ChangeListener` in `cosec-control`, beside the control plane's internal `ControlStore`
   ([Extending](./extending.md)).
 - **`cosec-document`** (directory `core/document/`, `me.ahoo.cosec.document`) holds the formats CoSec stores and
   exchanges: the platform, app and tenant documents with their codec (`PolicyDocumentCodec`) and compiler
@@ -146,8 +147,11 @@ The rules behind the picture:
   format, which `conformance` runs too, so the suite and the applications' tests evaluate scenarios one way.
 - **`cosec-migrate`** converts 7.x data into 8.0 documents and publishes them; no application depends on it.
   **`cosec-gateway-server`** is a ready-to-run gateway built from the starter; it is never published. **`conformance`**,
-  **`architecture`**, **`e2e`**, **`client-host`**, **`system-test`** and **`system-behind`** are test-only modules and
-  are never published either.
+  **`architecture`**, **`compat`**, **`e2e`**, **`client-host`**, **`system-test`** and **`system-behind`** are
+  test-only modules and are never published either.
+  **`compat`** (directory `test/compat/`) is the cross-version fixture (RFC 0014 T): the previous release, as published
+  (`cosec-previous` in `gradle/libs.versions.toml`), runs beside this build in a class loader of its own, and the two
+  read what the other wrote, rewrite it and share counters on one Redis (the `MIX-*` rules).
   **`client-host`** (directory `test/client-host/`) is a real CoSec 8 application, the starter over WebFlux with CoCache
   in memory, that the TypeScript client's tests run against (`pnpm test:host` in `typescript/` starts it).
   **`system-test`** (directory `test/system-test/`) is the system test: the gateway image built from the commit, the
@@ -464,6 +468,7 @@ each with its scenarios or guard tests, and `:conformance:mutationCheck` breaks 
 | **Snapshot caches never expire and throw on failed reads**, whatever a CoCache customizer or property says. | Redis is the store of record; expiry or a swallowed error would silently drop policies. | `CacheTtlPolicyTest`, `StrictCacheFailureTest` |
 | **One revision per document per evaluation**, installed in load order. | A decision must never mix two revisions of one document. | `SnapshotConsistencyPropertyTest`, `SnapshotInstallOrderPropertyTest` |
 | **Hot-path changes come with a JMH before/after.** | Authorization runs on every request. | `EngineAuthorizationBenchmark`, `PipelineBenchmark` (review) |
+| **What two releases share on one Redis is frozen within 8.x**: the key derivations, the scripts' stored fields and the invalidation channels, listed once in `FrozenLayout`; a new derivation or way of counting goes to a new key space. | A mixed deployment would count a client twice, miss a revocation, or lose a document: wider than either release, or a refusal neither makes. | `FrozenLayoutTest`, `FrozenScriptsTest` (beside the frozen scripts), `RedisAuthStateCacheTest`, `SNP-26` |
 | **Public signatures change only on purpose.** Each published module's ABI is in its dump; a change that is not in the dump fails the build. | Applications compile against CoSec and implement its SPIs; a signature change nobody noticed breaks them. | `checkKotlinAbi` (part of `check`), `SpiMarkerTest` |
 
 ## Performance

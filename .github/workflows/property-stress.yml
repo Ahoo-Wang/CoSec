@@ -17,7 +17,7 @@
 # same iterations as one job per module did, and the run lasts as long as its longest class, not its longest module (on
 # 2026-11-22 `:runtime` took 51 of the run's 52 minutes, its classes one after another: docs/reviews/2026-11/ci-efficiency.md). Run it here, never
 # on a developer machine: a million cases per property takes far too long and loads the machine. The modules come
-# from test/conformance/src/test/resources/rules/*.json of the tested ref, the same source build.gradle.kts registers
+# from test/conformance/src/test/resources/rules/<FAMILY>/<ID>.json of the tested ref, the same source build.gradle.kts registers
 # the tasks from, so a new registered property needs no change to this file.
 name: Property stress
 on:
@@ -64,13 +64,10 @@ jobs:
           if not re.fullmatch(r"[1-9][0-9]{0,11}", os.environ["ITERATIONS"]):
               sys.exit("::error::iterations must be a positive integer")
           classes = {}
-          for path in glob.glob("test/conformance/src/test/resources/rules/*.json"):
-              if path.endswith("_meta.json"):
-                  continue
-              for rule in json.load(open(path))["rules"]:
-                  for prop in rule.get("properties", []):
-                      name, test = prop.split(":", 1)  # module:Class#test
-                      classes.setdefault(name, set()).add(test.split("#")[0])
+          for path in glob.glob("test/conformance/src/test/resources/rules/*/*.json"):
+              for prop in json.load(open(path)).get("properties", []):
+                  name, test = prop.split(":", 1)  # module:Class#test
+                  classes.setdefault(name, set()).add(test.split("#")[0])
           dirs = set(classes)
           # Guards name the project (settings.gradle.kts: `:<name>` in `<group>/<name>`); find its directory.
           mods = {}

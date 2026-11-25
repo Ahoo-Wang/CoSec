@@ -28,6 +28,13 @@ import me.ahoo.cosec.runtime.http.RequestSecurity
  * Who asks the control plane (RFC 0007 §10.1): a principal the host pipeline authenticated, with the memberships and
  * token attributes of that request. [security] is the permitted request itself; [PipelineControlAuthorizer] evaluates
  * the control-plane actions as it, and without it nothing is permitted.
+ *
+ * Every operator the control plane decides for is made by [of], with its request. The two made without one never reach
+ * what reads the request's credential ([principalBindings], [breakGlass], whether it is a workload's): a recorded
+ * approver, checked again at publication, is read for its tenant alone (`ApprovalRules`); the publisher an expiry names
+ * settles a change without analysis (`Publishing.writtenBeforeExpiry`, whose moved heads are recorded unanalyzed).
+ * Should a new caller build one without [security] and reach them anyway, each reads the restrictive answer, never a
+ * token's (`IDN-44`): no credential is a workload's, with no principal bindings and no break-glass.
  */
 @InternalCoSecApi
 class Operator(
@@ -63,12 +70,15 @@ class Operator(
 
     /**
      * Whether the operator's principal bindings reach it in this request: not with a credential that has a role cap
-     * (RFC 0009 §4.2). Without a request, which permits nothing anyway, as a token would.
+     * (RFC 0009 §4.2), and not without a request, whose credential says nothing (`IDN-44`).
      */
-    val principalBindings: Boolean get() = security?.principal?.principalBindings ?: true
+    val principalBindings: Boolean get() = security?.principal?.principalBindings ?: false
 
-    /** Whether break-glass could reach the operator in this request: only with CoSec's own token. */
-    val breakGlass: Boolean get() = security?.principal?.breakGlass ?: true
+    /**
+     * Whether break-glass could reach the operator in this request: only with CoSec's own token, a person's; never
+     * without a request (`IDN-44`).
+     */
+    val breakGlass: Boolean get() = security?.principal?.breakGlass ?: false
 
     override fun toString(): String = "Operator(${actor.principal.value}@${actor.tenant.value})"
 

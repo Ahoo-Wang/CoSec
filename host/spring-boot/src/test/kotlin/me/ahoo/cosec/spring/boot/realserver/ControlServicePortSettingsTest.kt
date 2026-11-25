@@ -38,12 +38,14 @@ import org.springframework.boot.builder.SpringApplicationBuilder
 import org.springframework.boot.context.annotation.ImportCandidates
 import org.springframework.boot.reactor.netty.NettyReactiveWebServerFactory
 import org.springframework.boot.test.context.FilteredClassLoader
+import org.springframework.boot.web.server.autoconfigure.ServerProperties
 import org.springframework.context.ConfigurableApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
 import org.springframework.core.io.DefaultResourceLoader
+import org.springframework.util.unit.DataSize
 import org.springframework.web.reactive.function.server.RouterFunction
 import org.springframework.web.reactive.function.server.RouterFunctions
 import org.springframework.web.reactive.function.server.ServerResponse
@@ -135,6 +137,68 @@ class ControlServicePortSettingsTest {
             val own = ControlServiceServer.factory(context, 0)
             own.address.assert().isEqualTo(InetAddress.getByName("127.0.0.1"))
         }
+    }
+
+    /**
+     * `IDN-43`, `CTL-71`: a host that reads the identity gets a request-header limit derived from what it reads
+     * (`cosec.pipeline.identity.max-size` and 8 KB for the rest), and the service port, the application's server on
+     * another port, has it too: a request whose headers pass Spring Boot's default 8 KB reaches the gate on either
+     * port. A host that does not read the identity keeps the server's own default, which refuses that request.
+     */
+    @Test
+    fun `a host that reads the identity derives its header limit, on the service port as on its own - IDN-43`() {
+        withoutGateway {
+            start(
+                "cosec.pipeline.caller=forwarded-identity",
+                "cosec.pipeline.identity.only-trusted-callers-can-reach=true",
+                "cosec.jwt.enabled=false",
+                "cosec.authorization.snapshot.eviction-check=warn",
+            )
+        }.use { context ->
+            context.serverLimit().assert().isEqualTo(DataSize.ofKilobytes(16))
+            val application = context.environment.getRequiredProperty("local.server.port").toInt()
+            val service = context.environment.getRequiredProperty("local.control.service.port").toInt()
+            for ((name, port) in listOf("application" to application, "service" to service)) {
+                statusWithPadding(port, PADDING).assert().describedAs("the $name port")
+                    .isEqualTo(statusWithPadding(port, 0))
+            }
+        }
+        start().use { context ->
+            context.serverLimit().assert().isEqualTo(DataSize.ofKilobytes(8))
+            val service = context.environment.getRequiredProperty("local.control.service.port").toInt()
+            statusWithPadding(service, PADDING).assert().isNotEqualTo(statusWithPadding(service, 0))
+        }
+    }
+
+    private fun ConfigurableApplicationContext.serverLimit(): DataSize =
+        getBean(ServerProperties::class.java).maxHttpRequestHeaderSize
+
+    /**
+     * [block] with Spring Cloud Gateway hidden from the thread's class loader too: the guard that refuses a host believing
+     * the identity on a gateway looks the gateway up there, not through the application's resource loader.
+     */
+    private fun <T> withoutGateway(block: () -> T): T {
+        val thread = Thread.currentThread()
+        val previous = thread.contextClassLoader
+        thread.contextClassLoader = FilteredClassLoader(GATEWAY_GLOBAL_FILTER)
+        return try {
+            block()
+        } finally {
+            thread.contextClassLoader = previous
+        }
+    }
+
+    /** The status of a `GET` of the control API on [port], with a header of [padding] bytes besides. */
+    private fun statusWithPadding(port: Int, padding: Int): Int = Socket("127.0.0.1", port).use { socket ->
+        socket.soTimeout = SOCKET_MILLIS
+        socket.getOutputStream().apply {
+            val request = "GET $BASE/documents/tenant:acme HTTP/1.1\r\nHost: localhost\r\n" +
+                "X-Padding: ${"x".repeat(padding)}\r\nConnection: close\r\n\r\n"
+            write(request.encodeToByteArray())
+            flush()
+        }
+        val line = socket.getInputStream().bufferedReader().readLine()
+        checkNotNull(line) { "the connection closed before a response" }.split(' ')[1].toInt()
     }
 
     @Test
@@ -239,6 +303,9 @@ class ControlServicePortSettingsTest {
             "me.ahoo.cosec.ip2region",
         )
         val properties = listOf(
+            // One address for the binds and the requests (#1962): bound to every address on a port the system chose, a
+            // server shares that port with any process bound to one address on it, which then takes its connections.
+            "server.address=127.0.0.1",
             "server.port=0",
             "cosec.control.http.service-port=0",
             "cocache.backend=memory",
@@ -268,7 +335,7 @@ class ControlServicePortSettingsTest {
     }
 
     private fun request(scheme: String, port: Int): HttpRequest =
-        HttpRequest.newBuilder(URI.create("$scheme://localhost:$port/cosec/control/v1/documents/tenant:acme"))
+        HttpRequest.newBuilder(URI.create("$scheme://127.0.0.1:$port/cosec/control/v1/documents/tenant:acme"))
             .timeout(Duration.ofSeconds(TIMEOUT_SECONDS)).GET().build()
 
     private fun client(context: SSLContext?): HttpClient =
@@ -322,6 +389,9 @@ class ControlServicePortSettingsTest {
 
     private companion object {
         const val PASSWORD = "changeit"
+
+        /** Past Spring Boot's default 8 KB of request headers, within the 16 KB derived for a host reading identities. */
+        const val PADDING = 10 * 1024
         const val TIMEOUT_SECONDS = 10L
         const val BASE = "/cosec/control/v1"
         const val OK = 200

@@ -1,17 +1,17 @@
 # Rule: APR-7
-# Mutant: a credential named service is not a workload's: a service's own identity approves like a person
+# Mutant: whose a credential is goes unread, and only a credential named api-key is a workload's: a service's own identity approves like a person
 # Tests: :spi:test --tests me.ahoo.cosec.spi.authn.AuthenticatedPrincipalTest :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
-index cbc2a0acc..131c9b8ae 100644
+index a328bd730..eeafb650e 100644
 --- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
 +++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
-@@ -270,7 +270,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
-      * control plane's trust root (RC1-11); a host's own authenticator for workloads should not be given `cosec:approve`
-      * either, or should name its credential `service`.
+@@ -271,7 +271,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
+      * provenance. A workload never approves a change, is never the control plane's trust root (RC1-11) and never uses
+      * break-glass. What the credential is named, its method, decides nothing: it is a label.
       */
--    val workload: Boolean get() = apiKey || credential?.method == Identity.Method.SERVICE
-+    val workload: Boolean get() = apiKey
+-    val workload: Boolean get() = apiKeyCredential || credential?.kind != Identity.Credential.Kind.PERSON
++    val workload: Boolean get() = apiKeyCredential || credential?.method == Identity.Method.API_KEY
  
      /** The claimed memberships; null when they come from the provider or cannot be used. */
      val memberships: Memberships? get() = (membershipSource as? MembershipSource.Claims)?.memberships

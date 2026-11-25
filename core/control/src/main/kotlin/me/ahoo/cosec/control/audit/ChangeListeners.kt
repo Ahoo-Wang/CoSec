@@ -129,7 +129,7 @@ class ChangeListeners(
             } else if (!queue.put(event, bytes, requiredTimeout)) {
                 queue.lose()
                 log.error {
-                    "Change event ${event.kind} of change ${event.change.value} on ${event.document} was not handed to " +
+                    "Change event ${event.kind} of change ${event.change} on ${event.document} was not handed to " +
                         "REQUIRED change listener [${queue.listener.name}]: its queue stayed full for $requiredTimeout " +
                         "(${queue.depth} events, ${mib(queue.bytes)}). The step is stored; this listener misses the event."
                 }
@@ -205,7 +205,7 @@ class ChangeListeners(
         if (gated && required.isNotEmpty()) {
             throw ChangeAuditException("The control plane is stopping: no REQUIRED change listener can record $event.")
         }
-        val why = "arrived while the change listeners drained at shutdown: ${event.kind} of change ${event.change.value}"
+        val why = "arrived while the change listeners drained at shutdown: ${event.kind} of change ${event.change}"
         queues.forEach { queue ->
             queue.keep(1)
             kept(queue, 1, why)

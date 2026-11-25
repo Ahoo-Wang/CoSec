@@ -1,0 +1,14 @@
+{
+  "id": "IDN-9",
+  "source": "RFC 0006 §7.3 (RC1-18)",
+  "statement": "On a host that decides with policies (cosec.pipeline.mode=enforce), no adapter hands a handler a CoSec-Identity header a client sent: every permit of the pipeline strips it, and WebMvc, WebFlux and the gateway apply that alike. A service behind a gateway (mode gateway) keeps the header its gateway sent.",
+  "level": "build",
+  "pending": null,
+  "guards": [
+    "spring-boot:WebAdapterParityTest#the three adapters hand on no client identity",
+    "spring-boot:RealServerParityTest#every server answers alike",
+    "webflux:PipelineWebFilterTest#aPermitHandsOnNoClientIdentity",
+    "webmvc:PipelineServletFilterTest#aPermitHandsOnNoClientIdentity",
+    "runtime:IdentityForwardingTest#without an issuer a permit strips the client's identity and forwards none"
+  ]
+}

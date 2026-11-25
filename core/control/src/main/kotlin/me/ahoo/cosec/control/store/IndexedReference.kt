@@ -13,12 +13,12 @@
 
 package me.ahoo.cosec.control.store
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /** A reference a document indexed: [policy] of [target], as [ReferrerEntry] of that document at [revision]. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 data class IndexedReference(
     val target: SnapshotKey,
     val policy: PolicyId,

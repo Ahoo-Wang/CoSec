@@ -93,6 +93,9 @@
 'module: conformance':
   - changed-files:
       - any-glob-to-any-file: 'test/conformance/**'
+'module: compat':
+  - changed-files:
+      - any-glob-to-any-file: 'test/compat/**'
 'module: spring-boot':
   - changed-files:
       - any-glob-to-any-file: 'host/spring-boot/**'

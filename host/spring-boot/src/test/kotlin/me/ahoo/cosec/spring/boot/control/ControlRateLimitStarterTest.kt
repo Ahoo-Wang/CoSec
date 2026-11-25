@@ -30,6 +30,7 @@ import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
@@ -121,7 +122,15 @@ class ControlRateLimitStarterTest {
 
     private fun token(context: ApplicationContext, tenant: String, id: String): String =
         context.getBean(TokenConverter::class.java)
-            .toToken(TokenSubject(id, app = "cosec-control", tenant = tenant, roles = setOf("admin")))
+            .toToken(
+                TokenSubject(
+                    id,
+                    Identity.Credential.Kind.PERSON,
+                    app = "cosec-control",
+                    tenant = tenant,
+                    roles = setOf("admin")
+                )
+            )
             .accessToken
 
     private fun WebTestClient.simulate(token: String, tenant: String, suffix: String = ""): Pair<Int, String> {

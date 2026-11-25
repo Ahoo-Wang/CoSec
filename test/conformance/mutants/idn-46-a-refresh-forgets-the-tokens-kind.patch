@@ -1,0 +1,17 @@
+# Rule: IDN-46
+# Mutant: a refresh with the claims kept issues from a subject declared a person's, so a workload's session becomes a person's at its first refresh
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.TokenKindJwtTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenSubject.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenSubject.kt
+index f20204761..5745a374a 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenSubject.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenSubject.kt
+@@ -95,7 +95,7 @@ class TokenSubject(
+         fun of(token: VerifiedToken, issue: TokenFamilies.Issue? = null): TokenSubject = TokenSubject(
+             id = token.principal,
+             // The kind the presented token carries, never one an application's hook gives (IDN-46).
+-            kind = token.kind,
++            kind = Identity.Credential.Kind.PERSON,
+             app = token.app,
+             tenant = token.tenant,
+             roles = token.roles,

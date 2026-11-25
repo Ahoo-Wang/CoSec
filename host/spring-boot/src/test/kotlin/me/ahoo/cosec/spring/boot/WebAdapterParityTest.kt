@@ -68,6 +68,7 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -246,11 +247,12 @@ class WebAdapterParityTest {
 
     private val slashTenantTokens = TokenAuthenticator(
         object : TokenVerifier {
-            override fun verify(accessToken: String) = VerifiedToken("jti", "alice", "acme/west", null)
+            override fun verify(accessToken: String) = VerifiedToken("jti", "alice", "acme/west", null, PERSON)
 
             override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
         },
         RevocationReader.NONE,
+        acceptUnavailableRevocations = false,
     )
 
     private val authenticator = Authenticator { credentials ->
@@ -692,7 +694,7 @@ class WebAdapterParityTest {
             app = "",
             space = "",
             roles = setOf("clerk"),
-            credential = Identity.Credential(Identity.Method.JWT, "t1", Instant.now().plusSeconds(3600)),
+            credential = Identity.Credential(Identity.Method.JWT, PERSON, "t1", Instant.now().plusSeconds(3600)),
             issuedAt = Instant.now(),
             requestId = "r1",
         )

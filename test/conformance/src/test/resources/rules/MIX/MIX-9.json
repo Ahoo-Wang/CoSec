@@ -1,0 +1,10 @@
+{
+  "id": "MIX-9",
+  "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 9",
+  "statement": "Social login states and their count are frozen within the major version (RFC 0014 R6, SNP-26): states recorded by either version are counted together, and one version takes what the other recorded.",
+  "level": "build",
+  "guards": [
+    "compat:CounterCompatTest#login states are counted together, and one version takes what the other recorded"
+  ],
+  "pending": null
+}

@@ -626,11 +626,12 @@ probes `/livez` and `/readyz` on the gateway's own port.
 
 On an application, WebFlux or WebMvc, an actuator endpoint is a request like any other: where CoSec's filter stands,
 nothing is let through without a policy, and until the first platform document is installed every request is `503`. What
-the filter fronts depends on the server (`STA-4`; the cells are asserted against real servers in `ManagementPortTest`):
+the filter fronts depends on the server, and on WebFlux on what it runs (`STA-4`; the cells are asserted against real servers in `ManagementPortTest`, the forwarded-identity row in `ControlServerTest`):
 
 | Server | The application port | A separate `management.server.port` |
 |---|---|---|
-| WebFlux | CoSec's: the probes are `503` before the first platform document, `401` for an anonymous caller after it | CoSec's too: Spring Boot's management server collects the application's `WebFilter`s and `RouterFunction`s, so the pipeline fronts it, and the application's own functional routes are served there behind it (an application controller is a `404`); CoSec's own routes, the control API and the login routes, are a `404` there (`CTL-69`) |
+| WebFlux, a pipeline that decides (`enforce` with `caller: credential`) | CoSec's: the probes are `503` before the first platform document, `401` for an anonymous caller after it | CoSec's too: Spring Boot's management server collects the application's `WebFilter`s and `RouterFunction`s, so the pipeline fronts it, and the application's own functional routes are served there behind it (an application controller is a `404`); CoSec's own routes, the control API and the login routes, are a `404` there (`CTL-69`). Never probe it over HTTP: give it a `tcpSocket` probe |
+| WebFlux, a gate of the forwarded identity (`gateway` mode, or `caller: forwarded-identity`, as the control-plane image) | CoSec's gate, as on the management port | CoSec's gate too, collected as above: a request without `CoSec-Identity` passes as anonymous and the gate decides nothing, so the probes answer as Spring's own (liveness `200`; on a host that holds documents, as the control-plane image, readiness `503` until they are installed; a service in `gateway` mode holds none, so its readiness waits for none); a malformed, repeated, oversized or expired identity header, or a `crit` the host does not know, is still refused (`400`, `401`, `503`). Probes over HTTP work here; CoSec's own routes are a `404` there (`CTL-69`) |
 | WebMvc | CoSec's, as on WebFlux | Outside CoSec: actuator's endpoints are Spring's own (liveness `200`; readiness `503` until the documents are installed, then `200`), and a controller, a functional route, the control API and the login routes are a `404` |
 | Gateway ([its own section](#actuator-on-a-gateway)) | the gateway's routes only | Outside CoSec: actuator's endpoints are Spring's own and the gateway's routes are not served; neither is the control API |
 
@@ -752,17 +753,18 @@ behind the gateway refuses that filter at startup (`STA-6`); turn it off in any 
 | `tenant`, `sub` | The tenant and principal the gateway verified. |
 | `scope` | `{app, space}`, as the gateway resolved them. |
 | `roles` | The principal's roles in that space, by their bare names: those the decision used. The scope's roles, not every role of the token (the token's `roles` claim lists the roles of every space as `role@space`). |
-| `memberships` | `{spaces, attachments}` (`IDN-39`): what else the principal is a member of. `spaces` holds its roles in every other space, by space id (the default space's key is empty), never the scope's own space; `attachments` the ids of the policies it attaches, in the order its memberships name them. Always written, `{"spaces":{},"attachments":[]}` when there is nothing more: its presence says the memberships are whole. A host that decides with policies on the identity (`cosec.pipeline.caller=forwarded-identity`: a control host, a service port) refuses a header without it, and decides with all of it, so a DENY attached to the principal, or one that reads a role it holds in another space (`subject.roles`), applies there as at the gateway. |
-| `auth` | `{method, jti, exp, iat, capped, session}`: how the principal authenticated (`jwt` and `api-key` are CoSec's own; any other non-empty name is read as it is, so a gateway with another authenticator works), the token's `jti` or the key's id, the credential's expiry, and when it was issued (`iat`, absent when the credential does not say, never after `exp`); `session` only for CoSec's own token (`jwt`): its `sid`, `auth_time` (when the user signed in) and `generation`, so that a service behind the gateway knows the login time and a [tenant switch](./authentication.md#switching-tenant-and-app) there can issue from it; `capped: true` only for a credential with a role cap, which then gets no grant from principal bindings or attachments behind the gateway either (their DENYs still apply). Only `jwt`, which a gateway forwards for CoSec's own token alone, gets break-glass. Never the credential itself. |
+| `memberships` | `{spaces, attachments}` (`IDN-39`): what else the principal is a member of. `spaces` holds its roles in every other space, by space id (the default space's key is empty), never the scope's own space; `attachments` the ids of the policies it attaches, in the order its memberships name them. Written by the gateway always, `{"spaces":{},"attachments":[]}` when there is nothing more: its presence says the memberships are whole. `HttpControlService`'s relay of a request's caller writes it only when the identity it relays stated it (`IDN-42`): a hop never states what it did not receive. A host that decides with policies on the identity (`cosec.pipeline.caller=forwarded-identity`: a control host, a service port) refuses a header without it, and decides with all of it, so a DENY attached to the principal, or one that reads a role it holds in another space (`subject.roles`), applies there as at the gateway. |
+| `auth` | `{method, kind, jti, exp, iat, capped, session}`: how the principal authenticated (`jwt` and `api-key` are CoSec's own; any other non-empty name is read as it is, so a gateway with another authenticator works, and decides nothing), whose credential it is (`kind`: `person`, or a workload's for any other value or none, which never approves, is never the trust root and has no break-glass, `IDN-44`; CoSec's writers always write it, and a header that declares an `api-key` or `service` credential a person's is refused with `400`), the token's `jti` or the key's id, the credential's expiry, and when it was issued (`iat`, absent when the credential does not say, never after `exp`); `session` only for CoSec's own token (`jwt`): its `sid`, `auth_time` (when the user signed in) and `generation`, so that a service behind the gateway knows the login time and a [tenant switch](./authentication.md#switching-tenant-and-app) there can issue from it; `capped: true` only for a credential with a role cap, which then gets no grant from principal bindings or attachments behind the gateway either (their DENYs still apply). Only `jwt` of a person, which a gateway forwards for CoSec's own token alone, gets break-glass. Never the credential itself. |
 | `iat` | When the gateway made the header, in epoch seconds. |
 | `rid` | The gateway's request id. |
 | `claims` | Only the principal attributes named in `cosec.gateway.identity.claims` (the token's `attributes` claim; an API key gives only `apiKeyId`): strings, booleans and numbers. A `Byte`, `Short`, `Int`, `Long`, or `BigInteger` within a `Long` travels as an integer; a finite `Float` or `Double`, or a `BigDecimal` a `Double` holds exactly, as a number. |
+| `crit` | The paths of the members a reader must understand (`IDN-41`), such as `"auth.kind"`. A reader ignores every member it does not know, at any level, unless this list names it; one it names and does not know is refused with `503` `unavailable`, since a later version wrote it. Absent from every 8.0 writer: every 8.0 member is one every 8.x reader knows. |
 
 It never carries the token, the API key, cookies or other request headers, the content of a policy (only the ids of
 those the principal attaches), the matched statement, external attribute values or the client IP.
 
 **It fails closed.** The request is `500` `internal-error`, logged, and nothing is truncated, when the identity is
-larger than `cosec.gateway.identity.max-size` (8 KB), when a named claim is not a string, boolean or such a number (a
+larger than `cosec.gateway.identity.max-size` (6 KB), when a named claim is not a string, boolean or such a number (a
 number the header cannot hold exactly, `NaN` or an infinity included) or is longer than 1024 characters, or when the credential never expires (such as an [API key](./authentication.md#api-keys)
 without `expires-at`): a service could not bound such an identity.
 
@@ -811,9 +813,10 @@ decided the request line's method and removes the method-override headers from w
 |---|---|
 | No `CoSec-Identity` | Proceeds as the anonymous principal `(0)`; your code decides what it may see. |
 | A valid identity | Proceeds as that principal, in that scope. |
-| Not readable (not base64url, not the format, an unknown or duplicate member, a repeated role, `iat` or `exp` past year 9999), sent more than once, larger than `cosec.pipeline.identity.max-size` (8 KB), or a scope that does not resolve here (such as an app other than `cosec.authorization.scope.app-id`) | `400` `invalid-request` |
-| On a host that decides with policies on the identity (`cosec.pipeline.caller=forwarded-identity`), no `memberships` (`IDN-39`): an older gateway's header, or one an application wrote without them | `400` `invalid-request` |
+| Not readable (not base64url, not the format, a duplicate member, a malformed `crit`, a repeated role, `iat` or `exp` past year 9999), sent more than once, larger than `cosec.pipeline.identity.max-size` (8 KB), or a scope that does not resolve here (such as an app other than `cosec.authorization.scope.app-id`) | `400` `invalid-request` |
+| On a host that decides with policies on the identity (`cosec.pipeline.caller=forwarded-identity`), no `memberships` (`IDN-39`): an older gateway's header, one an application wrote without them, or a relayed caller whose own header had none (`IDN-42`). The control plane's in-process facade refuses such a caller alike | `400` `invalid-request` |
 | An unknown version, an `iat` in the future, or no `auth.exp` | `401` `token-invalid` |
+| A member `crit` names that this service does not know (`IDN-41`): a gateway of a later version wrote it. Counted as `cosec.identity.refused{problem=unavailable}`, and logged naming the member; upgrade the service | `503` `unavailable` |
 | `auth.exp` passed, or `iat` older than `cosec.pipeline.identity.max-age` (60 seconds) | `401` `token-expired` |
 
 The time checks allow `cosec.authentication.revocation.skew` (5 seconds) for the gateway's clock. The maximum age
@@ -842,7 +845,7 @@ The forwarded identity is the credential here, and its app is what it declares: 
 that names another app, or none, is refused (`400` `invalid-request`).
 
 **Testing such a service** without a gateway in front, or calling it from a local client during development, needs
-the header a gateway would send. `IdentityHeader` in `cosec-testkit` (experimental) writes it with CoSec's own encoder,
+the header a gateway would send. `IdentityHeader` in `cosec-testkit` (stable: no opt-in) writes it with CoSec's own encoder,
 and reads it back as a service does before returning it. Malformed input throws and names the member at fault:
 
 ```kotlin

@@ -26,6 +26,7 @@ import me.ahoo.cosec.runtime.PipelineFixtures.facts
 import me.ahoo.cosec.runtime.PipelineFixtures.pipeline
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.http.ProblemType
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spi.token.VerifiedToken
@@ -43,7 +44,13 @@ import java.time.Instant
  */
 class RevocationHangPipelineTest {
     private object Verifier : TokenVerifier {
-        override fun verify(accessToken: String): VerifiedToken = VerifiedToken("jti-1", "alice", "tenant-a", null)
+        override fun verify(accessToken: String): VerifiedToken = VerifiedToken(
+            "jti-1",
+            "alice",
+            "tenant-a",
+            null,
+            PERSON
+        )
 
         override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
     }

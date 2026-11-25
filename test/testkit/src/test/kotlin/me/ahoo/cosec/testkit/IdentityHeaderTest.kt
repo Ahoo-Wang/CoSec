@@ -63,6 +63,7 @@ class IdentityHeaderTest {
 
         override suspend fun authenticate(credentials: Password) = TokenSubject(
             credentials.user,
+            Identity.Credential.Kind.PERSON,
             tenant = "acme",
             roles = setOf("clerk"),
             attributes = mapOf("name" to "Alice"),
@@ -109,6 +110,23 @@ class IdentityHeaderTest {
         credential.method.assert().isEqualTo(Identity.Method.JWT)
         credential.issuedAt.assert().isNotNull()
         credential.session?.generation.assert().isEqualTo(1L)
+    }
+
+    /** IDN-44: the kit states whose the token is, a person's or a workload's, each by a function of its own. */
+    @Test
+    fun `a workload's header is read as a workload's, without break-glass, and a subject's as a person's - IDN-44`() {
+        val workload = checkNotNull(behindGateway(IdentityHeader.forWorkload("svc-batch", tenant = "acme")).security)
+        IdentityCodec.decode(IdentityHeader.forWorkload("svc-batch", tenant = "acme")).credential.kind
+            .assert().isEqualTo(Identity.Credential.Kind.WORKLOAD)
+        checkNotNull(workload.principal).let {
+            it.workload.assert().isTrue()
+            it.breakGlass.assert().isFalse()
+        }
+        val person = checkNotNull(behindGateway(IdentityHeader.forSubject("alice", tenant = "acme")).security)
+        checkNotNull(person.principal).let {
+            it.workload.assert().isFalse()
+            it.breakGlass.assert().isTrue()
+        }
     }
 
     @Test
@@ -175,7 +193,12 @@ class IdentityHeaderTest {
                 app = "",
                 space = "",
                 roles = roles,
-                credential = Identity.Credential(Identity.Method.API_KEY, "key-1", expiresAt),
+                credential = Identity.Credential(
+                    Identity.Method.API_KEY,
+                    Identity.Credential.Kind.WORKLOAD,
+                    "key-1",
+                    expiresAt
+                ),
                 issuedAt = Instant.now(),
                 requestId = "r-1",
             )

@@ -11,11 +11,10 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.spi.shadow
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 
@@ -23,7 +22,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocument
  * A staged change's candidate for one document (RFC 0007 §6.4), as the control plane writes it to `candidate:<docKey>`:
  * the shadow window it belongs to, the revision of the head it was made on, and the document it would publish.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class StoredCandidate(val window: String, val baseRevision: Long, val document: SnapshotDocument) {
     init {
         require(

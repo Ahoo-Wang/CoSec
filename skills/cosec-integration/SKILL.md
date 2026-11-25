@@ -160,7 +160,7 @@ Use `$cosec-policy-author` to write the documents. Storage details: https://cose
 
 The gateway strips any client `CoSec-Identity` and, on a permit for an authenticated principal, forwards the identity it
 verified (tenant, principal, app, space, the roles there, its roles in other spaces and its attached policy ids under
-`memberships` (`IDN-39`, always written, empty when nothing), credential id and expiry, and the claims named in
+`memberships` (`IDN-39`, always written by the gateway, empty when nothing; a relay states it only when it was forwarded it, `IDN-42`), credential id and expiry, and the claims named in
 `cosec.gateway.identity.claims`) to a route that receives it: a route to a registered service (`uri: lb://...`), or one
 whose metadata says `cosec-identity: true`. Any other route, and one marked `cosec-identity: false`, gets none: mark
 your own `http(s)://` services `true`, never a third party. It forwards no credentials (`Authorization`, the API key
@@ -221,10 +221,12 @@ cosec:
 - Answers: no header is anonymous; unreadable, repeated or oversize (`cosec.pipeline.identity.max-size`, 8KB) is 400;
   older than `cosec.pipeline.identity.max-age` (60s) plus `cosec.authentication.revocation.skew`, or past the
   credential's expiry, is 401 `token-expired`; unknown version, no expiry or an identity from the future is 401
-  `token-invalid`; a scope that does not resolve here (for example a different `scope.app-id`) is 400.
+  `token-invalid`; a scope that does not resolve here (for example a different `scope.app-id`) is 400; a member it
+  does not know is ignored, unless the header's `crit` names it, which is 503 (`IDN-41`): upgrade the service.
 - Startup fails for an unknown `cosec.pipeline.mode`, and for `mode=gateway` on a Spring Cloud Gateway host.
-- Tests of such a service, without a gateway: `IdentityHeader` (`cosec-testkit`, experimental) writes the header a
-  gateway sends: `forSubject(subject, tenant, app, space, roles)`, `of(identity)`, or `withToken(token, verifier,
+- Tests of such a service, without a gateway: `IdentityHeader` (`cosec-testkit`, stable: no opt-in) writes the header a
+  gateway sends: `forSubject(subject, tenant, app, space, roles)` (a person's token), `forWorkload(...)` (a workload's:
+  never approves, never the trust root, no break-glass), `of(identity)`, or `withToken(token, verifier,
   revocations)` for a real token's session. A header is refused after 60s: make one per request. Never hand-write the
   JSON, and never use it in production. A Spring Boot test that starts the service states the boundary too, or the
   context fails to start: `@SpringBootTest(properties = [IdentityHeader.ONLY_GATEWAY_CAN_REACH])` (true in a test,
@@ -257,7 +259,7 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
   implement `SwitchTenantCredentials`: the target tenant (and app), the request's `SecurityContext`, and the session's
   token pair (`accessToken`, `refreshToken`), read from the body as the refresh route reads it. An access token alone
   does not switch; the pair is judged as a refresh's (an older one ends the session), and the switch moves nothing of
-  the session it came from (`IDN-22`).
+  the session it came from (`IDN-22`). A logout of the switched session ends that login too (`IDN-40`).
 - Refresh and logout routes: set `cosec.authentication.login.refresh.path` and `logout.path` and the starter serves them
   (`POST`, the pair as JSON; `200` pair, `401` token-*, `503` unavailable, `500` error; logout `204`), on Spring MVC and
   WebFlux, never on a gateway. A document must permit an anonymous `POST` of each path, or every refresh is
@@ -358,7 +360,7 @@ in app `cosec-control`. On WebFlux, raise `spring.codec.max-in-memory-size` for 
 10MB (the document cap and 2MB). Workflow: https://cosec.ahoo.me/policies/testing.
 
 The control plane's token is issued for tenant `(platform)` (an administrator) or the tenant's own, and for the app
-`cosec.control.app-id`: `TokenSubject(id = "alice", app = "cosec-control", tenant = "(platform)")`. A change is
+`cosec.control.app-id`: `TokenSubject(id = "alice", kind = Kind.PERSON, app = "cosec-control", tenant = "(platform)")`. A change is
 `POST /changes` (document, base revision, operations), then `:skip-shadow` with a `reason` (the trust root, and a
 tenant's administrator on its own document) or `:shadow`, then `:publish`. A console that edits roles sends one `putRole`
 per save. A service that mirrors an identity system's roles calls `ControlClient.proposeAndPublishWithoutShadow` per

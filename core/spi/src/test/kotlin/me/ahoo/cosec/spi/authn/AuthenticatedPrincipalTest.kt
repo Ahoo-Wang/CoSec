@@ -46,13 +46,17 @@ class AuthenticatedPrincipalTest {
         principal.attributes.assert().isEqualTo(mapOf("department" to "ops"))
     }
 
-    private fun principal(method: Identity.Method?, apiKeyCredential: Boolean = false) = AuthenticatedPrincipal(
+    private fun principal(
+        method: Identity.Method?,
+        apiKeyCredential: Boolean = false,
+        kind: Identity.Credential.Kind? = null,
+    ) = AuthenticatedPrincipal(
         PrincipalId("svc-iam"),
         TenantId.PLATFORM,
         MembershipSource.Provider.UNCAPPED,
         emptyMap(),
-        method?.let { Identity.Credential(it, "c1", null) },
-        breakGlass = method == Identity.Method.JWT,
+        method?.let { Identity.Credential(it, kind ?: kindOf(it), "c1", null) },
+        breakGlass = method == Identity.Method.JWT && (kind ?: kindOf(method)) == Identity.Credential.Kind.PERSON,
         issuedAt = null,
         apiKeyCredential = apiKeyCredential,
         app = null,
@@ -60,11 +64,12 @@ class AuthenticatedPrincipalTest {
     )
 
     /**
-     * IDN-34: a workload's credential is an API key, by provenance or by its name, or a credential named `service`;
-     * CoSec's own token, another authenticator's method and no credential are a person's. `apiKey` keeps its meaning.
+     * IDN-34, IDN-44: a workload is a principal whose credential declares itself a workload's (an API key's and a
+     * service's own are by construction), one CoSec's API key authenticator proved, or one with no credential; the
+     * method decides nothing. `apiKey` keeps its meaning.
      */
     @Test
-    fun `a workload is an API key or a service, by provenance or by name - IDN-34`() {
+    fun `a workload is what its credential declares, an API key by provenance, or a principal with no credential - IDN-44`() {
         principal(Identity.Method.SERVICE).let {
             it.workload.assert().isTrue()
             it.apiKey.assert().isFalse()
@@ -73,14 +78,57 @@ class AuthenticatedPrincipalTest {
         principal(Identity.Method("service-key"), apiKeyCredential = true).workload.assert().isTrue()
         principal(Identity.Method.JWT).workload.assert().isFalse()
         principal(Identity.Method("ldap")).workload.assert().isFalse()
-        principal(null).workload.assert().isFalse()
+        // The method decides nothing: a credential of any name is what it declares.
+        principal(Identity.Method("ldap"), kind = Identity.Credential.Kind.WORKLOAD).workload.assert().isTrue()
+        // No credential is no person's: the restrictive reading.
+        principal(null).workload.assert().isTrue()
         Identity.Method.SERVICE.value.assert().isEqualTo("service")
+    }
+
+    @Test
+    fun `a credential named api-key or service cannot be declared a person's - IDN-44`() {
+        listOf(Identity.Method.API_KEY, Identity.Method.SERVICE).forEach { method ->
+            assertThrownBy<IllegalArgumentException> {
+                Identity.Credential(method, Identity.Credential.Kind.PERSON, "c1", null)
+            }.hasMessageContaining("is a workload's")
+        }
+    }
+
+    /** BRK-8 (RC1-26): another authenticator never names CoSec's token's method, a person's or a workload's. */
+    @Test
+    fun `the public constructors refuse the method jwt, whatever the kind - BRK-8`() {
+        Identity.Credential.Kind.entries.forEach { kind ->
+            val jwt = Identity.Credential(Identity.Method.JWT, kind, "c1", null)
+            assertThrownBy<IllegalArgumentException> {
+                AuthenticatedPrincipal(
+                    PrincipalId("bob"),
+                    TenantId("acme"),
+                    MembershipSource.Provider.UNCAPPED,
+                    credential = jwt
+                )
+            }.hasMessageContaining("is CoSec's own token's")
+            assertThrownBy<IllegalArgumentException> {
+                AuthenticatedPrincipal(PrincipalId("bob"), TenantId("acme"), memberships = null, credential = jwt)
+            }.hasMessageContaining("is CoSec's own token's")
+        }
+        // Another method of either kind is accepted.
+        AuthenticatedPrincipal(
+            PrincipalId("bob"),
+            TenantId("acme"),
+            MembershipSource.Provider.UNCAPPED,
+            credential = Identity.Credential(Identity.Method("ldap"), Identity.Credential.Kind.WORKLOAD, "c1", null),
+        ).workload.assert().isTrue()
     }
 
     /** IDN-34: a service's credential has neither break-glass nor a session, which are CoSec's own token's alone. */
     @Test
     fun `a service's credential has no break-glass and no session - IDN-34`() {
-        val service = Identity.Credential(Identity.Method.SERVICE, "service:svc-iam", null)
+        val service = Identity.Credential(
+            Identity.Method.SERVICE,
+            Identity.Credential.Kind.WORKLOAD,
+            "service:svc-iam",
+            null
+        )
         assertThrownBy<IllegalArgumentException> {
             AuthenticatedPrincipal(
                 PrincipalId("svc-iam"),
@@ -99,4 +147,12 @@ class AuthenticatedPrincipalTest {
             service.copy(session = TokenSession("s1", Instant.EPOCH, 1))
         }
     }
+
+    /** The kind a credential named [method] is declared with: a workload's for the names that are one by construction. */
+    private fun kindOf(method: Identity.Method) =
+        if (method == Identity.Method.API_KEY || method == Identity.Method.SERVICE) {
+            Identity.Credential.Kind.WORKLOAD
+        } else {
+            Identity.Credential.Kind.PERSON
+        }
 }

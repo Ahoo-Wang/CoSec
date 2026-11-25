@@ -1,0 +1,10 @@
+{
+  "id": "SCP-6",
+  "source": "RFC 0004 §4.6",
+  "statement": "An unauthenticated subject is always in the default tenant (0) and has no roles, whatever memberships it is given.",
+  "level": "engine",
+  "guards": [
+    "model:ScopeResolverTest#an anonymous subject is in the default tenant and has no roles"
+  ],
+  "pending": null
+}

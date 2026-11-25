@@ -1,0 +1,14 @@
+{
+  "id": "IDN-25",
+  "source": "authentication.md audit (2026-11-18): one verifier, one refresh authentication",
+  "statement": "A request, a refresh and a logout verify with one TokenVerifier: the application's bean when it declares one, else CoSec's. The served refresh route refreshes with the application's RefreshTokenAuthentication when it declares one, its hook included, else with the starter's over the MembershipRefresh bean; a refresh authentication over a credentials class the route cannot present fails startup while the route's path is set.",
+  "level": "startup",
+  "pending": null,
+  "guards": [
+    "spring-boot:OneVerifierTest#an application verifier that refuses a token refuses it on a request, a refresh and a logout alike",
+    "spring-boot:OneVerifierTest#with CoSec's own verifier the same token is the principal on the request",
+    "spring-boot:OneVerifierTest#the served refresh route refreshes with the application's own refresh authentication, its hook included",
+    "spring-boot:OneVerifierTest#a refresh authentication over credentials of the application's own fails startup with the route set",
+    "spring-boot:OneVerifierTest#an application verifier that wraps CoSec's own makes a request's token not CoSec's, without session or break-glass"
+  ]
+}

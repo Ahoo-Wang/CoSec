@@ -1,0 +1,12 @@
+{
+  "id": "SCP-5",
+  "source": "RFC 0004 §4.1, §10",
+  "statement": "Only ScopeResolver constructs a Scope; no decoding path (JSON, header, cache) deserializes one.",
+  "level": "build",
+  "guards": [
+    "architecture:ScopeConstructionTest#onlyTheResolverConstructsScopes",
+    "architecture:ScopeConstructionTest#scopeIsNotADataClass",
+    "document:PolicyDocumentCodecTest#a scope is never decoded"
+  ],
+  "pending": null
+}

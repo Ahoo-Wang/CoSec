@@ -1,0 +1,7 @@
+{
+  "id": "BRK-4",
+  "source": "RFC 0004 §4.8 (#1029 review)",
+  "statement": "The break-glass root binding applies only to principals of the platform tenant; a root binding of any other tenant does not compile.",
+  "level": "engine",
+  "pending": null
+}

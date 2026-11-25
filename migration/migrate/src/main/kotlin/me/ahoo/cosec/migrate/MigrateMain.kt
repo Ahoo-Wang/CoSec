@@ -11,11 +11,10 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.migrate
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.io.PrintStream
 import kotlin.system.exitProcess
@@ -67,6 +66,7 @@ object MigrateMain {
         "bootstrap" to setOf("to-redis", "cluster", "key-prefix", "platform-admin", "force"),
         "repair-references" to setOf("to-redis", "cluster", "key-prefix"),
         "verify-chain" to setOf("to-redis", "cluster", "key-prefix", "document", "prefix", "limit"),
+        "check-patterns" to setOf("to-redis", "cluster", "key-prefix", "document", "prefix"),
         "restore" to setOf("to-redis", "cluster", "key-prefix", "document", "revision", "file", "confirm"),
         "partition plan" to setOf("from-redis", "from-files", "key-prefix", "out"),
         "api-keys" to setOf(
@@ -85,6 +85,8 @@ object MigrateMain {
           repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]
           verify-chain --to-redis <uri> [--cluster] [--key-prefix <p>] [--document platform|app:<id>|tenant:<id>]
                        [--prefix <document key prefix, such as tenant:acme>] [--limit <n>]
+          check-patterns --to-redis <uri> [--cluster] [--key-prefix <p>] [--document platform|app:<id>|tenant:<id>]
+                         [--prefix <document key prefix>]   (read only: the patterns the next version refuses)
           restore --to-redis <uri> [--cluster] [--key-prefix <p>] --document platform|app:<id>|tenant:<id>
                   --revision <n> or --file <document.json>, then the same with --confirm <head revision>
           (--cluster: --to-redis names seed nodes of a Redis Cluster, comma-separated)
@@ -148,6 +150,7 @@ object MigrateMain {
         "bootstrap" -> BootstrapCommand.bootstrap(options, out)
         "repair-references" -> RepairReferencesCommand.repairReferences(options, out)
         "verify-chain" -> VerifyChainCommand.verifyChain(options, out)
+        "check-patterns" -> CheckPatternsCommand.checkPatterns(options, out)
         "restore" -> RestoreCommand.restore(options, out)
         "partition plan" -> PartitionPlanCommand.partitionPlan(options, out)
         "api-keys" -> ApiKeysCommand.apiKeys(options, out)

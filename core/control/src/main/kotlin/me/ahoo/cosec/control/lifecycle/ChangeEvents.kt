@@ -38,7 +38,7 @@ internal fun ChangeRequest.event(
     time = clock.instant(),
     kind = kind,
     operator = operator,
-    change = id,
+    change = id.value,
     document = key,
     base = RevisionRef(base.revision, base.digest?.toString()),
     candidate = candidate?.let { RevisionRef(publishedRevision ?: (base.revision + 1), it) },

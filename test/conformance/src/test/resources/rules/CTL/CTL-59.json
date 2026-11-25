@@ -1,0 +1,12 @@
+{
+  "id": "CTL-59",
+  "source": "RFC 0007 §5.7 (maintainer decision 2026-11-21, the control-plane host's replicas and embedders; what can be computed is not configured; control-server-design §0.6)",
+  "statement": "Every control-plane instance runs the maintenance passes (reclaiming revisions, closing shadow windows, reconciling the app list and the staged list), kept apart by their leases: any number of instances over one store run each pass once per interval, one at a time. There is no switch that turns them off, so no deployment can be configured in which none runs.",
+  "level": "startup",
+  "pending": null,
+  "guards": [
+    "spring-boot:ControlServicePortTest#the maintenance passes run on every host that has the control plane, and no property turns them off",
+    "spring-boot:UnknownPropertiesTest#a switch that was removed before it was released is not a property",
+    "control:ControlMaintenanceTest#shadow windows are closed by whoever holds the lease, which a pass releases"
+  ]
+}

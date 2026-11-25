@@ -523,11 +523,20 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             "result", "reason", "tenant", "app", "id", "roles", "policies", "membership", "token", "jwt", "apiKeys", "apiKeysFail",
         )
         return when (val result = resultOf(node)) {
-            "token" -> TokenAuthenticator(ScenarioTokenVerifier(node.required("token")), revocations(revocations))
+            "token" -> TokenAuthenticator(
+                ScenarioTokenVerifier(node.required("token")),
+                revocations(revocations),
+                acceptUnavailableRevocations = true,
+            )
             "jwt" -> scenarioJwt(node.required("jwt"), revocations(revocations))
             "composite" -> CompositeAuthenticator(
-                token = node.get("token")?.let { TokenAuthenticator(ScenarioTokenVerifier(it), revocations(revocations)) }
-                    ?: Authenticator { AuthnResult.Anonymous },
+                token = node.get("token")?.let { token ->
+                    TokenAuthenticator(
+                        ScenarioTokenVerifier(token),
+                        revocations(revocations),
+                        acceptUnavailableRevocations = true,
+                    )
+                } ?: Authenticator { AuthnResult.Anonymous },
                 apiKey = ApiKeyAuthenticator(apiKeys(node), Clock.fixed(Instant.parse(NOW), ZoneOffset.UTC)),
             )
             "anonymous" -> Authenticator { AuthnResult.Anonymous }
@@ -648,7 +657,9 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     /** Takes whatever token the request presents as the scenario's token, as a verified JWT would read. */
     private class ScenarioTokenVerifier(private val node: JsonNode) : TokenVerifier {
         init {
-            node.only("jti", "tenant", "app", "id", "roles", "policies", "membership", "issuedAt", "expiresAt", "verification")
+            node.only(
+                "jti", "tenant", "app", "id", "kind", "roles", "policies", "membership", "issuedAt", "expiresAt", "verification"
+            )
         }
 
         override fun verify(accessToken: String): VerifiedToken {
@@ -663,6 +674,12 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
                 principal = node.get("id")?.text() ?: "alice",
                 tenant = node.get("tenant")?.text(),
                 app = node.get("app")?.text(),
+                // A verifier says whose the token is (IDN-46): a person's unless the scenario says `workload`.
+                kind = when (val kind = node.get("kind")?.text() ?: "person") {
+                    "person" -> Identity.Credential.Kind.PERSON
+                    "workload" -> Identity.Credential.Kind.WORKLOAD
+                    else -> throw ScenarioFormatException("Unknown token kind $kind")
+                },
                 roles = node.get("roles")?.strings().orEmpty().toSet(),
                 policies = node.get("policies")?.strings().orEmpty().toSet(),
                 issuedAt = node.get("issuedAt")?.textOrNull()?.let(Instant::parse),
@@ -681,7 +698,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
      */
     private fun scenarioJwt(node: JsonNode, revocations: RevocationReader): Authenticator {
         val token = ScenarioJwt(node).token
-        val authenticator = TokenAuthenticator(ScenarioJwt.VERIFIER, revocations)
+        val authenticator = TokenAuthenticator(ScenarioJwt.VERIFIER, revocations, acceptUnavailableRevocations = true)
         return Authenticator { credentials ->
             authenticator.authenticate(
                 if (credentials.token == null) credentials else Credentials(token, credentials.apiKey)

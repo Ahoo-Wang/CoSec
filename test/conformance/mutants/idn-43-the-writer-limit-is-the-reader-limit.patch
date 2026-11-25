@@ -1,0 +1,18 @@
+# Rule: IDN-43
+# Mutant: CoSec's writers write up to the reader's limit, so a member a later version adds pushes a header that every older reader read past what it reads
+# Tests: :document:test --tests me.ahoo.cosec.document.identity.IdentityLimitsTest
+# Inlined: IdentityCodec.kt: const val WRITE_MAX_BYTES
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt
+index 1e72d0f1a..3ca3fee51 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt
+@@ -81,7 +81,7 @@ object IdentityCodec {
+      * of a request's caller, `IDN-43`). Below [READ_MAX_BYTES] by the room the members a later 8.x version adds may
+      * take: a later version may raise it, up to R, never past it.
+      */
+-    const val WRITE_MAX_BYTES = 6 * 1024
++    const val WRITE_MAX_BYTES = 8 * 1024
+ 
+     /** The longest string claim value a gateway forwards. */
+     const val MAX_CLAIM_LENGTH = 1024
