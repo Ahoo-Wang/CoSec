@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.control.store
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
@@ -21,7 +21,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * and whether that revision defines the policy's id itself (RC1-9) rather than binding or naming the target's: the
  * platform's checks read it instead of the referrer's head (`CTL-43`).
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 data class ReferrerEntry(val referrer: SnapshotKey, val revision: Long, val definesItself: Boolean = false) {
     init {
         require(revision >= 1) { "A referrer entry names a revision, at least 1." }

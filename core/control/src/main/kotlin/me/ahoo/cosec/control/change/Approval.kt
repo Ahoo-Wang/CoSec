@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.control.change
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.model.Memberships
@@ -28,7 +27,7 @@ import java.time.Instant
  * the approver, with the [memberships] and [attributes] they approved with, still holds `cosec:approve` on the
  * document: publishing checks that again (review K3). An approval without them cannot be checked, so it does not count.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 data class Approval(
     val approver: Actor,
     val at: Instant,

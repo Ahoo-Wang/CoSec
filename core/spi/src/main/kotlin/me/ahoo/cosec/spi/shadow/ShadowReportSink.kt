@@ -15,13 +15,13 @@
 
 package me.ahoo.cosec.spi.shadow
 
-import me.ahoo.cosec.annotations.CoSecSpi
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
-/** Where each instance writes its shadow reports and its status (RFC 0007 §6.4, §6.5). */
-@CoSecSpi
-@ExperimentalCoSecApi
+/**
+ * Where each instance writes its shadow reports and its status (RFC 0007 §6.4, §6.5). Not an extension point in 8.0
+ * (`@InternalCoSecApi`): `cosec-cocache`'s `CoCacheShadowReports`, which the starter wires, is the only one.
+ */
+@InternalCoSecApi
 interface ShadowReportSink {
     suspend fun write(report: ShadowReport)
 

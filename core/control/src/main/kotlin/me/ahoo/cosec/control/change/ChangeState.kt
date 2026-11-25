@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.control.change
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
@@ -31,7 +30,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  * A closed window is not a state: when it closes, the change moves on, and how it closed is the change's
  * [ChangeRequest.shadow] ([ShadowState.closed]).
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 enum class ChangeState {
     /** Proposed, with the findings of its last check; not checked clean. */
     DRAFT,

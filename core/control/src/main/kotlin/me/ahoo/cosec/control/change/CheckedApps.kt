@@ -15,10 +15,9 @@
 
 package me.ahoo.cosec.control.change
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 
 /** The app list a check read: its [digest], `null` when there was none. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 data class CheckedApps(val digest: SnapshotDigest?)

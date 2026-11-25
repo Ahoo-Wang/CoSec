@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.control.change
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.ProvenanceKind
@@ -32,7 +31,7 @@ import java.time.Instant
  * analyzed with; publishing checks again on the current heads, and once it has written, looks whether one of them moved
  * in between (RC1-33).
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 data class ChangeRequest(
     val id: ChangeId,
     val key: SnapshotKey,

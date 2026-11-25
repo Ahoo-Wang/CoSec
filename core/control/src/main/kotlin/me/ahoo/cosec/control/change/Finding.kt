@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.control.change
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
@@ -23,7 +22,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  * `COMPILE`, `IF_MATCH`, `OPERATION`, `REFERENCES`); [status] is the HTTP status the control API answers it with
  * (RFC 0007 §10.2).
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 data class Finding(
     val check: String,
     val path: String,

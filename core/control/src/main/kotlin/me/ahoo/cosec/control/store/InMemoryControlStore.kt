@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.control.store
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
@@ -41,7 +40,7 @@ import java.time.Instant
  */
 // stays: one method per store operation of ControlStore
 @Suppress("TooManyFunctions")
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : ControlStore {
     private val lock = Any()
     private val heads = HashMap<SnapshotKey, SnapshotDocument>()

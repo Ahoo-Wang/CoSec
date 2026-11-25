@@ -15,9 +15,8 @@
 
 package me.ahoo.cosec.control.change
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /** How bad a finding is: an error keeps the change from being checked clean, a warning is shown at publish. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 enum class Severity { ERROR, WARNING }

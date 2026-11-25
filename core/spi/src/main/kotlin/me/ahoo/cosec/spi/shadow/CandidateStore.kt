@@ -15,14 +15,17 @@
 
 package me.ahoo.cosec.spi.shadow
 
-import me.ahoo.cosec.annotations.CoSecSpi
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
-/** Where candidates are read from: the `candidate:` namespace. Reads never block the caller. */
-@CoSecSpi
-@ExperimentalCoSecApi
+/**
+ * Where candidates are read from: the `candidate:` namespace. Reads never block the caller.
+ *
+ * The shadow window's ports and values (this one, `ShadowReportSink`, `ShadowReportReader`) are not an extension point
+ * in 8.0 (`@InternalCoSecApi`): `cosec-cocache` implements them all, the starter wires them, and they follow the control
+ * plane's protocol, which changes in any release.
+ */
+@InternalCoSecApi
 fun interface CandidateStore {
     suspend fun candidate(key: SnapshotKey): StoredCandidate?
 

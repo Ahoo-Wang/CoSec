@@ -49,7 +49,6 @@ writes its implementations of CoSec's ports in Kotlin. Durations, instants and c
 | `BridgeContextContributor` | `cosec-runtime`, `runtime.event` | Carry a thread-local context (logging, tracing) into the pipeline. | every bean |
 | `ProblemRenderer` | `cosec-runtime`, `runtime.http` | Write the body of a refusal in your framework's own problem catalog ([Problem renderer](#problem-renderer)). Experimental. | one bean, replacing CoSec's own body; two fail startup |
 | `ChangeListener` | `cosec-control`, `control.audit` | Observe or gate control-plane changes. | every bean, with `cosec-control` |
-| `ControlStore` | `cosec-control`, `control.store` | Keep the control plane's records (revisions, change requests, staging slots) somewhere other than in `CoCacheControlStore`. The control plane itself starts only with `cosec-cocache`, whose Redis stores keep the published documents: this port does not change that. Experimental, with its records and the shadow window ports. | one bean, with `cosec-control` and `cosec-cocache` |
 | Route maps | `cosec-document`, `document.route` | Give requests `service:verb` actions on typed resources. | `cosec.authorization.routes.location` |
 
 Packages are under `me.ahoo.cosec`. The ports whose signatures need only the model and the contracts live in
