@@ -97,7 +97,7 @@ RFC 0002–0007 起初让每个阶段以"与 7.x 或与上一阶段等价"为切
 
 ### 3.2 规则登记表
 
-`test/conformance/src/test/resources/rules/<族>.json`（每个文件是 `{"rules": [...]}`）是 8.0 规范性规则的唯一索引；登记表范围的说明在
+`test/conformance/src/test/resources/rules/<族>/<ID>.json`（一条规则一个文件，2026-11-25，#2023；`rules/_meta.json` 说明整个登记表）是 8.0 规范性规则的唯一索引；登记表范围的说明在
 `rules/_meta.json`。`Corpus` 读取 `_meta.json` 与全部族文件，规则出现在别族的文件里、或族文件除 `rules` 之外还有别的内容时失败。每一条：
 
 ```jsonc
@@ -114,8 +114,7 @@ RFC 0002–0007 起初让每个阶段以"与 7.x 或与上一阶段等价"为切
 ```
 
 **级别。** `engine`、`analysis`、`pipeline`、`control` 的规则由场景守护（§3.3）。`build`（构建与源码的检查、ArchUnit 规则）、`startup`（实例怎样启动）
-与 `timing`（并发的加载怎样交错）的规则没有场景运行器能驱动，由它所列的测试守护；这些测试必须是 JUnit 会运行的单个测试，并列在
-`GuardAllowlist` 中该级别之下（§3.4），`timing` 级还要有一个随 `cosec.property.iterations` 扩大例数的性质测试（§3.5）。
+与 `timing`（并发的加载怎样交错）的规则没有场景运行器能驱动，由它所列的测试守护；这些测试必须是 JUnit 会运行的单个测试，写在这条规则自己的文件里（§3.4），`timing` 级还要有一个随 `cosec.property.iterations` 扩大例数的性质测试（§3.5）。
 
 **编号**按领域取前缀，序号只增不复用；规则改变语义时新开一个 id，旧 id 标为 `superseded`，场景随之迁移。今天的族：
 
@@ -213,10 +212,10 @@ C3 → `SCP-1`、R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写�
 2. 每个场景引用的规则 id 都在登记表里、没有引用 `superseded` 的规则，并使用已知的极性与级别；
 3. 登记表引用的每个性质测试与守护测试都存在（按项目与测试名查找）；
 4. 打印仍为 `pending` 的规则及其 PR（今天没有）；
-5. `build`、`startup`、`timing` 级的规则只由 `GuardAllowlist` 为该级别列出的测试覆盖，每个都是一个 JUnit 会运行的测试（不是整个类，也没有 `@Disabled`）；
-   `timing` 级的规则至少有一个读 `cosec.property.iterations` 的性质测试；名单上没有任何同级规则引用的测试，也算失败。
+5. `build`、`startup`、`timing` 级的规则由它自己的文件列出的测试覆盖，每个都是一个 JUnit 会运行的测试（不是整个类，也没有 `@Disabled`）；
+   `timing` 级的规则至少有一个读 `cosec.property.iterations` 的性质测试。
 
-`GuardAllowlist` 在代码里：为一条 `build`、`startup` 或 `timing` 级的规则指定守护测试是一次经过审查的代码改动，不只是族文件里的一行。
+没有运行器检查这样的测试做了规则说的事，所以为一条 `build`、`startup` 或 `timing` 级的规则指定守护测试，是对这条规则自己文件的一次经过审查的改动；登记表旁边不另设名单（2026-11-25：手写的名单与登记表逐条重复，并行的 PR 在它的末尾必然冲突；由登记表推出的名单永远与它一致，检查不出任何东西，所以连同那两项检查一起删去）。
 改变规范性规则的 PR 同时改登记表与场景（根 AGENTS.md "Where a change has to land"）。
 
 ### 3.5 可执行的 oracle 与不变量性质

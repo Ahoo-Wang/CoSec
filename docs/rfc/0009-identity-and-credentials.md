@@ -240,7 +240,7 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 
 ## 8. 一致性规则（新族 `IDN`）
 
-规则登记在 `test/conformance/src/test/resources/rules/IDN.json`，措辞与守卫以登记表为准。下表是出自本 RFC 的各条；族里的其他规则出自别处：
+规则登记在 `test/conformance/src/test/resources/rules/IDN/`（一条规则一个文件），措辞与守卫以登记表为准。下表是出自本 RFC 的各条；族里的其他规则出自别处：
 `IDN-7` 至 `IDN-9`（RFC 0006 §7.3）、`IDN-11`（RFC 0004 §4.5.1）、`IDN-12`（RFC 0001 D5）、`IDN-25` 至 `IDN-27`、`IDN-29`、`IDN-33`。
 
 | 规则 | 级别 | 内容 |
