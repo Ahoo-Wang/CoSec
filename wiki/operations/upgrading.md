@@ -555,7 +555,7 @@ when there is a pattern to rewrite or a document it could not read, so a deploym
 the control plane: on the version you run, publish each DENY with its bridge, or with its exact form beside it, and
 narrow or remove each affected ALLOW; upgrade every instance; publish the form the tool printed, alone. No other order works: an unescaped reserved character fails the whole
 document on the new version, and the old one reads the escaped form as a backslash and the character: in a path it
-matches nothing, in a typed resource or an action another id or verb ([Upgrading from 8.0.0-beta.8](./upgrading-previews.md#from-8-0-0-beta-8)). It only reads, so it may run while the
+matches nothing, in a typed resource or an action another id or verb. It only reads, so it may run while the
 control plane runs.
 
 #### Run it as a Kubernetes Job {#run-as-a-kubernetes-job}
@@ -932,10 +932,17 @@ the revocation check reports is `503`, never an accepted token (`PIP-7`).
 - **Break-glass, 7.x's root,** applies only to a token CoSec's own `JwtTokenVerifier` verified, never to a token of a
   custom `TokenVerifier` or to a principal another authenticator accepted (`BRK-8`).
 - **Tenant switch and social login.** A tenant switch (7.x's `AbstractSwitchTenantAuthentication`, now
-  `SwitchTenantAuthentication` with a `TenantSwitch`, [From 8.0.0-alpha.4](./upgrading-previews.md#from-8-0-0-alpha-4)) answers the user's
+  `SwitchTenantAuthentication` with a `TenantSwitch`) answers the user's
   `TenantMembership` in the target tenant and app instead of a principal, so the new token never carries the previous
   tenant's roles, and it presents the session's token pair, as a refresh does: an access token alone does not switch
-  ([Switching tenant and app](../integration/authentication.md#switching-tenant-and-app)). `DirectSocialUserPrincipalConverter` signs only `cosec_oauth_provider` and `cosec_oauth_user_id`,
+  ([Switching tenant and app](../integration/authentication.md#switching-tenant-and-app)). Where 7.x subclassed it and
+  implemented `switchTenant(targetTenantId, previousPrincipal)`, declare
+  `SwitchTenantAuthentication(tokenVerifier, families, revocation, YourCredentials::class.java) { credentials -> … }` as a
+  bean, with the starter's `TokenVerifier`, `TokenFamilies` and `TokenRevocation` beans. Your credentials class
+  implements `SwitchTenantCredentials`: `targetTenantId`, `targetAppId` (null by default), the request's `context`
+  (`SecurityContext`) instead of 7.x's `principal`, and the session's `accessToken` and `refreshToken`. The new token is
+  for the app your switch answers in its `TenantMembership`, else the previous token's: a user never gets an app by
+  naming it. `DirectSocialUserPrincipalConverter` signs only `cosec_oauth_provider` and `cosec_oauth_user_id`,
   not the provider's user info ([Authentication](../integration/authentication.md#tenants)).
 - `cosec.api-key.header` is now `cosec.pipeline.api-key-header` (default `X-API-Key`), and no document may read the
   header it names (`CND-5`).
@@ -1116,6 +1123,24 @@ document and revocation reader.
 tool that read or wrote those keys directly must use the control plane. Give only the control plane's Redis account
 write access to `<prefix>:snapshot:*` and `<prefix>:control:*`. All keys: [Storage](./storage.md).
 
+#### One key prefix {#one-key-prefix}
+
+[`cosec.key-prefix`](./configuration.md#key-prefix) (`cosec` by default) is the prefix of every key 8.0 writes. It
+replaces 7.x's `cosec.authorization.cache.key-prefix` (default `cosec`) and `cosec.api-key.key-prefix` (default
+`cosec:api-key`), and the fixed `cosec` of the rate limit counters and the social login's OAuth states. With the
+defaults every key 8.0 still reads stays where it was. With `<p>` the value of `cosec.key-prefix`:
+
+- token revocations (`<p>:token:revoked:*`) are read under `<p>`, where 7.x wrote them
+  under `cosec.authorization.cache.key-prefix`;
+- API keys are read under `<p>:api-key`, where 7.x read them under `cosec.api-key.key-prefix`;
+- rate limit counters and OAuth states are written under `<p>`; both are short-lived, and a counter starts again.
+
+A deployment that set either 7.x prefix to something else sets `cosec.key-prefix` and, before switching, copies each
+revocation and API key under the new prefix (`COPY`, or `RENAME`, which keeps the key's expiry): **a revocation left
+under the old prefix is no longer read, so the token it revoked is accepted again**. `cosec-migrate api-keys` converts
+the keys under `<--key-prefix>:api-key`. `cosec.key-prefix` holds no `:` (`SNP-9`), so a 7.x prefix that held one
+cannot be kept: choose one without, and copy the keys under it.
+
 #### Startup fails when Redis's eviction policy cannot be read {#startup-fails-when-redis-s-eviction-policy-cannot-be-read}
 
 At startup CoSec reads Redis's `maxmemory-policy` and refuses to start unless it is `noeviction`, because an evicted
@@ -1198,12 +1223,12 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 | 7.x package | 8.0 package (module) | Types |
 |---|---|---|
 | `me.ahoo.cosec.api.authentication`, `me.ahoo.cosec.authentication` | `me.ahoo.cosec.login` (`cosec-login`) | `Authentication`, `Credentials` (now `LoginCredentials`), `CompositeAuthentication` |
-| `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `AbstractSwitchTenantAuthentication` is `SwitchTenantAuthentication` with a `TenantSwitch`; `SimpleRefreshTokenAuthentication` is `RefreshTokenAuthentication` (`AbstractRefreshTokenAuthentication` is removed) ([From 8.0.0-alpha.4](./upgrading-previews.md#from-8-0-0-alpha-4)) |
+| `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `AbstractSwitchTenantAuthentication` is `SwitchTenantAuthentication` with a `TenantSwitch`; `SimpleRefreshTokenAuthentication` is `RefreshTokenAuthentication` (`AbstractRefreshTokenAuthentication` is removed); both take your credentials class ([Tokens and API keys](#tokens-and-api-keys), [Refreshing tokens](../integration/authentication.md#refreshing-tokens)) |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `TokenConverter`, `TokenCompositeAuthentication`, `RefreshTokenMismatchException` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.spi.token` (`cosec-spi`) | `TokenVerifier`, `TokenStore`, `TokenRevoker`, `RevocationReader`, `TokenVerificationException`, `TokenExpiredException`, `TokenRevokedException` |
-| `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `DefaultTokenRevoker` is `StoreTokenRevoker` ([From 8.0.0-alpha.4](./upgrading-previews.md#from-8-0-0-alpha-4)) |
-| `me.ahoo.cosec.token` | `me.ahoo.cosec.api.token` (`cosec-api`) | `SimpleCompositeToken` is removed: `CompositeToken` is a final class (`RevocableTokenVerifier` is removed too: [From 8.0.0-alpha.4](./upgrading-previews.md#from-8-0-0-alpha-4)) |
-| `me.ahoo.cosec.api.CoSec` | gone | Its values have names where they mean something: `CoSecPrincipal.ANONYMOUS_ID` (`me.ahoo.cosec.api.principal`), `TenantId.DEFAULT` (`me.ahoo.cosec.model`); the `cosec.` property prefix is written out ([From 8.0.0-alpha.4](./upgrading-previews.md#from-8-0-0-alpha-4)) |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `DefaultTokenRevoker` is `StoreTokenRevoker`: it revokes through the `TokenStore`, and also ends the token's session. The starter's bean is still `cosecTokenRevoker`, and `TokenRevoker` is still the SPI, whose `revoke` and `revokeSubject` now suspend. Where you constructed it, it takes the `TokenRevocation` and `TokenFamilies` beans besides the verifier, the store and the time to keep a revocation |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.api.token` (`cosec-api`) | `SimpleCompositeToken` is removed: `CompositeToken` is a final class, built with `CompositeToken(accessToken, refreshToken)`, equal by value, and its string hides both tokens. The JSON a login or refresh answers is unchanged. `RefreshTokenCredentials` declares `accessToken` and `refreshToken` and is no longer a `CompositeToken`: where you passed it as one (`TokenRevoker.revoke`), build one. `RevocableTokenVerifier` is removed too: the pipeline, refresh and logout read revocations through `TokenRevocation` (`me.ahoo.cosec.runtime.token`), and a `TokenVerifier` checks only the token itself |
+| `me.ahoo.cosec.api.CoSec` | gone | Its values have names where they mean something: `CoSecPrincipal.ANONYMOUS_ID` (`me.ahoo.cosec.api.principal`), `TenantId.DEFAULT` (`me.ahoo.cosec.model`); the `cosec.` property prefix is written out. Code that read `CoSec.COSEC`, `CoSec.COSEC_PREFIX` or `CoSec.DEFAULT` writes the value it meant (`cosec`, `cosec.`, `(0)`); no key, property or span attribute changes |
 | `me.ahoo.cosec.context` | `me.ahoo.cosec.webmvc` (`cosec-webmvc`) | `SecurityContextHolder` |
 | `me.ahoo.cosec.context.request` | `me.ahoo.cosec.runtime.http` (`cosec-runtime`) | `RemoteIpResolver`, `XForwardedRemoteIpResolver` |
 | `me.ahoo.cosec.api.audit` | `me.ahoo.cosec.spi.audit` (`cosec-spi`) | `AuditEventSink` |
@@ -1211,7 +1236,7 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 | `me.ahoo.cosec.apikey` | `me.ahoo.cosec.spi.apikey` (`cosec-spi`) | `ApiKey`, `ApiKeyReader`, `InMemoryApiKeyStore` |
 | `me.ahoo.cosec.limiter` | `me.ahoo.cosec.spi.ratelimit` (`cosec-spi`) | `RateLimit`, `RateLimitResult`, `RateLimiter` ([below](#removed-and-replaced-apis)) |
 | `me.ahoo.cosec` | `me.ahoo.cosec.model` (`cosec-model`) | `CoSecException` |
-| `me.ahoo.cosec.spring.boot.starter` and its sub-packages | `me.ahoo.cosec.spring.boot` and the same sub-packages (`cosec-spring-boot`) | The starter's classes, such as `jwt.JwtProperties`: `me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties` is now `me.ahoo.cosec.spring.boot.jwt.JwtProperties`, and, like the other `*Properties` classes, `@InternalCoSecApi` ([From 8.0.0-alpha.4](./upgrading-previews.md#from-8-0-0-alpha-4)): read `cosec.jwt.*` with `@Value` or the `Environment`, and do not reuse its nested types |
+| `me.ahoo.cosec.spring.boot.starter` and its sub-packages | `me.ahoo.cosec.spring.boot` and the same sub-packages (`cosec-spring-boot`) | The starter's classes, such as `jwt.JwtProperties`: `me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties` is now `me.ahoo.cosec.spring.boot.jwt.JwtProperties`, and, like the other `*Properties` classes and `EnabledCapable`, `@InternalCoSecApi`: read `cosec.jwt.*` with `@Value` or the `Environment`, and do not reuse its nested types. Its `@ConditionalOn*` annotations are internal: condition a bean of your own with `@ConditionalOnProperty("cosec.jwt.enabled")` instead of `@ConditionalOnJwtEnabled`. Auto-configuration class names in `spring.autoconfigure.exclude` and logger names change with the package (`me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration` is `me.ahoo.cosec.spring.boot.CoSecAutoConfiguration`) |
 
 The 8.0 SPIs live in the same places: `MembershipProvider` and `MembershipClaims` in `me.ahoo.cosec.spi.membership`,
 `SnapshotDocumentStore` and `InMemorySnapshotDocumentStore` in `me.ahoo.cosec.spi.snapshot`, `AttributeProvider` in
@@ -1281,8 +1306,9 @@ Code that uses any of these no longer compiles or is no longer called.
 | `me.ahoo.cosec.limiter.RateLimiter` and its `LocalRateLimiter`, `RedisRateLimiter` (`cosec-cocache`) | `me.ahoo.cosec.spi.ratelimit.RateLimiter`, a suspending SPI; the starter registers its `LocalRateLimiter` or `ReactiveRedisRateLimiter` ([Rate limiting](../policies/rate-limiting.md)). `RateLimit` and `RateLimitResult` remain. |
 | `Jwts.toPrincipal(String)`, `Jwts.decode`, `Jwts.verifyTimeClaims` | None: `Jwts` is internal to `cosec-jwt`. Turn a token into a principal with `TokenVerifier.verify`, which checks the signature, the expiry and the claims, then call `TokenRevocation.check` (`me.ahoo.cosec.runtime.token`, the starter's bean) on what it returns: `verify` alone accepts a revoked token. A revocation store that cannot be read throws `RevocationUnavailableException`, which your code decides on ([Verifying a token outside the pipeline](../integration/authentication.md#verifying-a-token-outside-the-pipeline)). |
 | `PrincipalConverter`, `TokenVerifier.toPrincipal` | `TokenVerifier.verify`, then `TokenRevocation.check` on its result (the starter's bean), as above ([Verifying a token outside the pipeline](../integration/authentication.md#verifying-a-token-outside-the-pipeline)). |
-| `Authentication.authenticate`, `TokenCompositeAuthentication.authenticateAsToken`, the social providers: `Mono<...>` | Suspending functions that return the value; a failed login throws ([Logging in](../integration/authentication.md#logging-in)). |
-| `DefaultAuthenticationProvider` and `SocialProviderManager` as objects | Classes, one instance per application context: inject the `AuthenticationProvider` or `SocialProviderManager` bean. |
+| `Authentication.authenticate`, `TokenCompositeAuthentication.authenticateAsToken`: `Mono<...>` | Suspending functions that return the value; a failed login throws ([Logging in](../integration/authentication.md#logging-in)). |
+| `SocialAuthenticationProvider` of your own, registered with `SocialProviderManager` | None in 8.0: the provider interface and its registry are `@InternalCoSecApi`, and the social providers are JustAuth's, chosen by each registration's `type` under `cosec.authentication.login.social.registration.<name>` ([Social login](../integration/authentication.md#social-login)). A provider JustAuth has moves to its registration. For one it does not have, implement `Authentication` for credentials of your own and serve the OAuth exchange yourself, as any login of your own ([Logging in](../integration/authentication.md#logging-in)): it then keeps the `state` single use and bound to the browser that started the sign-in, which CoSec's social login does for its providers. A provider of one's own is a candidate for the external identity providers of 8.1. |
+| `DefaultAuthenticationProvider` and `SocialProviderManager` as objects | None for an application: both are `@InternalCoSecApi`, as is `AuthenticationProvider`. Declare `Authentication` beans, which the starter registers, and log in through the `TokenCompositeAuthentication` bean; start a social sign-in with the `SocialAuthentication` bean. |
 | `AuthorizationChecker.check(...)`: `Mono<Boolean>` | `AuthorizationChecker.check(security, action, resource)`, a suspending function; `cosec-webflux` adds a `Mono<Boolean>` form and `cosec-webmvc` a blocking one ([Checks](../integration/checks.md)). |
 | Filters `ReactiveAuthorizationFilter`, `AuthorizationFilter` (servlet), `AuthorizationGatewayFilter`, and their constructors taking an `Authorization` | `PipelineWebFilter`, `PipelineServletFilter`, `PipelineGatewayFilter`, created by the starter. |
 | `ReactiveInjectSecurityContextWebFilter`, `InjectSecurityContextFilter` (inject mode) | `cosec.pipeline.mode=gateway` behind a CoSec gateway ([Inject mode becomes identity propagation](#inject-mode-becomes-identity-propagation)). The 8.0 filters put the security context on every permitted request. |
@@ -1358,9 +1384,9 @@ read; no property turns the check off ([Unknown properties](./configuration.md#u
 | `cosec.inject.enabled` | Removed ([Inject mode becomes identity propagation](#inject-mode-becomes-identity-propagation)). |
 | `cosec.api-key.store-blocking` | Removed. |
 | `cosec.jwt.token-revocation.enabled` | Removed: revocation is always on ([Token revocation is always on](#token-revocation-is-always-on)). |
-| `cosec.authorization.cache.key-prefix` | `cosec.key-prefix`, the prefix of every key: copy the token revocations first ([which families move](./upgrading-previews.md#from-8-0-0-alpha-2)). |
-| `cosec.api-key.key-prefix` | `cosec.key-prefix`: copy the API keys first ([which families move](./upgrading-previews.md#from-8-0-0-alpha-2)). |
-| `cosec.authorization.snapshot.key-prefix` (8.0 previews) | `cosec.key-prefix`: set it to this prefix ([which families move](./upgrading-previews.md#from-8-0-0-alpha-2)). |
+| `cosec.authorization.cache.key-prefix` | `cosec.key-prefix`, the prefix of every key: copy the token revocations first ([One key prefix](#one-key-prefix)). |
+| `cosec.api-key.key-prefix` | `cosec.key-prefix`: copy the API keys first ([One key prefix](#one-key-prefix)). |
+| `cosec.authorization.snapshot.key-prefix` (8.0 previews) | `cosec.key-prefix`: set it to this prefix. |
 | `cosec.unknown-properties` (8.0 previews) | Removed: an unknown key always fails startup. |
 
 `cosec.authorization.cache.token.*` is now `cosec.authentication.revocation.cache.*`.
@@ -1391,13 +1417,32 @@ Two settings changed during the 8.0 previews:
 - **Audit events** are written for every outcome, including `400`, cancelled requests, authentication failures and
   errors, and `kind` says which (`DECIDED`, `BAD_REQUEST`, `AUTHENTICATION_UNAVAILABLE`, `CANCELLED`, `ERROR`). New
   fields: `snapshotVersion` (the revisions read), `binding` (the binding the deciding statement applied through, or
-  `attached:<policy>`), `breakGlass`. New values: decision `INDETERMINATE`; reason codes `INDETERMINATE`,
-  `SCOPE_REJECTED`, `RATE_LIMITER_UNAVAILABLE`, `TOKEN_REVOKED`, `BOUNDARY`. `authorization.source` says what decided
+  `attached:<policy>`), `breakGlass`. `authorization.source` says what decided
   in terms of the binding model: `via`, `document`, `policy` and `statement` replace the source `type`, `policy` and
   `role`, and `principal.policies` and `request.device.userAgent` are gone
   ([Audit events](./observability.md#audit-events)). `elapsedNanos` now covers the whole pipeline (authentication,
   attributes, rate limits), not only the authorization. An `AuditEventSink` still receives the flat record; one that
   reads those fields changes with them.
+- **Audit decisions and reason codes are renamed, removed and added.** The JSON an `AuditEventSink`, the audit log and
+  a Kafka record carry writes each value by its name, and so does the Kotlin enum (`me.ahoo.cosec.api.audit`):
+
+  | Field | 7.x | 8.0 |
+  |---|---|---|
+  | `authorization.decision` (`AuditDecision`) | `ALLOW`, `EXPLICIT_DENY`, `IMPLICIT_DENY`, `TOO_MANY_REQUESTS`, `ERROR` | `PERMIT`, `EXPLICIT_DENY`, `IMPLICIT_DENY`, `SCOPE_REJECTED`, `BOUNDARY`, `INVALID_REQUEST`, `TOO_MANY_REQUESTS`, `ERROR`, `INDETERMINATE` |
+  | `authorization.reasonCode` (`AuditReasonCode`) | `ALLOW`, `EXPLICIT_DENY`, `IMPLICIT_DENY`, `TOKEN_EXPIRED`, `TOKEN_INVALID`, `TOO_MANY_REQUESTS`, `REGEX_TIMEOUT`, `ERROR` | `PERMIT`, `EXPLICIT_DENY`, `IMPLICIT_DENY`, `TOKEN_EXPIRED`, `TOKEN_INVALID`, `TOO_MANY_REQUESTS`, `ERROR`, `INDETERMINATE`, `SCOPE_REJECTED`, `RATE_LIMITER_UNAVAILABLE`, `TOKEN_REVOKED`, `BOUNDARY`, `DELEGATION_UNSUPPORTED`, `INVALID_REQUEST`, `TOKEN_NOT_YET_VALID` |
+
+  What a consumer changes:
+  - **Match `PERMIT` where it matched `ALLOW`, in both fields.** A SIEM rule, an alert or a Kafka consumer that matches
+    `"ALLOW"` matches nothing after the upgrade, and nothing fails to say so.
+  - **`REGEX_TIMEOUT` is never written**: 8.0 has no regular expressions in a policy, so nothing times out. 7.x wrote it
+    with the decision `IMPLICIT_DENY`.
+  - **Accept the new values.** A refusal is any decision but `PERMIT`; a consumer that counts refusals adds
+    `SCOPE_REJECTED`, `BOUNDARY` and `INVALID_REQUEST` (a `400`, with `kind` `BAD_REQUEST`). A request no decision could
+    be made for is `INDETERMINATE` (`503`), where 7.x wrote `ERROR`; `ERROR` is now a `500` only. A token refused as
+    revoked is `TOKEN_REVOKED`, no longer `TOKEN_INVALID`. Which outcome writes which pair:
+    [Audit events](./observability.md#audit-events).
+  - Code that names the enums recompiles: `AuditDecision.ALLOW`, `AuditReasonCode.ALLOW` and `AuditReasonCode.REGEX_TIMEOUT`
+    are gone, and a `when` over either enum gains the new values.
 - **Metrics**: the `cosec.authorization` timer covers the whole pipeline too. Its `source` tag is now `binding`,
   `attachment`, `builtin`, `boundary`, `scope` or `none` (7.x: `global_policy`, `principal_policy`,
   `role_permission`, `root`, `blacklist`, `none`, `unknown`); `result` names what decided in the decision event's words (`permit`,
