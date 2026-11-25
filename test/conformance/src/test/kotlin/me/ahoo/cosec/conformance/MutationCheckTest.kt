@@ -75,6 +75,184 @@ class MutationCheckTest {
         stale.assert().describedAs("--tests names that match no test class of their project").isEmpty()
     }
 
+    /**
+     * A patch that changes code its callers inline is only seen by those callers once they are compiled again, which
+     * incremental compilation does not always do (the old `ctl-41` survived so). Its header says so, which gives it the
+     * strict build: a patch that hides it would be checked on stale callers.
+     */
+    @Test
+    fun `every mutant that changes inlined code says so in its header`() {
+        val root = Path(requireNotNull(System.getProperty("cosec.repository.root")) { "cosec.repository.root" })
+        val wrong = Mutant.all(Path("mutants")).mapNotNull { mutant ->
+            Recompilation.headerProblem(mutant, root)?.let { "${mutant.name}: $it" }
+        }
+        wrong.assert().describedAs("mutants whose # Inlined: line does not match their patch").isEmpty()
+    }
+
+    /** The old `ctl-41`: a default of an inline function, whose callers keep the old one unless they are recompiled. */
+    private fun inlineDefault(header: String = ""): Pair<Path, Mutant> {
+        val root = Files.createDirectories(temp.resolve("repo"))
+        val source = Files.createDirectories(root.resolve("core/control/src/main/kotlin/x")).resolve("Support.kt")
+        Files.writeString(
+            source,
+            """
+            |internal object Support {
+            |    /** A body as JSON. */
+            |    inline fun post(
+            |        request: Request,
+            |        maxBytes: Long = SMALL,
+            |        block: (Node) -> Response,
+            |    ): Response {
+            |        val text = "{ not a brace }"
+            |        return block(read(request, maxBytes))
+            |    }
+            |
+            |    fun plain(request: Request): Long = SMALL
+            |}
+            |
+            """.trimMargin()
+        )
+        val patch = Files.writeString(
+            temp.resolve("ctl-41-old.patch"),
+            "# Rule: CTL-41\n# Mutant: m\n# Tests: :control:test\n$header\n" +
+                "diff --git a/core/control/src/main/kotlin/x/Support.kt b/core/control/src/main/kotlin/x/Support.kt\n" +
+                "--- a/core/control/src/main/kotlin/x/Support.kt\n+++ b/core/control/src/main/kotlin/x/Support.kt\n" +
+                "@@ -4,3 +4,3 @@\n         request: Request,\n-        maxBytes: Long = SMALL,\n" +
+                "+        maxBytes: Long = LARGE,\n         block: (Node) -> Response,\n",
+        )
+        return root to Mutant.read(patch)
+    }
+
+    @Test
+    fun `a patch whose change is compiled into its callers needs the header and a build from source`() {
+        val (root, bare) = inlineDefault()
+        Recompilation.inlined(bare.patch, root).assert().containsExactly("Support.kt: inline fun post")
+        Recompilation.headerProblem(
+            bare,
+            root
+        )!!.assert().contains("Support.kt: inline fun post", "no `# Inlined:` line")
+        bare.inlined.assert().isNull()
+
+        val (_, marked) = inlineDefault("# Inlined: post's default maxBytes")
+        marked.inlined.assert().isEqualTo("post's default maxBytes")
+        Recompilation.headerProblem(marked, root).assert().isNull()
+
+        // What incremental compilation did to the old ctl-41: the patched class compiled, its callers kept what they had.
+        val incremental = Build(
+            0,
+            "> Task :control:compileKotlin\n> Task :runtime:compileKotlin FROM-CACHE\n" +
+                "> Task :control:compileTestKotlin UP-TO-DATE\n> Task :control:testClasses UP-TO-DATE\n"
+        )
+        val required = Recompilation.requiredTasks(marked.patch)
+        required.assert().containsExactly(":control:compileKotlin")
+        unproved(incremental, required, strict = false).assert().isEmpty()
+        unproved(incremental, required, strict = true).assert().containsExactly(
+            ":runtime:compileKotlin FROM-CACHE",
+            ":control:compileTestKotlin UP-TO-DATE",
+        )
+        // A strict build compiles every class of the tests' build again: that proves it.
+        val strict = Build(
+            0,
+            "> Task :runtime:compileKotlin\n> Task :runtime:compileJava NO-SOURCE\n> Task :control:compileKotlin\n" +
+                "> Task :control:compileTestKotlin\n"
+        )
+        unproved(strict, required, strict = true).assert().isEmpty()
+        Recompilation.STRICT.assert().containsExactly("--rerun-tasks", "--no-build-cache")
+    }
+
+    @Test
+    fun `a change outside an inline function, a private inline one or a private constant needs no header`() {
+        val root = Files.createDirectories(temp.resolve("repo"))
+        val dir = Files.createDirectories(root.resolve("core/x/src/main/kotlin"))
+        Files.writeString(
+            dir.resolve("A.kt"),
+            """
+            |object A {
+            |    private inline fun guarded(block: () -> Int): Int = try {
+            |        block()
+            |    } catch (e: Exception) {
+            |        0
+            |    }
+            |    inline fun <T> field(parse: () -> T): T =
+            |        parse()
+            |    fun plain(): Int = 1
+            |    private const val SECRET = 1
+            |}
+            |
+            """.trimMargin()
+        )
+        fun inlined(line: Int, from: String, to: String): List<String> {
+            val patch = Files.writeString(
+                temp.resolve("p$line.patch"),
+                "diff --git a/core/x/src/main/kotlin/A.kt b/core/x/src/main/kotlin/A.kt\n" +
+                    "--- a/core/x/src/main/kotlin/A.kt\n+++ b/core/x/src/main/kotlin/A.kt\n" +
+                    "@@ -$line,1 +$line,1 @@\n-$from\n+$to\n",
+            )
+            return Recompilation.inlined(patch, root)
+        }
+        inlined(3, "        block()", "        block() + 1").assert().isEmpty()
+        inlined(8, "        parse()", "        parse().also { }").assert().containsExactly("A.kt: inline fun field")
+        inlined(9, "    fun plain(): Int = 1", "    fun plain(): Int = 2").assert().isEmpty()
+        inlined(10, "    private const val SECRET = 1", "    private const val SECRET = 2").assert().isEmpty()
+        inlined(
+            10,
+            "    private const val SECRET = 1",
+            "    const val SECRET = 2"
+        ).assert().containsExactly("A.kt: const val SECRET")
+    }
+
+    @Test
+    fun `each patched file names the task that must compile or copy it`() {
+        val patch = Files.writeString(
+            temp.resolve("files.patch"),
+            listOf(
+                "core/runtime/src/main/kotlin/A.kt",
+                "core/runtime/src/test/kotlin/ATest.kt",
+                "core/runtime/src/testFixtures/kotlin/F.kt",
+                "host/spring-boot/src/main/resources/META-INF/x.imports",
+                "k8s/control/deployment.yaml",
+            ).joinToString("") { "diff --git a/$it b/$it\n--- a/$it\n+++ b/$it\n@@ -1 +1 @@\n-a\n+b\n" },
+        )
+        Recompilation.requiredTasks(patch).assert().containsExactly(
+            ":runtime:compileKotlin",
+            ":runtime:compileTestKotlin",
+            ":runtime:compileTestFixturesKotlin",
+            ":spring-boot:processResources",
+        )
+    }
+
+    /**
+     * A build that took the patched file as unchanged ran the classes from before it: neither its pass nor its failure is
+     * a verdict. A task absent from the build has no class on the tests' class path (an architecture rule reads the file).
+     */
+    @Test
+    fun `a build that did not run the patched project's compilation proves nothing`() {
+        val required = listOf(":control:compileKotlin")
+        unproved(Build(0, "> Task :control:compileKotlin UP-TO-DATE\n"), required, false)
+            .assert().containsExactly(":control:compileKotlin UP-TO-DATE")
+        unproved(Build(0, "> Task :control:compileKotlin NO-SOURCE\n"), required, false).assert().hasSize(1)
+        unproved(Build(0, "> Task :control:compileKotlin\n"), required, false).assert().isEmpty()
+        unproved(Build(0, "> Task :control:compileKotlin FROM-CACHE\n"), required, false).assert().isEmpty()
+        unproved(Build(0, "> Task :architecture:test\n"), required, false).assert().isEmpty()
+    }
+
+    @Test
+    fun `an inlined mutant's tree is replaced after every verdict`() {
+        val marked = Files.writeString(
+            temp.resolve("inlined.patch"),
+            "# Rule: X-1\n# Mutant: m\n# Tests: :a:test\n# Inlined: a\n\n" +
+                "diff --git a/src/A.kt b/src/A.kt\n--- a/src/A.kt\n+++ b/src/A.kt\n@@ -1 +1 @@\n-val a = 1\n+val a = 2\n",
+        )
+        val inlined = Mutant.read(marked)
+        val next = patch("next")
+        run(listOf(inlined, next)) { tree, mutant ->
+            tree.apply(mutant.patch)
+            if (mutant == inlined) MutantResult.KILLED else MutantResult.SURVIVED
+        }
+        made.assert().hasSize(2)
+        removed.first().assert().isEqualTo(made.first())
+    }
+
     @Test
     fun `a --tests name matches a class, a method of one, or a pattern`() {
         val known = setOf("me.ahoo.a.FooTest", "me.ahoo.a.stage.BarTest")

@@ -1,6 +1,7 @@
 # Rule: DOC-7
 # Mutant: a window of up to a year is accepted again, so a rule keyed by a client's header keeps a counter key per value for two years
 # Tests: :model:test --tests me.ahoo.cosec.model.decision.DecisionTest
+# Inlined: Decision.kt: const val MAX_WINDOW_SECONDS
 
 diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/decision/Decision.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/decision/Decision.kt
 index ea43a003..9fddd3a0 100644

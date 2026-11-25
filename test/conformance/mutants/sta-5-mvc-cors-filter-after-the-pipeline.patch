@@ -1,6 +1,7 @@
 # Rule: STA-5
 # Mutant: On Spring MVC the CORS filter runs after the pipeline's, so a preflight is decided before it is answered
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.CorsWiringTest
+# Inlined: CoSecPipelineWebAutoConfiguration.kt: const val CORS_SERVLET_FILTER_ORDER
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
 index 740830db..a8a34cae 100644

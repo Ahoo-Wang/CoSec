@@ -1,6 +1,7 @@
 # Rule: PIP-19
 # Mutant: the servlet filter runs ahead of Spring Boot's hidden-method filter again: a POST with _method=DELETE is authorized as a POST and executed as a DELETE
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.RewritingFilterOrderTest
+# Inlined: CoSecPipelineWebAutoConfiguration.kt: const val SERVLET_FILTER_ORDER
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
 index 740830db..3482521d 100644

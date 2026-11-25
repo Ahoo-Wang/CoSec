@@ -1,6 +1,7 @@
 # Rule: CTL-24
 # Mutant: a client field that does not parse has its exception's message in the 400 detail
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlHttpTest
+# Inlined: JsonFields.kt: the body of inline fun field
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/JsonFields.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/JsonFields.kt
 index 8c00d207..e24009d2 100644
