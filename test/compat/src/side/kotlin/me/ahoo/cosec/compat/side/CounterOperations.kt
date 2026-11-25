@@ -54,6 +54,12 @@ internal object CounterOperations {
             Redis.strings.expire(key, Duration.ofMillis(windowMs * 2))
             "elapsed=${nowMs % windowMs}"
         },
+        // How far into its window Redis's clock is, for a window of `window` seconds: what the script weighs `p` by.
+        "limit.elapsed" to { a ->
+            val windowMs = a.getValue("window").toLong() * MILLIS
+            val nowMs = checkNotNull(Redis.strings.execute { connection -> connection.serverCommands().time() })
+            "elapsed=${nowMs % windowMs}"
+        },
         "session.admit" to { a ->
             val now = Instant.ofEpochMilli(a.getValue("now").toLong())
             val family = TokenFamily(
