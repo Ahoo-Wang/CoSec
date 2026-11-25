@@ -1,0 +1,12 @@
+{
+  "id": "CTL-5",
+  "source": "RFC 0007 §5.8",
+  "statement": "A platform or app candidate that removes a policy another document's binding refers to is not published; the back-reference index is added to before a head moves and removed from only after.",
+  "level": "control",
+  "guards": [
+    "control:RevisionsTest",
+    "control:AppPermissionReferencesTest#a tenant's reference to an app permission is indexed under the app only, every other one as before",
+    "control:AppPermissionReferencesTest#the app cannot remove a permission a tenant refers to, and the platform holds no member for it"
+  ],
+  "pending": null
+}

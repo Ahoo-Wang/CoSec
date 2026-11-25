@@ -1,0 +1,11 @@
+{
+  "id": "CTL-1",
+  "source": "RFC 0007 §6.3",
+  "statement": "A candidate containing any Broken entry is not published, and the head does not move.",
+  "level": "control",
+  "guards": [
+    "control:PublishCompileTest",
+    "control:ControlFailClosedTest"
+  ],
+  "pending": null
+}

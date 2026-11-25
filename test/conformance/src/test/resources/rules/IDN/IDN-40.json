@@ -1,0 +1,27 @@
+{
+  "id": "IDN-40",
+  "source": "The maintainer's answer of 2026-11-24 (a logout after a tenant switch ends the login it came from too); RFC 0009 §11.4 (sentences proposed in the PR)",
+  "statement": "Logging out of a session a tenant switch started ends the login it was switched from (its root, IDN-36) as well, through every logout of CoSec's revoker: TokenRevoker.revoke of the access token, of the pair, and the served logout route (IDN-24); the root is read from the session's record, so the access token alone suffices. The root is revoked first, then the session, then the token's id, each by a conditional write, so a refresh or a switch that read the root before cannot write it back live, and a logout that fails at a step has done none of the later ones: it is answered as a failure (503 when the store cannot read or write), never as done while the login lives on, and its retry starts again. A root already revoked or gone is left as it is, a root of another principal is left alone and logged, and a login's own logout ends only itself. A switched session whose record is gone (pushed out of its principal's latest sessions in its tenant, IDN-35) cannot find its root. The access tokens the root and the other sessions switched from it issued stay valid until they expire, and those sessions end at their next refresh or switch.",
+  "level": "pipeline",
+  "pending": null,
+  "guards": [
+    "login:SwitchedLogoutTest#a switched session's logout revokes its login, then itself, then its token",
+    "login:SwitchedLogoutTest#a logout with the pair ends the login as one with the access token alone does",
+    "login:SwitchedLogoutTest#a login's own logout ends only itself, and its switched sessions at their next refresh",
+    "login:SwitchedLogoutTest#a sibling switched from the same login ends at its next refresh",
+    "login:SwitchedLogoutTest#a root already revoked is left as it is, and the session still ends",
+    "login:SwitchedLogoutTest#a root whose record is gone leaves the session to end alone",
+    "login:SwitchedLogoutTest#a switched session whose own record is gone cannot find its login",
+    "login:SwitchedLogoutTest#a root of another principal is left alone and logged, and the session still ends",
+    "login:SwitchedLogoutTest#a root that cannot be read stops the logout before the session or the token is touched",
+    "login:SwitchedLogoutTest#a root that cannot be revoked stops the logout before the session or the token is touched",
+    "login:SwitchedLogoutTest#a session that cannot be ended leaves the token unrevoked, and the retry completes the logout",
+    "login:SwitchedLogoutTest#a token id that cannot be recorded is retried from the start, and then refused as revoked",
+    "login:SwitchedLogoutTest#a refresh of the login that read it before the logout cannot write it back live",
+    "login:SwitchedLogoutTest#a refresh of the login that writes between the logout's read and write is followed by the revocation",
+    "login:SwitchedLogoutTest#two sessions of one login logging out at once both end it",
+    "login:SwitchedLogoutTest#a switch from the login that keeps it before the logout writes issues a session that ends at its refresh",
+    "login:SwitchedLogoutTest#a root that keeps changing fails the logout before the session or the token is touched",
+    "cocache:LaterSessionRecordStoreTest#a refresh, a logout and a switched session's logout meet a later record, refused and never rewritten - IDN-40"
+  ]
+}

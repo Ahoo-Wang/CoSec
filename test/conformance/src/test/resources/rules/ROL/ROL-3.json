@@ -1,0 +1,7 @@
+{
+  "id": "ROL-3",
+  "source": "RFC 0012 §6.2",
+  "statement": "A role of an app document that names an undefined permission does not compile; one of a tenant document is a REFERENCES finding, and on the data plane it fails closed.",
+  "level": "engine",
+  "pending": null
+}

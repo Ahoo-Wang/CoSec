@@ -1,0 +1,10 @@
+{
+  "id": "BND-5",
+  "source": "RFC 0004 §4.2",
+  "statement": "A role binding applies through the roles the principal has in the request's space, and only where its app and space match the scope exactly (case-sensitive, no trimming; * is Any).",
+  "level": "engine",
+  "properties": [
+    "engine:EnginePropertyTest#P10 the binding index agrees with a scan of every binding"
+  ],
+  "pending": null
+}

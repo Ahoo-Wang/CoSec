@@ -1,0 +1,10 @@
+{
+  "id": "IDN-6",
+  "source": "RFC 0009 §4.2",
+  "statement": "API keys turned on without a MembershipProvider bean fail startup, naming CoCacheMembershipProvider: a key's memberships are its principal's, and every key would otherwise be a 503.",
+  "level": "startup",
+  "pending": null,
+  "guards": [
+    "spring-boot:CoSecApiKeyAutoConfigurationTest#apiKeysNeedAMembershipProvider"
+  ]
+}

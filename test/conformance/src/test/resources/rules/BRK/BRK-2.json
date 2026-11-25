@@ -1,0 +1,10 @@
+{
+  "id": "BRK-2",
+  "source": "RFC 0004 §4.8",
+  "statement": "Break-glass bindings exist only in the platform document, bind only a principal, and must have expiresAt.",
+  "level": "engine",
+  "guards": [
+    "engine:CompiledDocumentTest#break-glass bindings are expiring principal bindings of the platform"
+  ],
+  "pending": null
+}

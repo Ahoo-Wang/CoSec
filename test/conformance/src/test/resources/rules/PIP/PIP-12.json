@@ -1,0 +1,15 @@
+{
+  "id": "PIP-12",
+  "source": "RFC 0006 §6.1; RC1-38",
+  "statement": "A request that sends a header with different values, when any statement, policy condition, boundary or rate limit key of the documents its view reads reads that header (`http.header.<name>`, or `Origin` and `Referer` through `http.origin` and `http.referer`), is answered 400 before evaluation, whatever the effect of the statement and whether it applies to the request; identical repeats are one value, and a header no document reads is not checked.",
+  "level": "pipeline",
+  "guards": [
+    "runtime:HostAttributesPipelineTest#aHeaderWithDifferentValuesIsInvalid",
+    "engine:CompiledDocumentTest#a document knows the headers it reads",
+    "testkit:KitHeadersTest#a header sent in two cases with different values is refused, whichever comes last",
+    "testkit:KitHeadersTest#identical repeats are one value, by the kit as by the pipeline",
+    "testkit:KitHeadersTest#a header no document reads is not checked",
+    "testkit:KitHeadersTest#Origin and Referer are checked the same way"
+  ],
+  "pending": null
+}

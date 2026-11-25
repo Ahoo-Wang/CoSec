@@ -1,0 +1,14 @@
+{
+  "id": "APR-3",
+  "source": "RFC 0007 §7.3, §7.5, Q10",
+  "statement": "A holder of cosec:approve on the document in the platform tenant is the trust root: its own changes are not analyzed and need no second person, unless four-eyes is on, when what the analysis cannot prove needs another holder, a platform principal too. A tenant principal holding cosec:approve is not the trust root: its own changes are analyzed (RC1-10). A workload is never the trust root: a principal whose credential declares itself a workload's (an API key's and a service's own identity are by construction, IDN-34), one with no credential, or one CoSec's API key authenticator proved (IDN-44).",
+  "level": "control",
+  "guards": [
+    "control:ApprovalB2Test#a tenant approver's own change is analyzed, and it approves others' - RC1-10",
+    "control:ControlAuthorizationTest#the trust root publishes alone unless four-eyes is on",
+    "control:ApprovalB2Test#under four-eyes a platform principal's change needs a platform approver",
+    "control:ApprovalB2Test#an API key is never the trust root - review M2",
+    "control:ApprovalB2Test#a service's own identity is never the trust root - IDN-34"
+  ],
+  "pending": null
+}

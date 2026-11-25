@@ -1,0 +1,14 @@
+{
+  "id": "CTL-31",
+  "source": "RFC 0007 §7.4.4",
+  "statement": "A platform or app change that removes a DENY needs a second person unless the trust root publishes it, and under four-eyes the trust root needs one too: removing a policy that holds a DENY, or a binding whose policy holds one or cannot be read, read from the expanded document, so a role removed or put with fewer permissions counts for each binding it no longer derives. Nothing holds over these documents as the platform's DENYs and a boundary hold over a tenant's, which removes its own DENY alone. Revoking a break-glass binding is not such a removal (§8).",
+  "level": "control",
+  "guards": [
+    "control:DenyRemovalTest#removing a platform DENY needs a second person, and removing an ALLOW does not",
+    "control:DenyRemovalTest#the trust root removes a DENY alone, and under four-eyes it needs a second person too",
+    "control:DenyRemovalTest#an app role whose permission holds a DENY is removed or narrowed by two people",
+    "control:DenyRemovalTest#a tenant removes its own DENY alone",
+    "control:DenyRemovalTest#revoking a break-glass binding ends an emergency, and a policy that cannot be read holds a DENY"
+  ],
+  "pending": null
+}

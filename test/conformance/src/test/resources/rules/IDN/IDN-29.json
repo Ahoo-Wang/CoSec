@@ -1,0 +1,13 @@
+{
+  "id": "IDN-29",
+  "source": "RFC 0006 §5.3.2; issue #1666 (Wow's release-candidate drill)",
+  "statement": "CoSec's token verifier tolerates an issuer's clock ahead of its own by the skew (`cosec.authentication.revocation.skew`, the one subject revocation judges with): a token's `iat` and `nbf` may be that much later than the verifier's clock. Never its `exp`: no skew lengthens a token's life. A token beyond the skew is rejected as `TOKEN_NOT_YET_VALID`, which the client reads as `token-invalid`.",
+  "level": "build",
+  "pending": null,
+  "guards": [
+    "jwt:IssuerSkewTest#an issue time within the skew ahead is accepted, beyond it refused as not valid yet",
+    "jwt:IssuerSkewTest#a not-before time within the skew ahead is accepted, beyond it refused as not valid yet",
+    "jwt:IssuerSkewTest#an expiry has no skew",
+    "jwt:IssuerSkewTest#a token accepted early is still revoked by a revocation it follows within the skew"
+  ]
+}

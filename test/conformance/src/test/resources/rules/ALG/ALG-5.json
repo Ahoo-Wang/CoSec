@@ -1,0 +1,10 @@
+{
+  "id": "ALG-5",
+  "source": "RFC 0004 §6.1",
+  "statement": "When nothing matches the decision is the implicit deny Deny(null).",
+  "level": "engine",
+  "properties": [
+    "engine:EnginePropertyTest#the decision is that of the pseudocode"
+  ],
+  "pending": null
+}

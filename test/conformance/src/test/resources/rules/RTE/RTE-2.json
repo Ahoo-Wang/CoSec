@@ -1,0 +1,11 @@
+{
+  "id": "RTE-2",
+  "source": "RFC 0005 §5.3, §5.1",
+  "statement": "A captured path value that holds a slash (a decoded %2F) never becomes a segment of a typed resource id: the request is refused with 400.",
+  "level": "pipeline",
+  "guards": [
+    "document:RouteMapTest#a capture that decodes to a slash never becomes a segment of a resource id",
+    "runtime:PipelineRoutesTest#a capture holding a slash is refused, never read as another resource"
+  ],
+  "pending": null
+}

@@ -1,0 +1,14 @@
+{
+  "id": "GRT-4",
+  "source": "RFC 0007 §7.4.1, 2026-10-30 revision (RC1-9)",
+  "statement": "Removing a tenant's own policy whose id the platform also defines grants the platform's policy to every live binding of the tenant that names the id, and to attachments of the id when the platform's policy is attachable; those fragments are analyzed like any other.",
+  "level": "control",
+  "properties": [
+    "control:GrantPropertyTest#A5 the grant analysis is sound",
+    "control:GrantPropertyTest#A8 changes analyzed as contained never grant beyond the grantors"
+  ],
+  "guards": [
+    "control:GrantAnalyzerTest"
+  ],
+  "pending": null
+}

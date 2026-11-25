@@ -1,0 +1,10 @@
+{
+  "id": "CTL-36",
+  "source": "RFC 0007 §6.7 (usability review before RC1, UC-5)",
+  "statement": "An :apply with REPLACE of a document that has a head is proposed on the revision the document's header names, the revision it was read at, not on the current head: when that is not the head, it is refused with 409, as POST /changes is with a stale base, and the message says to read the head again, bring what changed into the file, set its revision to the head's and apply again. A document not published yet is not compared. MERGE removes nothing and proposes on the head.",
+  "level": "control",
+  "guards": [
+    "control:ChangesTest#a replace read at an older revision is refused and removes nothing"
+  ],
+  "pending": null
+}

@@ -1,0 +1,10 @@
+{
+  "id": "CTL-37",
+  "source": "RFC 0007 §6.7 (usability review before RC1, UC-2)",
+  "statement": "An :apply with MERGE whose file leaves out entries of the head keeps them, and its change carries one WARNING finding (check OPERATION) per section ($.policies, $.bindings, $.roles, $.rateLimits) that names the kept ids and says that REPLACE removes them. A REPLACE carries none: what it removes are its operations.",
+  "level": "control",
+  "guards": [
+    "control:ChangesTest#apply merges or replaces, guarded by what it read"
+  ],
+  "pending": null
+}

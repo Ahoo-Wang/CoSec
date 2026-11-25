@@ -1,0 +1,11 @@
+{
+  "id": "ATR-6",
+  "source": "RFC 0007 §9.5, Q13 (N6)",
+  "statement": "A DENY with onMissing nomatch compiles, in any document, only with the confirmation the control plane records (onMissingConfirmed); it then lapses while its attribute cannot be fetched.",
+  "level": "pipeline",
+  "guards": [
+    "engine:ExternalAttributesTest",
+    "document:ExternalAttributeDocumentTest"
+  ],
+  "pending": null
+}

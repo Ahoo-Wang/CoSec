@@ -1,0 +1,15 @@
+{
+  "id": "CTL-51",
+  "source": "R2C-32 (review round 2, fourth pass); RFC 0007 §10.3",
+  "statement": "simulate and explain name a statement (its policy, index and name, and in the trace its effect and whether it matched) only to a caller who may read the document that defines its policy, whichever document the binding it applied through lives in: a tenant's binding to a platform policy or to an app's permission policy shows a tenant administrator neither the statement that decided nor any of that policy's statements in the trace, which are counted as redacted. A caller who may read the defining document is told them. The lock-out finding (V4) names the statement that would refuse the publisher only on the same condition, and otherwise says which request would be denied (DR1-F-13). analyze, likewise, lists only the bindings of the documents the caller may read (cosec:read), its own tenant's document included, and counts the others as hidden: cosec:analyze on a tenant asks who may do what there, it does not grant reading the bindings the answer lists (DR1-F-8).",
+  "level": "control",
+  "guards": [
+    "control:DecisionQueriesTest#a tenant administrator does not see the statements of a platform policy their binding points to",
+    "control:DecisionQueriesTest#a tenant administrator does not see the statements of an app policy their binding points to",
+    "control:DecisionQueriesTest#a platform operator still sees them, and a tenant administrator their own tenant's statements",
+    "control:ControlLockoutTest#a statement is named only to a publisher who may read the document that defines it",
+    "control:ControlLockoutTest#a refusal by the platform boundary names it only to a reader of the platform document",
+    "control:ControlLockoutTest#each reference is named only where its policy is defined"
+  ],
+  "pending": null
+}

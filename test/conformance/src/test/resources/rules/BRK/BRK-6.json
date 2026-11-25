@@ -1,0 +1,10 @@
+{
+  "id": "BRK-6",
+  "source": "RFC 0007 §8; round-2 review R4",
+  "statement": "The policy a live break-glass binding grants does not change while the binding lives: a change that puts it needs cosec:breakglass and a REQUIRED audit, and never checks clean.",
+  "level": "control",
+  "pending": null,
+  "guards": [
+    "control:ControlRoundTwoFixesTest#the policy a live break-glass binding grants changes only once the binding has gone"
+  ]
+}

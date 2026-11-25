@@ -1,0 +1,14 @@
+{
+  "id": "GRT-3",
+  "source": "RFC 0007 §7.4.3, 2026-10-30 revision (RC1-3)",
+  "statement": "A statement the grantor holds through a binding with expiresAt contains only fragments whose own binding expires no later; a fragment granted to attachments, without expiresAt or expiring later is not contained by it.",
+  "level": "control",
+  "properties": [
+    "control:GrantPropertyTest#A5 the grant analysis is sound",
+    "control:GrantPropertyTest#A8 changes analyzed as contained never grant beyond the grantors"
+  ],
+  "guards": [
+    "control:GrantAnalyzerTest"
+  ],
+  "pending": null
+}

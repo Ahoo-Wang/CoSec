@@ -1,0 +1,10 @@
+{
+  "id": "MIX-21",
+  "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on phase 2 of the cross-version fixture); the red-team inventory, row 21",
+  "statement": "The CoSec-* request parameters are strict: both versions read them alike, and one stated twice in disagreement is refused (400) by both.",
+  "level": "build",
+  "guards": [
+    "compat:EdgeCompatTest#the CoSec parameters are read alike, and an ambiguous one refused, by both versions"
+  ],
+  "pending": null
+}

@@ -1,0 +1,10 @@
+{
+  "id": "ALG-2",
+  "source": "RFC 0004 §6.1",
+  "statement": "Without a matching DENY, a DENY that fails (the statement or its policy's condition) makes the decision Indeterminate(MatcherFailed).",
+  "level": "engine",
+  "properties": [
+    "engine:EnginePropertyTest#the decision is that of the pseudocode"
+  ],
+  "pending": null
+}

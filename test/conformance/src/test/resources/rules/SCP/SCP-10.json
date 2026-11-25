@@ -1,0 +1,23 @@
+{
+  "id": "SCP-10",
+  "source": "RFC 0004 §4.6 (round-1 review, 2026-10-26; RC1-15), split from SCP-7 by batch R4 (2026-11-08)",
+  "statement": "An app a credential declares that cannot be an app id (blank, *, containing ':' or a control character, or longer than 128 characters: the rule of a tenant id) is Rejected(APP_MISMATCH), with or without a host app. An app document's key (SnapshotKey.App) takes only such an id, so the control plane takes no app the data plane could never read: analyze refuses one with 400, and a candidate document with a binding in such an app, wherever it is, is a V2 finding (400) at the binding's app. A stored record that names such an app (a change of one, or a head it was checked with; an instance status entry; a back-reference set's member; an app list entry; a head holding a binding in one) is a format error, and whatever reads it fails closed: nothing skips the record. Reading such a change is 503, a publish or a repair over such a head or set fails without moving the head, a maintenance pass stops without reclaiming, and the grant analysis takes every app as unknown.",
+  "level": "engine",
+  "guards": [
+    "model:ScopeResolverTest#a declared app that cannot be an app id is rejected with or without a host app",
+    "cocache:SnapshotKeyEncoderTest#anAppIdIsTheIdARequestCouldDeclare",
+    "control:ControlPlaneTest#analyze refuses an app that cannot be an app id",
+    "control:UnnamedAppIdsTest#a binding in an app no request can be in is refused with 400, naming it",
+    "control:UnnamedAppIdsTest#a head that holds one is a format error, so neither a publish nor a repair gets past it",
+    "control:UnnamedAppIdsTest#a stored change of such an app is a format error",
+    "control:ControlMaintenanceTest#an open change of an app no key can name stops the pass",
+    "control:ControlMaintenanceTest#an open change that cannot be expired stops the pass",
+    "control:ControlHttpTest#a change that no longer reads is a 503 to every caller, without detail",
+    "control:ChangesB1Test#an app list that is not to be trusted leaves every app unknown - RC1-4",
+    "cocache:CoCacheControlStoreTest#an open change of an app no key can name fails the listing",
+    "cocache:CoCacheControlStoreTest#a back-reference set naming an app no key can name is a format error",
+    "cocache:CoCacheControlStoreTest#the member codec reads back what it writes and rejects anything else",
+    "document:ShadowCodecTest#candidates, reports and statuses read back as they were written"
+  ],
+  "pending": null
+}

@@ -1,0 +1,12 @@
+{
+  "id": "IDN-19",
+  "source": "RFC 0009 §11.3; round-2 review M2",
+  "statement": "A family record that cannot be read, or a write of it that cannot be confirmed, issues nothing: the refresh fails (503), never reads the family as absent or the write as done. A missing record refuses the refresh (401).",
+  "level": "pipeline",
+  "pending": null,
+  "guards": [
+    "login:TokenFamiliesTest#an unreadable family record issues nothing",
+    "cocache:CoCacheTokenFamilyStoreTest#an unreadable family record issues nothing",
+    "cocache:CoCacheTokenFamilyStoreTest#the family table reads a failure as unknown, and no layer changes that"
+  ]
+}

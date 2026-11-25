@@ -1,0 +1,7 @@
+{
+  "id": "ROL-10",
+  "source": "RFC 0012 §7.5",
+  "statement": "A permission a tenant's role lists cannot be removed from its app.",
+  "level": "control",
+  "pending": null
+}

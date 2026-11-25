@@ -1,0 +1,13 @@
+{
+  "id": "DOC-14",
+  "source": "RFC 0005 §3; review round 1 of beta.4 (R1A-1)",
+  "statement": "A DENY statement, and a rate limit rule, whose http resource pattern sets decodeAndParseSegments false does not compile: it matches the path as received, percent-encoded, and would miss every encoded spelling of what it names (a DENY on /admin/** would not stop /%61dmin/users). The error names the statement by its path in the document. An ALLOW keeps the option.",
+  "level": "engine",
+  "guards": [
+    "engine:PolicyCompilerTest#a deny that matches the path undecoded does not compile, an allow does",
+    "document:PolicyDocumentCompilerTest#a deny matching the path as received does not compile, and the error names the statement",
+    "control:DocumentRefusalHttpTest#a change with a deny matching the path undecoded or an id that would forge a line stays a draft naming it",
+    "migrate:ConverterTest#a 7x deny matching the path undecoded is rejected at its statement, an allow converts"
+  ],
+  "pending": null
+}

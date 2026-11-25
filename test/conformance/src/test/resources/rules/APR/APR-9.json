@@ -1,0 +1,12 @@
+{
+  "id": "APR-9",
+  "source": "The pre-release review of 8.0.0-beta.9 (findings A-2 and B-1), decided by the coordinator on 2026-11-25; RFC 0007 §7.5",
+  "statement": "An approval records whose the approver's credential was, its kind (PERSON or WORKLOAD) as the host that recorded it read it, and the change answer shows it (approval.kind). At publication an approval counts only when it says a person's: one that records no kind, as every approval recorded before kinds, or a workload's, does not count, and the change waits for an approval again, its APPROVAL finding saying so. So a workload never approves (APR-7) holds at publication too, whichever version recorded the approval. An older reader that ignores the member reads the person's approval this version recorded; one that drops it in a rewrite leaves an approval that does not count, which narrows.",
+  "level": "control",
+  "pending": null,
+  "guards": [
+    "control:ApprovalKindTest#an approval counts only when it says its approver was a person - APR-9",
+    "control:ApprovalKindTest#a stored approval keeps its kind, and one recorded before kinds reads as none - APR-9",
+    "control:ControlRoundTwoFixesTest#an approval keeps every attribute of its approver, so that publishing checks what it was decided on"
+  ]
+}

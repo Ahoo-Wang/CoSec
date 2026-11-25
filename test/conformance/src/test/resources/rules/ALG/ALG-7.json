@@ -1,0 +1,16 @@
+{
+  "id": "ALG-7",
+  "source": "RFC 0004 §6.1",
+  "statement": "A policy's condition is evaluated at most once per evaluation, and only once one of its statements matched its action and resource (or failed matching the resource); untraced, nothing is evaluated after the statement that decided.",
+  "level": "engine",
+  "guards": [
+    "engine:EngineTest#a condition runs once per evaluation, also when policies share it",
+    "engine:EngineTest#a condition runs once however many others the evaluation reached",
+    "engine:EngineTest#a condition is not evaluated when no statement of the policy matches the action and resource"
+  ],
+  "pending": null,
+  "properties": [
+    "engine:IndexPropertyTest#ALG-7 a policy condition runs at most once, and only for a statement that matched its action and resource",
+    "engine:IndexPropertyTest#ALG-7 untraced, nothing is evaluated after the statement that decided"
+  ]
+}

@@ -157,7 +157,7 @@ class FilesOutsideTheProjects(unittest.TestCase):
 
     def test_conformance_and_architecture_are_projects_of_the_group_test_like_the_others(self):
         for path in (
-            "test/conformance/src/test/resources/rules/ACT.json", "test/conformance/mutants/a.patch",
+            "test/conformance/src/test/resources/rules/ACT/ACT-1.json", "test/conformance/mutants/a.patch",
             "test/conformance/src/test/resources/scenarios/ACT/a.json", "test/architecture/src/test/kotlin/A.kt",
             "test/architecture/src/test/kotlin/SourceSizeLedger.kt",
         ):
@@ -172,7 +172,7 @@ class FilesOutsideTheProjects(unittest.TestCase):
         # a Kotlin file of the same project does not
         self.assertEqual({"edge", "host", "test", "platform"}, run("edge/gateway/src/test/kotlin/A.kt")[0])
         # conformance's own data is skipped by RepositoryDocuments
-        self.assertEqual({"test"}, run("test/conformance/src/test/resources/rules/ACT.json")[0])
+        self.assertEqual({"test"}, run("test/conformance/src/test/resources/rules/ACT/ACT-1.json")[0])
 
     def test_a_dependency_of_a_reader_does_not_run_through_a_file_it_does_not_read(self):
         # `document` reads wiki/; `runtime` depends on `document` and reads nothing of it, but is listed on its own

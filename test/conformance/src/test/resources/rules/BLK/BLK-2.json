@@ -1,0 +1,10 @@
+{
+  "id": "BLK-2",
+  "source": "RFC 0006 §5.4.4",
+  "statement": "A blacklist that cannot be read is never \"not blocked\": the request is Indeterminate (503) unless a DENY matches.",
+  "level": "pipeline",
+  "guards": [
+    "runtime:ExternalAttributesPipelineTest"
+  ],
+  "pending": null
+}

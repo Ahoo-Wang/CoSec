@@ -1,0 +1,13 @@
+{
+  "id": "IDN-15",
+  "source": "RFC 0009 §11.3; round-2 review M2",
+  "statement": "Only a family's current generation moves it: a refresh of the current generation moves the family to its next generation with a conditional write of the record it read, so of concurrent refreshes of one pair exactly one moves it, on one instance or many. A refresh of any other generation never moves it.",
+  "level": "pipeline",
+  "pending": null,
+  "guards": [
+    "login:TokenFamiliesTest#only the current generation refreshes",
+    "login:TokenFamiliesTest#refreshes of one pair racing move the family once",
+    "cocache:CoCacheTokenFamilyStoreTest#refreshes of one pair racing on two instances move the family once",
+    "jwt:RefreshTokenFamiliesJwtTest#a retried refresh heals, and only the current pair moves the session on"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "ATR-5",
+  "source": "RFC 0006 §5.4.2; RFC 0004 Q6",
+  "statement": "A provider that fails or times out makes only its own attributes unavailable; the other providers' attributes are still read, so their DENY still matches.",
+  "level": "pipeline",
+  "guards": [
+    "runtime:ExternalAttributesPipelineTest"
+  ],
+  "pending": null
+}

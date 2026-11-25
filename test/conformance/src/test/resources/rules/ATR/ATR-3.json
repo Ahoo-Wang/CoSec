@@ -1,0 +1,9 @@
+{
+  "id": "ATR-3",
+  "source": "RFC 0006 §5.4.3 (Q13)",
+  "statement": "Superseded by ATR-6. Before the control plane's confirmation (RFC 0007 N6) a DENY could say onMissing nomatch only in the platform document; a DENY without the confirmation now does not compile in any document, and with it compiles in any (ATR-6).",
+  "level": "pipeline",
+  "guards": [],
+  "pending": null,
+  "superseded": "ATR-6"
+}

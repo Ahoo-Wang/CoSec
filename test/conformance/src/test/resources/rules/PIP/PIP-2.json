@@ -1,0 +1,15 @@
+{
+  "id": "PIP-2",
+  "source": "RFC 0006 §6.1",
+  "statement": "Indeterminate is always 503; 500 is kept for unmodelled exceptions.",
+  "level": "pipeline",
+  "properties": [
+    "runtime:ProblemBodyPropertyTest#problemBodiesHoldOnlyTheAllowedMembers"
+  ],
+  "guards": [
+    "runtime:PipelineTest#indeterminateDecisionIs503",
+    "runtime:PipelineTest#unmodelledExceptionIs500",
+    "runtime:PipelineTest#authenticatorUnavailableIs503"
+  ],
+  "pending": null
+}

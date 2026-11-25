@@ -1,0 +1,11 @@
+{
+  "id": "MIX-3",
+  "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 3",
+  "statement": "A refresh token is strict: only a token whose cosec.token is refresh is one, and no version takes it for an access token. A refresh token whose crit names an extension is not read either (IDN-47), from 8.0.0-beta.9 on both sides.",
+  "level": "build",
+  "guards": [
+    "compat:TokenCompatTest#a refresh token is refused as an access token by every version",
+    "compat:TokenCompatTest#a refresh token whose crit names an extension is refused by a version that does not understand it"
+  ],
+  "pending": null
+}

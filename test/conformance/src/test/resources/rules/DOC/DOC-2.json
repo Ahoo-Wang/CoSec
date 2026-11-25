@@ -1,0 +1,10 @@
+{
+  "id": "DOC-2",
+  "source": "RFC 0008 §3.2 (review of #1015)",
+  "statement": "The codecs neither encode nor decode Match.Exactly(\"*\"): * only ever means Match.Any.",
+  "level": "build",
+  "pending": null,
+  "guards": [
+    "document:PolicyDocumentCodecTest#the wildcard is only ever Any"
+  ]
+}

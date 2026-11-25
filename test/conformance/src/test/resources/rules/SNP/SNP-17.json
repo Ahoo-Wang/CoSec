@@ -1,0 +1,18 @@
+{
+  "id": "SNP-17",
+  "source": "RFC 0013 §5.4 (the request timer)",
+  "statement": "A request's cold load timeout runs from the call: its load or its timer answers it within `coldLoadTimeout` of `request()`. The request is registered before its offer, so `close` answers it whatever the drain does; its timer is armed when the offer returns, with what is left of the bound, and only if it is not yet answered; an offer that throws leaves it answered and untimed.",
+  "level": "build",
+  "guards": [
+    "runtime:KeyRunnerRequestTimerTest#a request answered inside its offer, by a load that completes in the drain, schedules no timer",
+    "runtime:KeyRunnerRequestTimerTest#a hit schedules no timer",
+    "runtime:KeyRunnerRequestTimerTest#a request whose offer returns late is timed by what is left of its bound, not the whole of it",
+    "runtime:KeyRunnerRequestTimerTest#a request whose bound is spent when its offer returns is answered TIMEOUT at once, on the caller's thread",
+    "runtime:KeyRunnerRequestTimerTest#an offer that throws leaves its request answered, not registered and waiting",
+    "runtime:KeyRunnerRequestTimerTest#an offer that throws arms no timer",
+    "runtime:KeyRunnerRequestTimerTest#a request still loading when the source closes is answered by close",
+    "runtime:KeyRunnerRequestTimerTest#a timer that fires after the answer, before its cancel, finds the request answered and does nothing",
+    "runtime:KeyRunnerRequestTimerTest#a request whose timer the scheduler refuses is answered FAILED once, unregistered, and its load's end changes nothing"
+  ],
+  "pending": null
+}

@@ -1,0 +1,19 @@
+{
+  "id": "CTL-40",
+  "source": "Review round 1 of beta.4 (R1B-4); RFC 0007 §6.2 V2",
+  "statement": "The platform's limits set entry budgets: the policies, statements, bindings to roles and bindings to Anyone one document holds, counting the entries its short forms derive (a role's bindings are bindings to roles; a catalog permission with an action is a policy of one statement) (by default 10,000, 20,000, 20,000 and 1,000). The control plane holds every candidate it checks to them, on propose, apply, rollback, rebase and publish: for every budget, the new count is at most the larger of the limit and the old count (that of the head the candidate replaces), with a warning finding naming each count still over; anything that raises an over-budget count is refused, with a 4xx finding naming the budget, the count and the limit, never a 500. Neither the compiler nor a host enforces a budget: a stored document over one keeps being served. cosec-migrate reports a converted document over a default budget as a warning naming the budget, the count and the limit, and writes it.",
+  "level": "control",
+  "guards": [
+    "control:EntryBudgetsTest#a change may not raise a count over its budget, and may keep or shrink one already over",
+    "control:EntryBudgetsTest#a new document is held to the limit itself",
+    "control:EntryBudgetsTest#a rollback is held to the rule against the current head",
+    "control:EntryBudgetsTest#a budget lowered after a change was checked keeps it from publishing",
+    "document:DocumentBudgetsCountTest#a tenant's roles count as the bindings they derive",
+    "document:DocumentBudgetsCountTest#an app's catalog permissions with an action count as policies of one statement, and its roles as bindings",
+    "control:SectionFieldsHttpTest#setLimits reads the entry budgets as the document reads them",
+    "document:PolicyDocumentCodecTest#the platform's entry budgets read and write back the same, beside the condition limits or alone",
+    "migrate:ConvertedBudgetsTest#a document over a default budget is a warning naming it, one within every budget is none",
+    "migrate:ConvertedBudgetsTest#publish and restore write a document over a budget as it is"
+  ],
+  "pending": null
+}

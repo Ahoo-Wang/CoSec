@@ -1,0 +1,16 @@
+{
+  "id": "SNP-8",
+  "source": "RFC 0003 §4.4 F5; RC1-43",
+  "statement": "A revision whose compilation fails, with an exception or a VirtualMachineError such as a StackOverflowError, is installed as failed: the source never keeps serving the revision before it in its place.",
+  "level": "timing",
+  "properties": [
+    "runtime:SnapshotFailClosedPropertyTest#aFailedCompilationNeverKeepsAnOlderRevision",
+    "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder"
+  ],
+  "guards": [
+    "runtime:SnapshotSourceFailureTest#f5NewRevisionWhoseCompilationOverflowsTheStackReplacesTheInstalledOne",
+    "runtime:SnapshotReviewFixesTest#virtualMachineErrorInACompilationFailsTheLoadWithoutWedgingTheKey",
+    "runtime:KeyDrainLaneTest#a failed compilation offered while a caller with a spent budget holds the flag is installed before it returns"
+  ],
+  "pending": null
+}

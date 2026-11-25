@@ -1,0 +1,13 @@
+{
+  "id": "IDN-3",
+  "source": "RFC 0009 §4.2",
+  "statement": "A credential whose memberships come from the MembershipProvider (an API key, or a token marked cosec.membership: provider) is invalid when the provider does not know its principal or knows it as not active: the request is evaluated as anonymous and a deny is 401 token-invalid. A provider that fails is 503, never an unknown principal.",
+  "level": "pipeline",
+  "pending": null,
+  "guards": [
+    "runtime:PipelineTest#aKeyOfAnUnknownOrInactivePrincipalIsRefused",
+    "runtime:PipelineTest#aKeyWhoseProviderFailsIs503",
+    "runtime:MembershipResolverTest#anInactivePrincipalIsRefused",
+    "runtime:PipelineTest#aTokenOfAnUnknownPrincipalIsRefused"
+  ]
+}

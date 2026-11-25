@@ -1,0 +1,14 @@
+{
+  "id": "OBS-10",
+  "source": "Coordinator's brief for 8.0.0-beta.6, 2026-11-21 (the properties review, items 18 to 20); RFC 0006 §9.3, §7.1",
+  "statement": "A listener's two timeouts are derived, never set: a REQUIRED decision listener may take 20 % of `cosec.pipeline.timeout`, so its wait ends inside the request it delays; the REQUIRED change listeners of a control request together take `cosec.pipeline.timeout`, the bound of the request's own authorization, as no other deadline bounds a control request; at shutdown the decision listeners, the change listeners and the Kafka audit and change listeners each deliver what is queued for a sixth of `spring.lifecycle.timeout-per-shutdown-phase` (5 s at Spring's default 30 s). `cosec.observability.listener.required-timeout`, `cosec.observability.listener.drain-timeout` and `cosec.control.audit.required-timeout` fail startup as keys CoSec does not read, saying what replaced them.",
+  "level": "startup",
+  "pending": null,
+  "guards": [
+    "runtime:StageBudgetsTest#a required listener's wait ends inside the request",
+    "spring-boot:DerivedTimeoutsTest#without either deadline stated, every value is the default it replaced",
+    "spring-boot:StarterWiringTest#change listeners take the pipeline timeout as their required timeout and stop with the context",
+    "spring-boot:StarterWiringTest#the Kafka audit waits at shutdown for the listeners' drain timeout",
+    "spring-boot:SnapshotReadinessTest#listener queues are a share of the heap, and the drain a sixth of the shutdown phase"
+  ]
+}

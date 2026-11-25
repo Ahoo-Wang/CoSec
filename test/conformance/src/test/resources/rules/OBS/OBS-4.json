@@ -1,0 +1,14 @@
+{
+  "id": "OBS-4",
+  "source": "RFC 0006 §9.3, X8; #1393",
+  "statement": "After a drain that timed out, or a cancel, no listener call starts: a call already running is not interrupted, every event still queued is dropped and counted, and an event offered as the listeners close is delivered or dropped, once, so delivered plus dropped is what was published.",
+  "level": "build",
+  "pending": null,
+  "guards": [
+    "runtime:DecisionListenersShutdownTest#after a drain gives up, only the call in flight finishes and the queued events are dropped",
+    "runtime:DecisionListenersShutdownTest#a cancelled consumer leaves nothing queued, and what it leaves is counted",
+    "runtime:DecisionListenersShutdownTest#a consumer that polls after the stop starts no call",
+    "runtime:DecisionListenersShutdownTest#an event offered after the listeners stopped is dropped and counted, not left queued",
+    "runtime:DecisionListenersShutdownTest#events published while the listeners drain are each delivered or dropped, once"
+  ]
+}

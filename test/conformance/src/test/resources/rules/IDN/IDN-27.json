@@ -1,0 +1,11 @@
+{
+  "id": "IDN-27",
+  "source": "RFC 0006 §5.3.2, usability review UA-1 and UA-2",
+  "statement": "Whether a revoked token, or a role removed from a user, still counts is never a default argument: no public constructor or function of a published module defaults a RevocationReader, a TokenRevocation or a MembershipRefresh. RevocationReader.NONE and MembershipRefresh.CLAIMS stay available, written by whoever chooses them.",
+  "level": "build",
+  "pending": null,
+  "guards": [
+    "architecture:SafeDefaultsTest#no public parameter that reads revocations or memberships has a default",
+    "architecture:SafeDefaultsTest#the scan reads the token API"
+  ]
+}

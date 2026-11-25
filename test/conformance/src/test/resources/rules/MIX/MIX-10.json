@@ -1,0 +1,10 @@
+{
+  "id": "MIX-10",
+  "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on phase 2 of the cross-version fixture); the red-team inventory, row 10",
+  "statement": "Memberships are not exchanged between instances: each holds its own, for cosec.authorization.membership.ttl, and none is written to Redis; what crosses is their invalidation, a frame on the deployment's membership channel, which an instance of either version applies to its own copy.",
+  "level": "build",
+  "guards": [
+    "compat:LocalStateCompatTest#an invalidation either version publishes drops the other's copy of a membership"
+  ],
+  "pending": null
+}

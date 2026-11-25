@@ -1,0 +1,18 @@
+{
+  "id": "IDN-32",
+  "source": "Review round 2, R2B-22: the cache of verified tokens; RFC 0009 §11.5",
+  "statement": "A cached verification is what verifying the token again would answer: CoSec's verifier answers from its cache only while its own clock is where verifying again would succeed, so a cached token never outlives its `exp` nor precedes its `iat` and `nbf` beyond the skew, and a token that differs in any byte is verified again; only successes are kept, and the revocation and reserved-attribute checks run after it on every request. The cache holds the token cache's share of the heap (`STA-12`), each entry weighed by its token's length times what an entry measurably retains for a character; the weight is reckoned when an entry is put, on a miss, never on a hit, and an evicted entry costs one verification, never another answer. Refresh, tenant switch and logout never read it, and an application's own TokenVerifier is never given it.",
+  "level": "build",
+  "pending": null,
+  "guards": [
+    "jwt:VerifiedTokenCachePropertyTest#a cached verification is what verifying again answers, at every instant",
+    "jwt:VerifiedTokenCachePropertyTest#a token that differs from a cached one only in its signature is refused",
+    "jwt:VerifiedTokenCachePropertyTest#the cache keeps within its bound and counts what it does",
+    "spring-boot:OneVerifierTest#CoSec's own verifier answers a request's token from the cache, and a logout still refuses it next",
+    "spring-boot:OneVerifierTest#an application's own verifier is never given the cache",
+    "jwt:VerifiedTokenCacheSizeTest#an entry weighs what it retains, and the share of a 2 GiB heap holds the bytes the old bound did"
+  ],
+  "properties": [
+    "jwt:VerifiedTokenCachePropertyTest#a cached verification is what verifying again answers, at every instant"
+  ]
+}

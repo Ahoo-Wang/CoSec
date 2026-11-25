@@ -1,0 +1,19 @@
+{
+  "id": "STA-9",
+  "source": "maintainer decision 2026-11-21 (the control-plane host's callers, \"按你推荐\"); RFC 0006 §7.3",
+  "statement": "`cosec.pipeline.caller=forwarded-identity` on a host that decides with policies (`cosec.pipeline.mode=enforce`) makes the web adapters' gate the `IdentityGate`: the caller is the principal the `CoSec-Identity` header states, believed under the operator's statement of what can reach the host, and the control plane, the snapshot and every other part of `enforce` are wired. The host verifies no credential: with `cosec.jwt.enabled=false` it holds no signing secret, issues no token and wires no token authenticator, yet its control plane still reads the revocations of an approver's token (`RC1-11`) from the token tables, which it wires for this caller. The two statement keys of `STA-7` are `cosec.pipeline.identity.only-gateway-can-reach` (only the gateway can reach the host) and `cosec.pipeline.identity.only-trusted-callers-can-reach` (the gateway and the services the operator names can); either satisfies the check, and the message names both. On such a host the web adapter does not decide a request, as in `gateway` mode: the gateway decided what came through it, and for a call that did not come through the gateway only the control plane's own authorization of each operation, as the principal the caller states, decides. A route of the application's own on such a host (the IAM service of the embedded deployment) is authorized at the gateway or not at all. A host with a service port (`cosec.control.http.service-port`, `CTL-58`) states `only-trusted-callers-can-reach`, since the port admits services: the gateway's key, `only-gateway-can-reach`, is refused beside it, naming the key to write. A host whose caller is the credential (`caller=credential`, the default) wires no `IdentityGate` and is asked for neither. Neither property is read on a Spring Cloud Gateway host: it fails to start with `mode=gateway` or with this caller, since a gateway decides on the credentials it verifies.",
+  "level": "startup",
+  "pending": null,
+  "guards": [
+    "spring-boot:ForwardedIdentityCallerTest#the control plane starts on the forwarded identity with no JWT and no secret, and the gate is the identity gate",
+    "spring-boot:ForwardedIdentityCallerTest#it does not start until the operator states what can reach it, and either statement will do",
+    "spring-boot:ForwardedIdentityCallerTest#a host that takes its callers from the credential is asked for none of it",
+    "spring-boot:ForwardedIdentityCallerTest#a hidden-method filter is refused here as in gateway mode",
+    "spring-boot:ForwardedIdentityCallerTest#the control plane decides for the principal the identity states, by the documents",
+    "spring-boot:ForwardedIdentityCallerTest#no header is no principal",
+    "spring-boot:ForwardedIdentityCallerTest#an IAM service that issues tokens and embeds the control plane takes the forwarded caller beside its login",
+    "spring-boot:ForwardedIdentityCallerTest#an identity gate the application wires beside enforce is asked for the statement too",
+    "spring-boot:IdentityGuardAutoConfigurationTest#the forwarded-identity caller on a gateway host fails startup",
+    "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused"
+  ]
+}

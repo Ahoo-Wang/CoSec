@@ -1,0 +1,11 @@
+{
+  "id": "ALG-1",
+  "source": "RFC 0004 §6.1",
+  "statement": "Any applicable DENY that matches makes the decision Deny, whatever errors, missing or unavailable inputs exist elsewhere (C1b).",
+  "level": "engine",
+  "properties": [
+    "engine:EnginePropertyTest#P1' adding a matching deny always denies",
+    "engine:EnginePropertyTest#the decision is that of the pseudocode"
+  ],
+  "pending": null
+}

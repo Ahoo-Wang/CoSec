@@ -1,0 +1,10 @@
+{
+  "id": "OBS-3",
+  "source": "RFC 0006 §9.3; #1392",
+  "statement": "A BEST_EFFORT event's hand-off never blocks or logs on the request's thread: a full or closed queue drops the event and counts it, and a reporter on the listeners' own dispatcher logs how many each listener dropped since its last line, at most once per warning interval, through a conflated signal (no unbounded hand-off).",
+  "level": "build",
+  "pending": null,
+  "guards": [
+    "runtime:DecisionListenersShutdownTest#a full queue drops without waiting on the log, which is written off the request's thread"
+  ]
+}

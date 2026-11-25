@@ -1,0 +1,10 @@
+{
+  "id": "BND-1",
+  "source": "RFC 0004 §4.2",
+  "statement": "An expired binding does not apply.",
+  "level": "engine",
+  "guards": [
+    "engine:EngineTest#principal bindings apply to their principal in their tenant"
+  ],
+  "pending": null
+}

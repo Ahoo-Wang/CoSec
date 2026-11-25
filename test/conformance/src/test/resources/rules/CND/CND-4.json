@@ -1,0 +1,10 @@
+{
+  "id": "CND-4",
+  "source": "RFC 0005 §3.2",
+  "statement": "Attributes are typed statically: a path outside the catalog, an operand of the wrong type, or a string literal for a Bool does not compile.",
+  "level": "engine",
+  "guards": [
+    "model:ConditionCheckerTest"
+  ],
+  "pending": null
+}

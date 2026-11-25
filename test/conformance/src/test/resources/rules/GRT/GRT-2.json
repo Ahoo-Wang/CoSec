@@ -1,0 +1,14 @@
+{
+  "id": "GRT-2",
+  "source": "RFC 0007 §7.4.3",
+  "statement": "A fragment the analysis cannot decide goes to approval by another holder of cosec:approve on the document (APR-1; within a tenant, only the platform grants it); it is never let through as probably contained.",
+  "level": "control",
+  "properties": [
+    "control:GrantPropertyTest#A5 the grant analysis is sound"
+  ],
+  "guards": [
+    "control:GrantAnalyzerTest",
+    "control:ControlAuthorizationTest#what the analysis cannot prove waits for another person's approval of its digest"
+  ],
+  "pending": null
+}

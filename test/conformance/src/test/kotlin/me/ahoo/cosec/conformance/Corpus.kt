@@ -29,6 +29,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.extension
 import kotlin.io.path.invariantSeparatorsPathString
+import kotlin.io.path.isDirectory
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.name
@@ -60,28 +61,38 @@ class Scenario(val name: String, val node: JsonNode) {
 }
 
 /**
- * The registry and the scenarios under one resource directory: `rules/<FAMILY>.json` (with `rules/_meta.json` for
- * what concerns the whole registry), and `scenarios/<prefix>/<name>.json`. One file per family, so that PRs adding
- * rules to different families do not conflict.
+ * The registry and the scenarios under one resource directory: `rules/<FAMILY>/<ID>.json`, one rule per file (with
+ * `rules/_meta.json` for what concerns the whole registry), and `scenarios/<prefix>/<name>.json`. One file per rule, so
+ * that PRs adding rules, even to the same family, never edit the same file.
  */
 class Corpus(private val resources: Path) {
-    /** Every rule, family files in name order, each file's rules in its order. */
+    /** Every rule, families in name order, each family's rules in the order of their numbers. */
     fun rules(): List<RuleEntry> {
         val directory = resources.resolve(RULES)
         ScenarioJson.read(directory.resolve(META)).only("\$comment")
-        val files = directory.listDirectoryEntries("*.json").filter { it.name != META }.sortedBy { it.name }
-        return files.flatMap { file ->
-            val family = file.name.removeSuffix(".json")
-            val root = ScenarioJson.read(file)
-            root.only("rules")
-            root.required("rules").values().map { it.rule() }.onEach { rule ->
-                if (rule.id.substringBefore('-') != family) {
-                    throw ScenarioFormatException(
-                        "Rule ${rule.id} is in $RULES/${file.name}, not $RULES/${rule.id.substringBefore('-')}.json"
-                    )
-                }
-            }
+        val strays = directory.listDirectoryEntries().filter { it.isRegularFile() && it.name != META }
+        if (strays.isNotEmpty()) {
+            throw ScenarioFormatException(
+                "$RULES/ holds ${strays.map { it.name }.sorted()}: a rule is $RULES/<FAMILY>/<ID>.json"
+            )
         }
+        val families = directory.listDirectoryEntries().filter { it.isDirectory() }.sortedBy { it.name }
+        return families.flatMap { family ->
+            family.listDirectoryEntries().map { file -> rule(family.name, file) }
+                .sortedBy { it.id.substringAfter('-').toIntOrNull() ?: Int.MAX_VALUE }
+        }
+    }
+
+    /** The one rule of [file], which must be `<ID>.json` in its family's directory. */
+    private fun rule(family: String, file: Path): RuleEntry {
+        val rule = ScenarioJson.read(file).rule()
+        if (file.name != "${rule.id}.json" || rule.id.substringBefore('-') != family) {
+            throw ScenarioFormatException(
+                "Rule ${rule.id} is in $RULES/$family/${file.name}, not " +
+                    "$RULES/${rule.id.substringBefore('-')}/${rule.id}.json"
+            )
+        }
+        return rule
     }
 
     fun scenarios(): List<Scenario> {

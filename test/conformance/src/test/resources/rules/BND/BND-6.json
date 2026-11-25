@@ -1,0 +1,7 @@
+{
+  "id": "BND-6",
+  "source": "RFC 0004 §4.2",
+  "statement": "A role binding that names a tenant applies only to principals of that tenant.",
+  "level": "engine",
+  "pending": null
+}

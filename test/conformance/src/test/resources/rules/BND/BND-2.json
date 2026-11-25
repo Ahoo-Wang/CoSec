@@ -1,0 +1,10 @@
+{
+  "id": "BND-2",
+  "source": "RFC 0004 §4.4",
+  "statement": "A principal attaches only policies of its own tenant document or of the platform layer that are attachable (C5); any other attachment is missing.",
+  "level": "engine",
+  "guards": [
+    "engine:EngineTest#only attachable policies attach, and the root policy never does"
+  ],
+  "pending": null
+}
