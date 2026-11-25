@@ -1,0 +1,17 @@
+# Rule: IDN-44
+# Mutant: the control plane reads an operator without a request as no workload, so it can be the trust root and approve
+# Tests: :control:test --tests me.ahoo.cosec.control.change.OperatorWithoutRequestTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
+index cd21c1377..a5cc2e5d4 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
+@@ -251,7 +251,7 @@ internal class ApprovalRules(
+      * Whether a workload's credential authenticated [operator] (`IDN-34`): as its credential declares (`IDN-44`), and an
+      * operator without a request, or without a principal, is a workload's: what says nothing is read as the less.
+      */
+-    fun workload(operator: Operator): Boolean = operator.security?.principal?.workload ?: true
++    fun workload(operator: Operator): Boolean = operator.security?.principal?.workload ?: false
+ 
+     private companion object {
+         /** The id of the credential a recorded approver is checked with again: not a credential anyone presented. */

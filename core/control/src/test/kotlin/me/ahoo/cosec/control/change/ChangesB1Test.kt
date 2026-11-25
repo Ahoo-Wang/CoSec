@@ -27,7 +27,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
-import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
@@ -217,7 +216,7 @@ class ChangesB1Test {
         )
     }
 
-    private val ops = Operator(
+    private val ops = person(
         ALICE,
         Memberships(Memberships.Source.CLAIMS, mapOf(SpaceId.DEFAULT to setOf(RoleId("ops"))), emptyList())
     )

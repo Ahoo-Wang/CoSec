@@ -24,7 +24,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
-import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.lifecycle.BreakGlass
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
@@ -463,7 +462,7 @@ class RetriedPublishTest {
     }
 
     private companion object {
-        val PIA = Operator(Actor(TenantId.PLATFORM, PrincipalId("pia")), NO_MEMBERSHIPS)
+        val PIA = person(Actor(TenantId.PLATFORM, PrincipalId("pia")))
 
         /** A new DENY and its binding: a change that only narrows. */
         val BAN = listOf(

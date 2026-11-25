@@ -18,7 +18,6 @@ package me.ahoo.cosec.control.change
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.EntryDigest
 import me.ahoo.cosec.control.store.StoreFixtures
@@ -387,7 +386,7 @@ class ChangesTest {
     @Test
     fun `only its author rebases a change`() = runBlocking<Unit> {
         val change = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("a"))), "x")
-        val bob = Operator(Actor(TenantId("acme"), PrincipalId("bob")), NO_MEMBERSHIPS)
+        val bob = person(Actor(TenantId("acme"), PrincipalId("bob")))
         assertThrownBy<ChangeRejectedException> { runBlocking { changes.rebase(bob, change.id) } }
             .extracting { (it as ChangeRejectedException).status }.isEqualTo(403)
         changes.rebase(ALICE_OP, change.id).state.assert().isEqualTo(ChangeState.CHECKED)
