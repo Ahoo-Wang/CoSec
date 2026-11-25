@@ -137,7 +137,8 @@ identity = {
     "v": 1, "tenant": "(platform)", "sub": os.environ["SUBJECT"], "scope": {"app": "cosec-control", "space": ""},
     # A host that decides on the identity needs the caller's whole memberships (IDN-39): here, nothing more.
     "roles": [], "memberships": {"spaces": {}, "attachments": []},
-    "auth": {"method": "jwt", "jti": "smoke-" + os.environ["SUBJECT"], "exp": now + 600, "iat": now},
+    # A person's token, as CoSec's writer states it (IDN-44).
+    "auth": {"method": "jwt", "kind": "person", "jti": "smoke-" + os.environ["SUBJECT"], "exp": now + 600, "iat": now},
     "iat": now, "rid": "smoke-" + os.environ["SUBJECT"],
 }
 print(base64.urlsafe_b64encode(json.dumps(identity, separators=(",", ":")).encode()).rstrip(b"=").decode())

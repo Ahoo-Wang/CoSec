@@ -276,7 +276,7 @@ open class PipelineBenchmark {
  * CoSec's own may name its credential `jwt` (RFC 0010 C3).
  */
 internal object CredentialedTokens : Authenticator {
-    private val credential = Identity.Credential(Identity.Method("test"), "t1", Instant.now().plus(Duration.ofDays(1)))
+    private val credential = Identity.Credential(Identity.Method("test"), Identity.Credential.Kind.PERSON, "t1", Instant.now().plus(Duration.ofDays(1)))
 
     override suspend fun authenticate(credentials: Credentials): AuthnResult {
         val answer = TokenAuthenticator.authenticate(credentials) as? AuthnResult.Authenticated

@@ -71,6 +71,7 @@ class ApiKeyAuthenticator(
             attributes = mapOf(ApiKey.API_KEY_ID_ATTRIBUTE to apiKey.id),
             credential = Identity.Credential(
                 Identity.Method.API_KEY,
+                Identity.Credential.Kind.WORKLOAD,
                 apiKey.id,
                 apiKey.expiresAt,
                 apiKey.roles != null

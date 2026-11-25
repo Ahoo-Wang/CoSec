@@ -37,7 +37,7 @@ class IdentityMembersTest {
     private val whole = """
         {"v":1,"tenant":"acme","sub":"alice","scope":{"app":"order","space":""},"roles":["clerk"],
          "memberships":{"spaces":{"emea":["auditor"]},"attachments":["suspended"]},
-         "auth":{"method":"jwt","jti":"t1","exp":1793404800,"iat":1793404200,"capped":true,
+         "auth":{"method":"jwt","kind":"person","jti":"t1","exp":1793404800,"iat":1793404200,"capped":true,
                  "session":{"sid":"s1","auth_time":1793400000,"generation":2}},
          "iat":1793401200,"rid":"r1","claims":{"name":"Alice"},"crit":["v"]}
     """.trimIndent()
@@ -90,7 +90,15 @@ class IdentityMembersTest {
         fun read(path: String): Identity = IdentityCodec.decodeJson(without(path))
         val optional = IdentityMembers.ALL.filter { it.whenAbsent != WhenAbsent.REFUSED }.map { it.path }
         optional.assert()
-            .containsExactlyInAnyOrder("memberships", "auth.iat", "auth.capped", "auth.session", "claims", "crit")
+            .containsExactlyInAnyOrder(
+                "memberships",
+                "auth.kind",
+                "auth.iat",
+                "auth.capped",
+                "auth.session",
+                "claims",
+                "crit",
+            )
 
         IdentityMembers.BY_PATH.getValue("memberships").whenAbsent.assert().isEqualTo(WhenAbsent.UNSTATED)
         read("memberships").memberships.assert().isNull()
@@ -100,6 +108,9 @@ class IdentityMembersTest {
 
         IdentityMembers.BY_PATH.getValue("auth.session").whenAbsent.assert().isEqualTo(WhenAbsent.NONE)
         read("auth.session").credential.session.assert().isNull()
+
+        IdentityMembers.BY_PATH.getValue("auth.kind").whenAbsent.assert().isEqualTo(WhenAbsent.WORKLOAD)
+        read("auth.kind").credential.kind.assert().isEqualTo(Identity.Credential.Kind.WORKLOAD)
 
         IdentityMembers.BY_PATH.getValue("claims").whenAbsent.assert().isEqualTo(WhenAbsent.EMPTY)
         read("claims").claims.assert().isEmpty()

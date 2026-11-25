@@ -50,7 +50,12 @@ class IdentityMembershipsCodecTest {
             app = "order",
             space = space,
             roles = setOf("clerk"),
-            credential = Identity.Credential(Identity.Method.JWT, "t1", now.plusSeconds(3600)),
+            credential = Identity.Credential(
+                Identity.Method.JWT,
+                Identity.Credential.Kind.PERSON,
+                "t1",
+                now.plusSeconds(3600)
+            ),
             issuedAt = now,
             requestId = "r1",
             memberships = memberships,

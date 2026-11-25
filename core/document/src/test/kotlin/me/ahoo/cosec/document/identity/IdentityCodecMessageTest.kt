@@ -92,7 +92,7 @@ class IdentityCodecMessageTest {
             app = "order",
             space = "",
             roles = setOf("clerk"),
-            credential = Identity.Credential(Identity.Method.JWT, "t1", null),
+            credential = Identity.Credential(Identity.Method.JWT, Identity.Credential.Kind.PERSON, "t1", null),
             issuedAt = Instant.ofEpochSecond(now),
             requestId = "r1",
         )
@@ -103,7 +103,12 @@ class IdentityCodecMessageTest {
             app = "order",
             space = "",
             roles = setOf("clerk"),
-            credential = Identity.Credential(Identity.Method.JWT, "t1", Instant.ofEpochSecond(now + 3600)),
+            credential = Identity.Credential(
+                Identity.Method.JWT,
+                Identity.Credential.Kind.PERSON,
+                "t1",
+                Instant.ofEpochSecond(now + 3600)
+            ),
             issuedAt = Instant.ofEpochSecond(now),
             requestId = "r1",
             claims = mapOf("name\r\nERROR forged" to listOf(1)),

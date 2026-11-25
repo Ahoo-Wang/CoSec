@@ -42,6 +42,8 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **服务读取带有它不认识的成员的身份头**（`IDN-41`）。`CoSec-Identity` 的读方以前不忽略任何未知成员：遇到就答 `400`，这正是 beta.8 的 `memberships` 需要在网关与其后的服务之间排顺序的原因。现在它忽略不认识的成员，不论在哪一层，除非请求头新增的 `crit` 点了它的名：那是更新的版本要求每个读方都理解的成员。`crit` 点了名而服务不认识的成员以 `503` `unavailable` 拒绝，计入 `cosec.identity.refused{problem=unavailable}`，日志写出该成员。8.0 的写方都不写 `crit`。应用自己写的请求头若拼错了成员名，现在会被忽略而不是被拒绝。
 - **破坏性：身份头有读方的上限和更小的写方上限**（`IDN-43`）。网关现在默认最多写 6 KB（`cosec.gateway.identity.max-size`，原为 8 KB），`HttpControlService` 的转述也是；服务仍读 8 KB（`cosec.pipeline.identity.max-size`），8.x 的任何版本都不调低它。身份在 6 到 8 KB 之间的主体，现在在网关上答 `500`，除非你把 `cosec.gateway.identity.max-size` 调高（最多 8 KB）；在服务器默认的请求头上限下，这样的头本来也到不了服务。读取身份的宿主（`gateway` 模式，或 `cosec.pipeline.caller=forwarded-identity`）在你没有设置 `server.max-http-request-header-size` 时会得到推出的值，默认时 16 KB；你设置的值保留不变，比它小时启动时以 `WARN` 写出。
 
+- **破坏性：每个凭证都声明它属于谁，人还是工作负载**（`IDN-44`）。受影响的是你自己的 `Authenticator`，以及其他任何构造 `Identity.Credential` 的代码。它的构造器在方法之后多了必需参数 `kind`（`Identity.Credential.Kind.PERSON` 或 `WORKLOAD`），没有默认值：构造它的代码不选就编译不过。决定主体能否审批变更、能否当控制面的信任根、能否用 break-glass 的，现在是这个种类，而不是方法的名字：以前除 `api-key` 和 `service` 之外的任何方法都按人读，所以给机器客户端起了自己方法名的认证器可以审批。没有凭证的主体现在是工作负载：它本来就不能审批，现在也不再是信任根。`CoSec-Identity` 带上 `auth.kind`，本版本的每个写方都写它；没有它的请求头（beta.8 网关写的）按工作负载读，所以经 beta.8 网关转发的运维者在升级后的控制面宿主上不能审批，直到网关升级。把 `api-key` 或 `service` 凭证声明为人的请求头以 `400` 拒绝。
+
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
 **按这个顺序升级。** 这个预览版有三处改动要读对方写的请求头或请求，所以滚动升级有先后；每一步完成后再做下一步：

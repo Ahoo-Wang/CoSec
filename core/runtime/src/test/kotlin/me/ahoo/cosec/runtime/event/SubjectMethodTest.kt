@@ -76,10 +76,22 @@ class SubjectMethodTest {
 
     @Test
     fun `the event names the credential as the identity header does`() {
-        methodOf(Identity.Credential(Identity.Method.JWT, "t1", null), "token").assert().isEqualTo("jwt")
-        methodOf(Identity.Credential(Identity.Method.API_KEY, "k1", null), "anything").assert().isEqualTo("api-key")
-        methodOf(Identity.Credential(Identity.Method("token"), "t1", null), "token").assert().isEqualTo("token")
-        methodOf(Identity.Credential(Identity.Method("partner"), "t1", null), "token").assert().isEqualTo("partner")
+        methodOf(
+            Identity.Credential(Identity.Method.JWT, Identity.Credential.Kind.PERSON, "t1", null),
+            "token"
+        ).assert().isEqualTo("jwt")
+        methodOf(
+            Identity.Credential(Identity.Method.API_KEY, Identity.Credential.Kind.WORKLOAD, "k1", null),
+            "anything"
+        ).assert().isEqualTo("api-key")
+        methodOf(
+            Identity.Credential(Identity.Method("token"), Identity.Credential.Kind.PERSON, "t1", null),
+            "token"
+        ).assert().isEqualTo("token")
+        methodOf(
+            Identity.Credential(Identity.Method("partner"), Identity.Credential.Kind.PERSON, "t1", null),
+            "token"
+        ).assert().isEqualTo("partner")
     }
 
     @Test

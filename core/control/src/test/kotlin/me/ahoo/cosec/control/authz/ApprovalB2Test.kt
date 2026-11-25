@@ -262,7 +262,7 @@ class ApprovalB2Test {
                     MembershipSource.Claims(Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()))
                 },
                 emptyMap(),
-                Identity.Credential(Identity.Method("oidc"), jti, null),
+                Identity.Credential(Identity.Method("oidc"), Identity.Credential.Kind.PERSON, jti, null),
                 breakGlass = false,
                 issuedAt = issuedAt,
                 apiKeyCredential = false,
@@ -392,7 +392,12 @@ class ApprovalB2Test {
                 PrincipalId("pia"),
                 TenantId.PLATFORM,
                 Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()),
-                credential = Identity.Credential(Identity.Method.API_KEY, "key-1", null),
+                credential = Identity.Credential(
+                    Identity.Method.API_KEY,
+                    Identity.Credential.Kind.WORKLOAD,
+                    "key-1",
+                    null
+                ),
                 app = PipelineControlAuthorizer.CONTROL_APP,
             )
         )
@@ -416,7 +421,7 @@ class ApprovalB2Test {
                 TenantId.PLATFORM,
                 MembershipSource.Claims(Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())),
                 emptyMap(),
-                Identity.Credential(Identity.Method("service-key"), "key-2", null),
+                Identity.Credential(Identity.Method("service-key"), Identity.Credential.Kind.PERSON, "key-2", null),
                 breakGlass = false,
                 issuedAt = null,
                 apiKeyCredential = true,
@@ -429,7 +434,12 @@ class ApprovalB2Test {
                 PrincipalId("pia"),
                 TenantId.PLATFORM,
                 Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()),
-                credential = Identity.Credential(Identity.Method.API_KEY, "key-1", null),
+                credential = Identity.Credential(
+                    Identity.Method.API_KEY,
+                    Identity.Credential.Kind.WORKLOAD,
+                    "key-1",
+                    null
+                ),
                 app = PipelineControlAuthorizer.CONTROL_APP,
             )
         )
@@ -451,10 +461,62 @@ class ApprovalB2Test {
             PrincipalId(principal),
             TenantId.PLATFORM,
             Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()),
-            credential = Identity.Credential(Identity.Method.SERVICE, "service:$principal", null),
+            credential = Identity.Credential(
+                Identity.Method.SERVICE,
+                Identity.Credential.Kind.WORKLOAD,
+                "service:$principal",
+                null
+            ),
             app = PipelineControlAuthorizer.CONTROL_APP,
         )
     )
+
+    /** A principal of [method] whose credential declares itself [kind]'s: the method is any authenticator's name. */
+    private fun declared(principal: String, method: String, kind: Identity.Credential.Kind) = engine.operator(
+        AuthenticatedPrincipal(
+            PrincipalId(principal),
+            TenantId.PLATFORM,
+            Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()),
+            credential = Identity.Credential(Identity.Method(method), kind, "$method:$principal", null),
+            app = PipelineControlAuthorizer.CONTROL_APP,
+        )
+    )
+
+    /**
+     * IDN-44, APR-7: whose a credential is decides, never its method's name. A credential of an authenticator's own
+     * method declared a workload's never approves; the same method declared a person's does.
+     */
+    @Test
+    fun `a credential declared a workload's never approves, whatever its method - IDN-44`() = runBlocking<Unit> {
+        val change = awaiting("viewers")
+        refused {
+            changes.approve(
+                declared("pia", "mtls", Identity.Credential.Kind.WORKLOAD),
+                change.id,
+                change.candidate!!
+            )
+        }
+            .assert().isEqualTo(403)
+        changes.approve(declared("pia", "mtls", Identity.Credential.Kind.PERSON), change.id, change.candidate!!)
+            .state.assert().isEqualTo(ChangeState.READY)
+    }
+
+    /** IDN-44, APR-3: a credential declared a workload's is never the trust root, whatever its method. */
+    @Test
+    fun `a credential declared a workload's is never the trust root, whatever its method - IDN-44`() = runBlocking<Unit> {
+        val platform = listOf(Operation.PutPolicy(allow("machines", action = "order:read", resource = "order/**")))
+        val machine = declared("pia", "mtls", Identity.Credential.Kind.WORKLOAD)
+        val change = changes.propose(machine, SnapshotKey.Platform, head(SnapshotKey.Platform), platform, "a machine")
+        change.escalations.map { it.reason.name }.assert().containsExactly("NOT_ANALYZED")
+        changes.abandon(machine, change.id)
+        changes.propose(
+            declared("pia", "mtls", Identity.Credential.Kind.PERSON),
+            SnapshotKey.Platform,
+            head(SnapshotKey.Platform),
+            platform,
+            "a person",
+        ).escalations.assert().isEmpty()
+    }
 
     /** IDN-34: a service's own identity is a workload's credential, as an API key is: it never approves (APR-7). */
     @Test

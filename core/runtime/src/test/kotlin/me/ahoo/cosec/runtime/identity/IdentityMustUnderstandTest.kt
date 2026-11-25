@@ -73,7 +73,12 @@ class IdentityMustUnderstandTest {
         app = "",
         space = "",
         roles = setOf("clerk"),
-        credential = Identity.Credential(Identity.Method.JWT, "t1", now.plusSeconds(600)),
+        credential = Identity.Credential(
+            Identity.Method.JWT,
+            Identity.Credential.Kind.PERSON,
+            "t1",
+            now.plusSeconds(600)
+        ),
         issuedAt = now,
         requestId = "r1",
         memberships = Identity.Memberships(emptyMap(), listOf("suspended")),
@@ -106,7 +111,7 @@ class IdentityMustUnderstandTest {
 
     @Test
     fun `a member the service does not know is ignored, and the caller is the one the header states - IDN-41`() {
-        val outcome = read(later("kind" to "person", "future" to mapOf("a" to listOf(1, 2))))
+        val outcome = read(later("device" to "d1", "future" to mapOf("a" to listOf(1, 2))))
 
         outcome.proceed.assert().isTrue()
         outcome.security!!.identity.assert().isEqualTo(identity)
@@ -115,7 +120,7 @@ class IdentityMustUnderstandTest {
     @Test
     fun `a member crit names that the service does not know is refused with 503, counted and logged apart - IDN-41`() {
         val refusals = IdentityRefusals()
-        val outcome = read(later("kind" to "person", "crit" to listOf("kind")), refusals)
+        val outcome = read(later("device" to "d1", "crit" to listOf("device")), refusals)
 
         outcome.proceed.assert().isFalse()
         outcome.status.assert().isEqualTo(503)
@@ -123,7 +128,7 @@ class IdentityMustUnderstandTest {
         refusals.count(ProblemType.UNAVAILABLE).assert().isEqualTo(1L)
         refusals.count(ProblemType.INVALID_REQUEST).assert().isEqualTo(0L)
         val line = lines.list.single { it.level == Level.WARN }.formattedMessage
-        line.assert().contains("(503 unavailable)").contains("[kind]").contains("upgrade this service")
+        line.assert().contains("(503 unavailable)").contains("[device]").contains("upgrade this service")
             .doesNotContain("did not write")
     }
 
@@ -138,11 +143,11 @@ class IdentityMustUnderstandTest {
     @Test
     fun `an ignorable member is lost at the next hop, and the host decides as without it - IDN-41`() {
         // A service that only trusts the gateway reads a later gateway's header and relays its caller.
-        val admitted = read(later("kind" to "person"), deciding = false)
+        val admitted = read(later("device" to "d1"), deciding = false)
         admitted.proceed.assert().isTrue()
         val relayed = checkNotNull(IdentityIssuer(clock = clock, relay = true).issue(checkNotNull(admitted.security)))
 
-        String(Base64.getUrlDecoder().decode(relayed)).assert().doesNotContain("\"kind\"")
+        String(Base64.getUrlDecoder().decode(relayed)).assert().doesNotContain("\"device\"")
         val decided = read(relayed)
         decided.proceed.assert().isTrue()
         decided.security!!.memberships.attachments.map { it.value }.assert().containsExactly("suspended")
@@ -151,7 +156,7 @@ class IdentityMustUnderstandTest {
     @Test
     fun `a must-understand member stops the chain at the first hop that does not know it - IDN-41`() {
         // The service refuses the header itself: there is no caller to relay, so nothing reaches the host without it.
-        val refused = read(later("kind" to "person", "crit" to listOf("kind")), deciding = false)
+        val refused = read(later("device" to "d1", "crit" to listOf("device")), deciding = false)
 
         refused.proceed.assert().isFalse()
         refused.status.assert().isEqualTo(503)

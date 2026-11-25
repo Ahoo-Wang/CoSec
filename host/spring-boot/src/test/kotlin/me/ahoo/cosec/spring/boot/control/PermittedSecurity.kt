@@ -53,7 +53,7 @@ internal fun permittedSecurity(path: String): RequestSecurity {
         TenantId("acme"),
         MembershipClaims.parse(emptyList(), emptyList()),
         emptyMap(),
-        Identity.Credential(Identity.Method("test"), "token-alice", null),
+        Identity.Credential(Identity.Method("test"), Identity.Credential.Kind.PERSON, "token-alice", null),
     )
     val views = object : SnapshotViews {
         private fun view(key: ViewKey) = SnapshotView(

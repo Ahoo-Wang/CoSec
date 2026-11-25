@@ -45,7 +45,12 @@ class IdentityLimitsTest {
         app = "",
         space = "",
         roles = setOf("clerk"),
-        credential = Identity.Credential(Identity.Method.JWT, "t1", now.plusSeconds(600)),
+        credential = Identity.Credential(
+            Identity.Method.JWT,
+            Identity.Credential.Kind.PERSON,
+            "t1",
+            now.plusSeconds(600)
+        ),
         issuedAt = now,
         requestId = "r1",
         claims = claims,

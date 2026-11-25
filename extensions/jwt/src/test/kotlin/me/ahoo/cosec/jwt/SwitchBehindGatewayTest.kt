@@ -185,7 +185,12 @@ class SwitchBehindGatewayTest {
             app = "",
             space = "",
             roles = setOf("clerk"),
-            credential = Identity.Credential(Identity.Method.API_KEY, "k1", Instant.now().plusSeconds(3600)),
+            credential = Identity.Credential(
+                Identity.Method.API_KEY,
+                Identity.Credential.Kind.WORKLOAD,
+                "k1",
+                Instant.now().plusSeconds(3600)
+            ),
             issuedAt = Instant.now(),
             requestId = "r1",
         )

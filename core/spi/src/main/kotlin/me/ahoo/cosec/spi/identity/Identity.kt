@@ -120,7 +120,14 @@ class Identity(
 
     /** How the principal authenticated at the gateway: for audit and revocation correlation, never the credential. */
     class Credential(
+        /** How it authenticated, by name: a label for audit and the record (`IDN-44`), never what decides. */
         val method: Method,
+        /**
+         * Whose credential it is, a person's or a workload's (`IDN-44`): what decides whether its principal may approve
+         * a change or be the control plane's trust root, and use break-glass. No default: whoever makes a credential
+         * says which. [Method.API_KEY] and [Method.SERVICE] are workloads' by construction.
+         */
+        val kind: Kind,
         /** The token's `jti` or the API key's id. */
         val id: String,
         /** When the credential expires; null when it never does. A downstream service refuses an identity past it. */
@@ -144,6 +151,9 @@ class Identity(
         val session: TokenSession? = null,
     ) {
         init {
+            require(kind == Kind.WORKLOAD || (method != Method.API_KEY && method != Method.SERVICE)) {
+                "A credential named [$method] is a workload's (IDN-34): it cannot be declared a person's."
+            }
             require(session == null || method == Method.JWT) { "Only CoSec's own token has a session (RFC 0009)." }
             require(issuedAt == null || expiresAt == null || !issuedAt.isAfter(expiresAt)) {
                 "A credential cannot be issued after it expires: issued $issuedAt, expires $expiresAt."
@@ -152,7 +162,7 @@ class Identity(
             require(session == null || issuedAt != null) { "A session's token says when it was issued." }
         }
 
-        private fun fields(): List<Any?> = listOf(method, id, expiresAt, capped, issuedAt, session)
+        private fun fields(): List<Any?> = listOf(method, kind, id, expiresAt, capped, issuedAt, session)
 
         override fun equals(other: Any?): Boolean = other is Credential && other.fields() == fields()
 
@@ -164,6 +174,7 @@ class Identity(
         @InternalCoSecApi
         fun copy(
             method: Method = this.method,
+            kind: Kind = this.kind,
             id: String = this.id,
             expiresAt: Instant? = this.expiresAt,
             capped: Boolean = this.capped,
@@ -171,20 +182,34 @@ class Identity(
             session: TokenSession? = this.session,
         ): Credential = Credential(
             method = method,
+            kind = kind,
             id = id,
             expiresAt = expiresAt,
             capped = capped,
             issuedAt = issuedAt,
             session = session,
         )
+
+        /**
+         * Whose a credential is (`IDN-44`), a closed set: a reader takes a kind it does not know, or none, as a
+         * [WORKLOAD]'s, the restrictive reading. A later kind is a workload's to every reader that does not know it.
+         */
+        enum class Kind {
+            /** A person's: who may approve and be the trust root as the policies grant, and use break-glass. */
+            PERSON,
+
+            /** A workload's (a service, a machine, an API key): never approves, never the trust root, no break-glass. */
+            WORKLOAD,
+        }
     }
 
     /**
-     * How the principal authenticated, by name: any non-empty one. [JWT], [API_KEY] and [SERVICE] are CoSec's own; an
+     * How the principal authenticated, by name: any non-empty one, a label for audit and the record (`IDN-44`); whose
+     * credential it is, which decides, is [Credential.kind]. [JWT], [API_KEY] and [SERVICE] are CoSec's own; an
      * authenticator for another kind of credential names its own (RFC 0010 C3), and a service behind the gateway reads
      * it as it is. [JWT] is reserved: only CoSec's own token verifier yields it (`AuthenticatedPrincipal`), so behind a
-     * gateway it says that the gateway verified CoSec's token, which alone may use break-glass (RC1-26). [API_KEY] and
-     * [SERVICE] name a workload's credential wherever they appear (`AuthenticatedPrincipal.workload`, fail closed).
+     * gateway it says that the gateway verified CoSec's token, which alone, a person's, may use break-glass (RC1-26).
+     * A credential named [API_KEY] or [SERVICE] is a workload's by construction.
      */
     class Method(val value: String) {
         init {

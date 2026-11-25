@@ -34,35 +34,35 @@ internal object IdentityOperations {
     val ALL: Map<String, (Map<String, String>) -> String> = mapOf(
         "identity.write" to { arguments -> IdentityHeader.write(sample(arguments.getValue("sample"))) },
         "identity.read" to { arguments -> describe(IdentityCodec.decode(arguments.getValue("header"))) },
+        // Whose the credential is, as this version reads it (`IDN-44`): apart from `identity.read`, which both versions
+        // describe in the same words.
+        "identity.kind" to { arguments -> Kinds.of(IdentityCodec.decode(arguments.getValue("header")).credential) },
     )
 
     /** The samples both versions can write: each a kind of caller a gateway forwards. */
     private fun sample(name: String): Identity = when (name) {
         "person" -> Identity(
             "acme", "alice", "order", "team-a", setOf("clerk"),
-            Identity.Credential(Identity.Method.JWT, "token-1", EXPIRES, issuedAt = AT),
+            Kinds.jwt("token-1", EXPIRES, AT),
             AT, "request-1",
             memberships = Identity.Memberships(mapOf("team-b" to setOf("viewer")), listOf("extra")),
         )
         "workload" -> Identity(
             "acme", "robot", "order", "", setOf("worker"),
-            Identity.Credential(Identity.Method.API_KEY, "key-1", EXPIRES, capped = true),
+            Kinds.apiKey("key-1", EXPIRES, capped = true),
             AT, "request-2",
             memberships = Identity.Memberships.NONE,
         )
         "session" -> Identity(
             "acme", "alice", "order", "", setOf("clerk"),
-            Identity.Credential(
-                Identity.Method.JWT, "token-2", EXPIRES, issuedAt = AT,
-                session = TokenSession("family-1", AT, 3),
-            ),
+            Kinds.jwt("token-2", EXPIRES, AT, session = TokenSession("family-1", AT, 3)),
             AT, "request-3",
             claims = mapOf("dept" to "sales"),
             memberships = Identity.Memberships.NONE,
         )
         "no-memberships" -> Identity(
             "acme", "alice", "order", "", setOf("clerk"),
-            Identity.Credential(Identity.Method.JWT, "token-3", EXPIRES, issuedAt = AT),
+            Kinds.jwt("token-3", EXPIRES, AT),
             AT, "request-4",
         )
         else -> throw IllegalArgumentException("no sample $name")

@@ -340,6 +340,7 @@ class ForwardedIdentityCallerTest {
             roles = emptySet(),
             credential = Identity.Credential(
                 Identity.Method.JWT,
+                Identity.Credential.Kind.PERSON,
                 "jti-$principal",
                 now.plusSeconds(600),
                 issuedAt = now

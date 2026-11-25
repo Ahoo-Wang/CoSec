@@ -1,17 +1,19 @@
 # Rule: IDN-34
-# Mutant: a service's own identity states jwt, CoSec's own token: break-glass reaches it and it passes for a person
+# Mutant: a service's own identity states jwt, CoSec's own token, declared a person's: break-glass reaches it and it passes for a person
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.identity.ServiceIdentityTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/ServiceIdentity.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/ServiceIdentity.kt
-index f326c20b6..c6f443fda 100644
+index f15490b39..bfd272a66 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/ServiceIdentity.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/ServiceIdentity.kt
-@@ -42,7 +42,7 @@ object ServiceIdentity {
-         app = app,
+@@ -43,8 +43,8 @@ object ServiceIdentity {
          space = "",
          roles = roles,
--        credential = Identity.Credential(Identity.Method.SERVICE, credentialId(principal), now.plus(LIFETIME)),
-+        credential = Identity.Credential(Identity.Method.JWT, credentialId(principal), now.plus(LIFETIME)),
-         issuedAt = now,
-         requestId = requestId,
-         // A service states its roles; it has no other space and attaches nothing (IDN-39).
+         credential = Identity.Credential(
+-            Identity.Method.SERVICE,
+-            Identity.Credential.Kind.WORKLOAD,
++            Identity.Method.JWT,
++            Identity.Credential.Kind.PERSON,
+             credentialId(principal),
+             now.plus(LIFETIME),
+         ),

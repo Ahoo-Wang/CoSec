@@ -1,0 +1,18 @@
+# Rule: IDN-44
+# Mutant: behind a gateway, CoSec's own token gets break-glass whatever kind it declares, so a workload's session uses break-glass bindings
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.identity.IdentityGateTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityGate.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityGate.kt
+index 2cf23a202..be62d3702 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityGate.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityGate.kt
+@@ -229,8 +229,7 @@ class IdentityGate(
+             MembershipSource.Claims(memberships),
+             identity.claims,
+             identity.credential,
+-            breakGlass = identity.credential.method == Identity.Method.JWT &&
+-                identity.credential.kind == Identity.Credential.Kind.PERSON,
++            breakGlass = identity.credential.method == Identity.Method.JWT,
+             issuedAt = identity.credential.issuedAt,
+             apiKeyCredential = false,
+             app = identity.app.takeIf(ScopeResolver::isValidAppId)?.let(::AppId),
