@@ -155,6 +155,90 @@
         "compat:SessionRecordCompatTest#each version reads the session the other wrote"
       ],
       "pending": null
+    },
+    {
+      "id": "MIX-10",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on phase 2 of the cross-version fixture); the red-team inventory, row 10",
+      "statement": "Memberships are not exchanged between instances: each holds its own, for cosec.authorization.membership.ttl, and none is written to Redis; what crosses is their invalidation, a frame on the deployment's membership channel, which an instance of either version applies to its own copy.",
+      "level": "build",
+      "guards": [
+        "compat:LocalStateCompatTest#an invalidation either version publishes drops the other's copy of a membership"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-15",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on phase 2 of the cross-version fixture); the red-team inventory, row 15",
+      "statement": "A document's revision index and the app list are ignorable with must-understand (SNP-27, SNP-28): read alike by both versions' control stores, rewritten unchanged, a later member dropped by a rewrite that leaves the same record, and a record whose crit names a member a version does not know refused by it and never rewritten.",
+      "level": "build",
+      "guards": [
+        "compat:ControlStoreCompatTest#each version reads the record alike, and reads it again after the other rewrote it",
+        "compat:ControlStoreCompatTest#a later member without crit is dropped by a rewrite, which leaves the same record",
+        "compat:ControlStoreCompatTest#a record whose crit names a member a version does not know is refused by it, and never rewritten"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-16",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on phase 2 of the cross-version fixture); the red-team inventory, row 16",
+      "statement": "A control API request is strict: an operation either version's control-sdk writes, either version's control plane reads alike, and one with a member a control plane does not know is refused by it (400), never read as an operation that does less.",
+      "level": "build",
+      "guards": [
+        "compat:ControlApiCompatTest#a proposal either version's client writes, either version's control plane reads alike",
+        "compat:ControlApiCompatTest#an operation with a member a control plane does not know is refused by it"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-17",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on phase 2 of the cross-version fixture); the red-team inventory, row 17",
+      "statement": "A control API answer is read leniently by control-sdk, a member it does not know ignored, except a document's entries, read strictly so that applying back what was read never drops a member (CTL-76): an answer either version's control plane gives, either version's client reads alike.",
+      "level": "build",
+      "guards": [
+        "compat:ControlApiCompatTest#an answer either version's control plane gives, either version's client reads alike, ignoring a later member",
+        "compat:ControlApiCompatTest#a document's entries in an answer are read strictly by every client"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-18",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on phase 2 of the cross-version fixture); the red-team inventory, row 18",
+      "statement": "A client meets both versions during a rolling upgrade: every problem the previous version answers it with, with its status, type and title, the current one answers alike; a later version may add a problem, never remove or change one. Within one version contract/ pins every answer (PIP-25).",
+      "level": "build",
+      "guards": [
+        "compat:EdgeCompatTest#every problem the previous version answers a client with, the current one answers alike"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-19",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on phase 2 of the cross-version fixture); the red-team inventory, row 19",
+      "statement": "A route map is not exchanged: each instance reads its own file (cosec.authorization.routes.location) at startup, so two versions meet only through the same file rolled out to both, which they resolve alike.",
+      "level": "build",
+      "guards": [
+        "compat:LocalStateCompatTest#one route map is resolved alike by both versions"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-20",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on phase 2 of the cross-version fixture); the red-team inventory, row 20",
+      "statement": "Kafka events are not exchanged between versions of CoSec: CoSec writes decision and change events for consumers outside it and reads none back, so their payload is a contract with those consumers only.",
+      "level": "build",
+      "guards": [
+        "compat:LocalStateCompatTest#no module of CoSec consumes Kafka"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-21",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on phase 2 of the cross-version fixture); the red-team inventory, row 21",
+      "statement": "The CoSec-* request parameters are strict: both versions read them alike, and one stated twice in disagreement is refused (400) by both.",
+      "level": "build",
+      "guards": [
+        "compat:EdgeCompatTest#the CoSec parameters are read alike, and an ambiguous one refused, by both versions"
+      ],
+      "pending": null
     }
   ]
 }

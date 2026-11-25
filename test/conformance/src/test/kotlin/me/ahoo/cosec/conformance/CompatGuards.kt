@@ -39,5 +39,17 @@ internal object CompatGuards {
         "compat:SideIsolationTest#the previous side runs the published release and the current side this build",
         "compat:TokenCompatTest#a refresh token is refused as an access token by every version",
         "compat:TokenCompatTest#each version verifies what the other issues as the current verifier does",
+        "compat:LocalStateCompatTest#an invalidation either version publishes drops the other's copy of a membership",
+        "compat:ControlStoreCompatTest#each version reads the record alike, and reads it again after the other rewrote it",
+        "compat:ControlStoreCompatTest#a later member without crit is dropped by a rewrite, which leaves the same record",
+        "compat:ControlStoreCompatTest#a record whose crit names a member a version does not know is refused by it, and never rewritten",
+        "compat:ControlApiCompatTest#a proposal either version's client writes, either version's control plane reads alike",
+        "compat:ControlApiCompatTest#an operation with a member a control plane does not know is refused by it",
+        "compat:ControlApiCompatTest#an answer either version's control plane gives, either version's client reads alike, ignoring a later member",
+        "compat:ControlApiCompatTest#a document's entries in an answer are read strictly by every client",
+        "compat:EdgeCompatTest#every problem the previous version answers a client with, the current one answers alike",
+        "compat:LocalStateCompatTest#one route map is resolved alike by both versions",
+        "compat:LocalStateCompatTest#no module of CoSec consumes Kafka",
+        "compat:EdgeCompatTest#the CoSec parameters are read alike, and an ambiguous one refused, by both versions",
     )
 }

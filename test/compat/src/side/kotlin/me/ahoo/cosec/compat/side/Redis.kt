@@ -38,7 +38,7 @@ import org.springframework.data.redis.core.StringRedisTemplate
  * stays in a local copy another reads from: what one version wrote, the other reads from Redis.
  */
 internal object Redis {
-    private val backend: RedisBackend by lazy { RedisBackend.standalone(RedisURI.create("redis://localhost:6379")) }
+    val backend: RedisBackend by lazy { RedisBackend.standalone(RedisURI.create("redis://localhost:6379")) }
 
     private val connections: LettuceConnectionFactory by lazy {
         LettuceConnectionFactory(RedisStandaloneConfiguration()).apply {
