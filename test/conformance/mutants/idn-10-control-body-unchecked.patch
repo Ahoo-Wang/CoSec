@@ -1,6 +1,7 @@
 # Rule: IDN-10
 # Mutant: a control request body may hold an id with an unpaired surrogate, a document key or a binding's principal
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlHttpTest
+# Inlined: ControlHttpSupport.kt: the body of inline fun post
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt
 index 4af48886..27bd3096 100644

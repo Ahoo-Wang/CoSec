@@ -1,6 +1,7 @@
 # Rule: SNP-26
 # Mutant: a long rate limit key value is hashed into an x: bucket, so two releases count it apart
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.FrozenLayoutTest
+# Inlined: CompiledRateLimit.kt: const val HASHED_BUCKET_PREFIX
 
 diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt
 index 57818df36..606d36a65 100644

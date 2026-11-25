@@ -1,6 +1,7 @@
 # Rule: IDN-43
 # Mutant: CoSec's writers write up to the reader's limit, so a member a later version adds pushes a header that every older reader read past what it reads
 # Tests: :document:test --tests me.ahoo.cosec.document.identity.IdentityLimitsTest
+# Inlined: IdentityCodec.kt: const val WRITE_MAX_BYTES
 
 diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCodec.kt
 index 1e72d0f1a..3ca3fee51 100644

@@ -1,6 +1,7 @@
 # Rule: CTL-41
 # Mutant: every control route reads the document bound, so a body nobody authorized is parsed whole
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlBodyBoundTest
+# Inlined: ControlHttpSupport.kt: the default maxBytes of inline fun post
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/BreakGlassRoutes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/BreakGlassRoutes.kt
 index 121ff3556..a62470060 100644

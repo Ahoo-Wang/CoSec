@@ -1,6 +1,7 @@
 # Rule: OBS-10
 # Mutant: a REQUIRED listener may wait 120 % of the pipeline timeout, longer than the request it delays
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.StageBudgetsTest
+# Inlined: StageBudgets.kt: const val REQUIRED_LISTENER_PERCENT
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StageBudgets.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StageBudgets.kt
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StageBudgets.kt
