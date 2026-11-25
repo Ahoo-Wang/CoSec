@@ -148,7 +148,7 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 
 [break-glass](../guide/security-model.md#break-glass) 绑定是否适用按来源和种类判断：只有经 `TokenAuthenticator`、由 CoSec 自己的 `JwtTokenVerifier` 校验过、并读作人的（`cosec.kind`，`IDN-46`）令牌能得到它。你的认证器返回的主体，无论凭证使用自己的方式（例如 `Identity.Method("ldap")`）还是没有凭证，永远得不到 break-glass；你自己的 `TokenVerifier` 认可的令牌也得不到，即使经过 `TokenAuthenticator`（此时凭证以认证器的 `method` 命名，默认为 `token`）。方式 `JWT` 保留给 CoSec 的令牌，break-glass 保留给人的：你用它构造的 `AuthenticatedPrincipal` 会被拒绝（`IllegalArgumentException`，即 `503`），因此任何认证器都无法凭名字冒充 CoSec 的令牌（`BRK-8`）。
 
-控制面在审批时还会读取主体的两项事实（[测试策略](../policies/testing.md#approval)）。`workload`（`IDN-34`）：对 API key（`apiKey`：CoSec 的 API key 认证器设置它，方式为 `API_KEY` 的凭证无论由谁构造都算作 API key）和方式为 `SERVICE` 的凭证（`service`，服务自己的身份，无论由谁构造）为真；工作负载从不审批，也从不是信任根。你的主体在 CoSec 看来是人的，除非其凭证名为 `api-key` 或 `service`。所以你的认证器以自己的方式名（比如 `oauth-client`）证明的机器客户端，如果被授予 `cosec:approve`，就能审批变更、也能当信任根：两个这样的凭证就凑成了四眼。面向工作负载的认证器在它构造的主体里把凭证写成 `Identity.Credential(Identity.Method.SERVICE, id, expiresAt)`（或 `API_KEY`），这样主体就是工作负载，并且不授予它 `cosec:approve` 或 `cosec:platform-admin`（DR1-C-3；只按出处认定人留到 8.1）。凭证的 id：审批会记下它，没有 id 的审批不算数。你构造的主体没有 `issuedAt`，所以其令牌的任何一次吊销（`subjectRevokedBefore`）都会让它的审批作废。
+控制面在审批时还会读取主体的两项事实（[测试策略](../policies/testing.md#approval)）。`workload`（`IDN-34`、`IDN-44`）：主体的凭证不是人的（种类不是 `PERSON`）、主体没有凭证，或是 CoSec 的 API key 认证器证明的 API key 时为真；工作负载从不审批，也从不是信任根。方式什么也不决定（见上文）：你的认证器以自己的方式名（比如 `oauth-client`）证明的机器客户端，只要其凭证写明 `Kind.WORKLOAD`，不论叫什么都是工作负载；人的登录不论用什么名字都是人的。面向工作负载的认证器在它构造的主体里写 `Identity.Credential(Identity.Method("oauth-client"), Identity.Credential.Kind.WORKLOAD, id, expiresAt)`（或 `Identity.Method.SERVICE`），并且不授予它 `cosec:approve` 或 `cosec:platform-admin`（DR1-C-3）。凭证的 id：审批会记下它，没有 id 的审批不算数。你构造的主体没有 `issuedAt`，所以其令牌的任何一次吊销（`subjectRevokedBefore`）都会让它的审批作废。
 
 认证器只能看到 Pipeline 读作凭证的内容：令牌（`Authorization` 请求头；开启 `cosec.pipeline.allow-query-token` 时其次是同名查询参数；开启 `cosec.pipeline.allow-cookie-token` 时再次是 Cookie）和 API key 请求头（`cosec.pipeline.api-key-header`）。
 
@@ -157,7 +157,7 @@ starter 的默认实现是 `CompositeAuthenticator`：带 API key 的请求只�
 ```kotlin
 @Bean
 fun cosecAuthenticator(
-    algorithm: Algorithm,
+    signing: JwtSigning,                       // starter 的密钥，来自 cosec.jwt
     verifier: ObjectProvider<TokenVerifier>,   // 你自己的校验器（若已注册）；starter 优先使用它
     tokenStore: TokenStore,                    // cosec-cocache 的存储：它的 `reader` 就是 starter 的吊销读取器
     unchecked: UncheckedRevocations,           // starter 中统计未经吊销检查而被接受的令牌的计数器

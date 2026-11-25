@@ -281,11 +281,15 @@ no time bound and no REQUIRED audit to such a binding. Turn four-eyes on where a
 ([Testing policies](../policies/testing.md#approval)), and watch the change log for ALLOWs of everything.
 
 The trust root is a person. A workload's credential is never the trust root and never approves, whatever its principal
-holds (`IDN-34`). A workload's credential is an API key, or the identity a service states when it calls the control
-plane as its own principal, whose credential is named `service`. CoSec tells its own API keys by where they were
-verified, and takes any credential named `api-key` or `service`, a gateway's forwarded identity's included, for a
-workload's. A credential your own authenticator accepts is a person's to CoSec unless it names it `service`, so give an
-authenticator of workloads neither `cosec:approve` nor `cosec:platform-admin`, or have it name its credential `service`.
+holds (`IDN-34`). Every credential declares whose it is, a person's or a workload's, and that kind alone decides; its
+method, the name it carries, is a label for audit (`IDN-44`). An API key and the identity a service states when it
+calls the control plane as its own principal (`service`) are workloads' by construction. A token CoSec issued says
+whose it is (`cosec.kind`, chosen at login, `IDN-45`, `IDN-46`), and a gateway forwards the kind with the identity
+(`auth.kind`). A credential that says anything but a person's, or says nothing, is a workload's: a principal with no
+credential, a token an earlier preview issued, a forwarded identity without `auth.kind`. A credential your own
+authenticator makes is what it declares, so declare a machine client's a workload's
+([Authenticators](../architecture/extending.md#authenticators)), and give an authenticator of workloads neither
+`cosec:approve` nor `cosec:platform-admin`.
 
 No one is the trust root through the control API's service profile, on the control-plane host's service port or
 through `ControlService` in process (`CTL-81`). There the identity is only stated, by whatever workload the network

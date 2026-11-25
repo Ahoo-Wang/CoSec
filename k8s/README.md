@@ -44,7 +44,7 @@ and the check are one kustomization and never apart.
 |---|---|---|---|
 | 8080 `http` | the operators' API: the gateway routes `/cosec/control/**` here, and states who is calling | the gateway's pods (`app.kubernetes.io/name: cosec-gateway`) | `cosec-control`, port 80 |
 | 8082 `service` | the service API: the narrow profile for services that call the control plane directly | exactly the services you name in [`networkpolicy-services.yaml`](control/networkpolicy-services.yaml); as shipped it names a placeholder, so it admits no one | `cosec-control-service`, port 80 |
-| 8081 `management` | the probes and `/actuator/prometheus`, outside CoSec | the `monitoring` namespace | none |
+| 8081 `management` | the probes and `/actuator/prometheus`, under CoSec's identity gate, which decides nothing for a request without `CoSec-Identity`, so the probes pass | the `monitoring` namespace | none |
 
 **What the policies are, and are not.** They are the control, not defence in depth: the host contains mistakes and keeps the
 audit, and does not verify its callers. A workload it admits can state any principal, a platform administrator included,

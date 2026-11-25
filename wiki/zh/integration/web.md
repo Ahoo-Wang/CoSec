@@ -406,11 +406,12 @@ docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT
 
 ### 应用上的 actuator {#actuator-on-an-application}
 
-在应用（WebFlux 或 WebMvc）上，actuator 端点与其他请求一样：CoSec 的过滤器所在之处，没有任何路径不经策略就放行，第一份平台文档安装之前每个请求都是 `503`。过滤器管辖什么，取决于是哪个服务器（`STA-4`；各格由 `ManagementPortTest` 在真实服务器上断言）：
+在应用（WebFlux 或 WebMvc）上，actuator 端点与其他请求一样：CoSec 的过滤器所在之处，没有任何路径不经策略就放行，第一份平台文档安装之前每个请求都是 `503`。过滤器管辖什么，取决于是哪个服务器，在 WebFlux 上还取决于它运行的是什么（`STA-4`；各格由 `ManagementPortTest` 在真实服务器上断言，转发身份那一行由 `ControlServerTest` 断言）：
 
 | 服务器 | 应用端口 | 独立的 `management.server.port` |
 |---|---|---|
-| WebFlux | 经 CoSec：第一份平台文档之前探针是 `503`，之后匿名调用方是 `401` | 同样经 CoSec：Spring Boot 的管理服务器会收集应用的 `WebFilter` 和 `RouterFunction`，所以管道在它前面，应用自己的函数式路由在那里提供，经过它（应用的控制器是 `404`）；CoSec 自己的路由，控制 API 和登录路由，在那里是 `404`（`CTL-69`） |
+| WebFlux，做判定的管道（`enforce` 且 `caller: credential`） | 经 CoSec：第一份平台文档之前探针是 `503`，之后匿名调用方是 `401` | 同样经 CoSec：Spring Boot 的管理服务器会收集应用的 `WebFilter` 和 `RouterFunction`，所以管道在它前面，应用自己的函数式路由在那里提供，经过它（应用的控制器是 `404`）；CoSec 自己的路由，控制 API 和登录路由，在那里是 `404`（`CTL-69`）。绝不要用 HTTP 探测它：给它 `tcpSocket` 探针 |
+| WebFlux，转发身份的闸门（`gateway` 模式，或 `caller: forwarded-identity`，如控制面镜像） | CoSec 的闸门，与管理端口相同 | 同样是 CoSec 的闸门，按上面的方式收集：不带 `CoSec-Identity` 的请求按匿名通过，闸门什么也不判定，所以探针按 Spring 自己的方式回答（存活 `200`；文档安装之前就绪为 `503`）；畸形、重复、超大或过期的身份头，或宿主不认识的 `crit`，仍然被拒绝（`400`、`401`、`503`）。这里可以用 HTTP 探测；CoSec 自己的路由在那里是 `404`（`CTL-69`） |
 | WebMvc | 经 CoSec，同 WebFlux | 不经 CoSec：actuator 的端点是 Spring 自己的（存活 `200`；就绪在文档安装之前是 `503`，之后 `200`），控制器、函数式路由、控制 API 和登录路由都是 `404` |
 | 网关（[单独一节](#actuator-on-a-gateway)） | 只有网关的路由 | 不经 CoSec：actuator 的端点是 Spring 自己的，网关的路由不在那里提供；控制 API 也不在 |
 

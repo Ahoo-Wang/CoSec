@@ -24,7 +24,7 @@ const HINT_CONDITIONS = 'removed in 8.0: conditions are a fixed AST (policies/la
 const HINT_BREAK_GLASS = 'removed in 8.0: root became a break-glass binding (guide/security-model.md)'
 const HINT_EXPRESSIONS = 'no expression language in 8.0: conditions are a fixed AST (policies/language.md)'
 
-// Matched as whole words, case-sensitively unless `ignoreCase`. The hint says what to write instead.
+// Matched as whole words, case-sensitively unless `ignoreCase`, or by `pattern` when given. The hint says what to write instead.
 const TERMS = [
   { term: 'SimpleAuthorization', hint: HINT_PIPELINE },
   { term: 'ActionMatcherFactory', hint: 'removed in 8.0: actions are built in (policies/language.md)' },
@@ -93,6 +93,12 @@ const TERMS = [
   { term: 'getRequiredContext', hint: 'renamed in 8.0.0-beta.5 (UA-7): `requireSecurityContext()` throws, `securityContextOrNull()` answers null, on every reader (integration/web.md)' },
   { term: 'SecurityContextHolder.context', hint: 'renamed in 8.0.0-beta.5 (UA-7): `requireSecurityContext()` throws, `securityContextOrNull()` answers null, on every reader (integration/web.md)' },
   { term: 'SecurityContextHolder.getContext', hint: 'renamed in 8.0.0-beta.5 (UA-7): `requireSecurityContext()` throws, `securityContextOrNull()` answers null, on every reader (integration/web.md)' },
+  // A shape, not a word: a credential built from a method without the kind second, as before 8.0.0-beta.9.
+  {
+    term: 'Identity.Credential(<method>, <id>, ...)',
+    pattern: /Identity\.Credential\(\s*(?:Identity\.)?Method(?:\.[A-Z_]+|\([^()]*\))\s*,(?!\s*(?:Identity\.Credential\.)?Kind\.)/,
+    hint: 'changed in 8.0.0-beta.9 (IDN-44): the kind is the required second argument, `Identity.Credential(method, kind, id, expiresAt)` (architecture/extending.md#authenticators)',
+  },
 ]
 
 const EXEMPT_SECTIONS = [
@@ -199,7 +205,8 @@ const scanned = [
 
 // Whole word: no ASCII letter, digit or underscore next to it ("misspelled" is not "spel"). A version such as
 // `6.x` also must not follow a dot, or `1.6.x` would match.
-const matchers = TERMS.map(({ term, ignoreCase, hint }) => {
+const matchers = TERMS.map(({ term, ignoreCase, hint, pattern: shape }) => {
+  if (shape) return { term, hint, regex: shape }
   const lead = /^\d/.test(term) ? '(?<![\\w.])' : '(?<!\\w)'
   const pattern = lead + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?!\\w)'
   return { term, hint, regex: new RegExp(pattern, ignoreCase ? 'i' : '') }

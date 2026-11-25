@@ -122,7 +122,7 @@ cosec:
 实例只有在安装了平台文档，以及 [`prewarm-apps` 和 `prewarm-tenants`](./configuration.md#snapshot) 列出的每个文档
 （列表为空表示只有平台文档）之后才算就绪。在此之前它会对每个被路由的请求回答 `503`，所以 starter 把 Spring Boot 的
 就绪状态改为 `REFUSING_TRAFFIC`，文档安装后再改回 `ACCEPTING_TRAFFIC`。跟随 `/actuator/health/readiness` 的负载均衡器
-在此期间不会给它流量，前提是它能访问到那条路径：对 CoSec 来说它是普通请求，所以在应用的应用端口上需要一条语句允许它（[应用上的 actuator](../integration/web.md#actuator-on-an-application)）。存活状态不受缺失文档的影响：存活状态保持 `CORRECT`，缺少文档不是重启实例的理由。HTTP 存活探针则是另一回事：在应用的应用端口上，第一份文档发布之前它回答 `503`，WebFlux 应用的管理端口也一样，kubelet 会在 pod 能就绪之前就重启它。WebMvc 应用的存活探针指向它的管理端口（不经 CoSec），WebFlux 应用则在应用端口上用 `tcpSocket` 探针。
+在此期间不会给它流量，前提是它能访问到那条路径：对 CoSec 来说它是普通请求，所以在应用的应用端口上需要一条语句允许它（[应用上的 actuator](../integration/web.md#actuator-on-an-application)）。存活状态不受缺失文档的影响：存活状态保持 `CORRECT`，缺少文档不是重启实例的理由。HTTP 存活探针则是另一回事：在应用的应用端口上，第一份文档发布之前它回答 `503`，管道做判定的 WebFlux 应用的管理端口也一样，kubelet 会在 pod 能就绪之前就重启它。WebMvc 应用的存活探针指向它的管理端口（不经 CoSec），管道做判定的 WebFlux 应用则在应用端口上用 `tcpSocket` 探针。闸门是转发身份的 WebFlux 宿主（`gateway` 模式，或 `cosec.pipeline.caller=forwarded-identity`）可以在它的管理端口上用 HTTP 探测（[应用上的 actuator](../integration/web.md#actuator-on-an-application)）。
 
 有 Spring Boot Actuator 时，`cosecSnapshot` 健康指示器在这些文档安装后报告 `UP`，之前报告 `DOWN`，细节为 `platform`
 （`installed`、`invalid`、`failed`、`absent` 或 `loading`）、`prewarmed` 和 `missing`（尚未安装的文档），存储的文档在这里
@@ -172,9 +172,9 @@ docker run -d -p 127.0.0.1:8080:8080 \
 |---|---|---|
 | **8080** | 运维人员的 API，`/cosec/control/**`（`cosec.control.http.base-path`），[控制 API](../policies/testing.md#the-control-plane)的每条路由 | 网关的 pod |
 | **8082** | 服务 API（`cosec.control.http.service-port`），为直接调用控制面的服务准备的窄档：有哪些租户文档和应用文档（[`GET /documents?kind=`](../policies/testing.md#listing-documents)，授予服务的方式是在 `doc/tenant` 或 `doc/app` 上的 `cosec:read`）、租户文档和应用文档，以及它们的变更流程（[从代码修改策略](../integration/checks.md#changing-policies-from-your-code)）；其他每条路由在这里都是 `404` | 恰好是你点名的服务 |
-| **8081** | 管理端口：`/actuator/health/liveness`、`/actuator/health/readiness`、`/actuator/prometheus`；在 CoSec 之外。控制 API 在这里是 `404`，除 8080 和 8082 之外的任何端口都是（`CTL-69`） | 只有监控 |
+| **8081** | 管理端口：`/actuator/health/liveness`、`/actuator/health/readiness`、`/actuator/prometheus`；处于 CoSec 的身份闸门之下，闸门对不带 `CoSec-Identity` 的请求什么也不判定，所以探针能通过，但它在这里仍然拒绝畸形的身份头（[应用上的 actuator](../integration/web.md#actuator-on-an-application)）。控制 API 在这里是 `404`，除 8080 和 8082 之外的任何端口都是（`CTL-69`） | 只有监控 |
 
-CoSec 不对管理端口做授权，而 actuator 不在应用端口上：探针探测管理端口。管理端口不只是 actuator：Spring Boot 的管理服务器还会在那里提供应用自己的函数式路由，镜像没有这样的路由；CoSec 自己的路由，控制 API 在内，只在应用端口和服务端口上应答。服务端口就是应用自己的服务器换一个端口，带着它的 TLS、客户端认证和绑定地址：如果声明是靠应用端口上的双向 TLS 成立的，8082 上同样成立。把 8080 发布给网关，把 8082 发布给你点名的服务，永远不要发布 8081。
+CoSec 不对管理端口做授权，而 actuator 不在应用端口上：探针探测管理端口。探针在那里能通过，是因为这个宿主的闸门是转发身份的闸门，它对不带身份的请求什么也不判定；WebFlux 管道做判定的应用，不能在它的管理端口上用 HTTP 探测。管理端口不只是 actuator：Spring Boot 的管理服务器还会在那里提供应用自己的函数式路由，镜像没有这样的路由；CoSec 自己的路由，控制 API 在内，只在应用端口和服务端口上应答。服务端口就是应用自己的服务器换一个端口，带着它的 TLS、客户端认证和绑定地址：如果声明是靠应用端口上的双向 TLS 成立的，8082 上同样成立。把 8080 发布给网关，把 8082 发布给你点名的服务，永远不要发布 8081。
 
 **这个宿主的边缘不做任何决策。** 它的 Web 网关是身份网关，只读取声明的身份，不做别的决策：8080 和 8082 上的请求都不会经过 `http:` 决策、限流规则或决策事件。运维人员的请求在转发之前已由网关做出 `http:` 决策并执行限流；服务端口上的请求则没有任何一方做过。每个控制动作仍由策略针对调用方声明的主体决策，并记为它的一步。限制一个服务向服务端口请求多少的，是放行它的网络和这个服务自己：控制路由上的限流规则只在网关之后有效。
 

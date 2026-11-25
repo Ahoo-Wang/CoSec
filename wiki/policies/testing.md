@@ -687,11 +687,11 @@ platform's: only a platform principal sets it (`403` otherwise), and only a plat
 abandons a change that sets one.
 
 A workload's credential is never the trust root, and never approves, whatever its principal holds (`IDN-34`): an API
-key, or a service's own identity (`ControlCaller.service`), whose credential is named `service`. CoSec tells its own API
-keys by where they were verified, and any credential named `api-key` or `service`, a gateway's forwarded identity's
-among them, counts as a workload's. A credential your own authenticator accepts is a person's to CoSec unless it names
-it `service`: give an authenticator of workloads neither `cosec:approve` nor `cosec:platform-admin`, or have it name its
-credential `service`.
+key, a service's own identity (`ControlCaller.service`), and any credential that does not declare itself a person's
+(`IDN-44`). The kind decides, never the credential's method: a token CoSec issued carries it (`cosec.kind`), a gateway
+forwards it (`auth.kind`), and anything but `person`, or nothing, reads as a workload's. A credential your own
+authenticator makes is what it declares ([Authenticators](../architecture/extending.md#authenticators)): declare a
+machine client's a workload's, and give an authenticator of workloads neither `cosec:approve` nor `cosec:platform-admin`.
 
 What the analysis does not see:
 

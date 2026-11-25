@@ -238,15 +238,14 @@ for a person's: an `AuthenticatedPrincipal` you construct with it is refused (`I
 no authenticator can pass for CoSec's token by its name (`BRK-8`).
 
 The control plane reads two more facts of the principal for approvals ([Testing policies](../policies/testing.md#approval)).
-`workload` (`IDN-34`): true for an API key (`apiKey`: CoSec's API key authenticator sets it, and a credential of the
-method `API_KEY` counts as one whoever made it) and for a credential of the method `SERVICE` (`service`, a service's
-own identity), whoever made it; a workload never approves and is never the trust root. A principal of yours is a
-person's to CoSec unless its credential is named `api-key` or `service`. So a machine client your authenticator proves
-under a method of its own (`oauth-client`, say) and grants `cosec:approve` can approve changes and be the trust root:
-two such credentials make four eyes. An authenticator of workloads names its credential
-`Identity.Credential(Identity.Method.SERVICE, id, expiresAt)` (or `API_KEY`) in the principal it builds, which makes
-the principal a workload, and gives it neither `cosec:approve` nor `cosec:platform-admin` (DR1-C-3; telling a person by
-provenance alone is 8.1's). The credential's id: an approval records
+`workload` (`IDN-34`, `IDN-44`): true when the principal's credential is not a person's (its kind is anything but
+`PERSON`), when it has no credential, and for an API key CoSec's API key authenticator proved; a workload never
+approves and is never the trust root. Its method decides nothing (above): a machine client your authenticator proves
+under a method of its own (`oauth-client`, say) is a workload once its credential says `Kind.WORKLOAD`, however it is
+named, and a person's sign-in is a person's under any name. An authenticator of workloads builds
+`Identity.Credential(Identity.Method("oauth-client"), Identity.Credential.Kind.WORKLOAD, id, expiresAt)` (or
+`Identity.Method.SERVICE`) in the principal it makes, and gives it neither `cosec:approve` nor `cosec:platform-admin`
+(DR1-C-3). The credential's id: an approval records
 it, and one without an id does not count. A principal you construct has no `issuedAt`, so any revocation of its
 tokens (`subjectRevokedBefore`) takes its approvals back.
 
@@ -265,7 +264,7 @@ them yourself, take each setting from where the starter does, and delegate:
 ```kotlin
 @Bean
 fun cosecAuthenticator(
-    algorithm: Algorithm,
+    signing: JwtSigning,                       // the starter's key, from cosec.jwt
     verifier: ObjectProvider<TokenVerifier>,   // your own verifier, if you registered one; the starter prefers it
     tokenStore: TokenStore,                    // cosec-cocache's store: its `reader` is the starter's revocation reader
     unchecked: UncheckedRevocations,           // the starter's counter of tokens accepted without a revocation check
