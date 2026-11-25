@@ -51,7 +51,8 @@ class TokenKindTest {
         (
             TokenAuthenticator(
                 verifier,
-                RevocationReader.NONE
+                RevocationReader.NONE,
+                acceptUnavailableRevocations = false,
             ).authenticate(Credentials("t", null)) as AuthnResult.Authenticated
             )
             .principal

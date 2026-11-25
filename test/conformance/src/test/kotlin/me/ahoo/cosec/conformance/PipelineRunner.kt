@@ -523,11 +523,20 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             "result", "reason", "tenant", "app", "id", "roles", "policies", "membership", "token", "jwt", "apiKeys", "apiKeysFail",
         )
         return when (val result = resultOf(node)) {
-            "token" -> TokenAuthenticator(ScenarioTokenVerifier(node.required("token")), revocations(revocations))
+            "token" -> TokenAuthenticator(
+                ScenarioTokenVerifier(node.required("token")),
+                revocations(revocations),
+                acceptUnavailableRevocations = true,
+            )
             "jwt" -> scenarioJwt(node.required("jwt"), revocations(revocations))
             "composite" -> CompositeAuthenticator(
-                token = node.get("token")?.let { TokenAuthenticator(ScenarioTokenVerifier(it), revocations(revocations)) }
-                    ?: Authenticator { AuthnResult.Anonymous },
+                token = node.get("token")?.let { token ->
+                    TokenAuthenticator(
+                        ScenarioTokenVerifier(token),
+                        revocations(revocations),
+                        acceptUnavailableRevocations = true,
+                    )
+                } ?: Authenticator { AuthnResult.Anonymous },
                 apiKey = ApiKeyAuthenticator(apiKeys(node), Clock.fixed(Instant.parse(NOW), ZoneOffset.UTC)),
             )
             "anonymous" -> Authenticator { AuthnResult.Anonymous }
@@ -689,7 +698,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
      */
     private fun scenarioJwt(node: JsonNode, revocations: RevocationReader): Authenticator {
         val token = ScenarioJwt(node).token
-        val authenticator = TokenAuthenticator(ScenarioJwt.VERIFIER, revocations)
+        val authenticator = TokenAuthenticator(ScenarioJwt.VERIFIER, revocations, acceptUnavailableRevocations = true)
         return Authenticator { credentials ->
             authenticator.authenticate(
                 if (credentials.token == null) credentials else Credentials(token, credentials.apiKey)

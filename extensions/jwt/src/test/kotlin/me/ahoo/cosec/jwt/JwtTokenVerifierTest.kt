@@ -258,7 +258,11 @@ class JwtTokenVerifierTest {
     fun onlyThisVerifiersTokensMayUseBreakGlass() {
         val token = signed { withClaim(Jwts.KIND_CLAIM, Jwts.PERSON) }
         fun authenticate(verifier: TokenVerifier) = runBlocking {
-            val result = TokenAuthenticator(verifier, RevocationReader.NONE).authenticate(Credentials(token, null))
+            val result = TokenAuthenticator(
+                verifier,
+                RevocationReader.NONE,
+                acceptUnavailableRevocations = false,
+            ).authenticate(Credentials(token, null))
             (result as AuthnResult.Authenticated).principal
         }
         val principal = authenticate(jwtTokenVerifier)
@@ -292,7 +296,11 @@ class JwtTokenVerifierTest {
         for (claim in claims) {
             val token = crafted("{$claim,\"exp\":$exp}")
             assertThrows(TokenVerificationException::class.java) { jwtTokenVerifier.verify(token) }
-            val authenticator = TokenAuthenticator(jwtTokenVerifier, RevocationReader.NONE)
+            val authenticator = TokenAuthenticator(
+                jwtTokenVerifier,
+                RevocationReader.NONE,
+                acceptUnavailableRevocations = false,
+            )
             val result = runBlocking { authenticator.authenticate(Credentials(token, null)) }
             (result as AuthnResult.Rejected).reason.assert().describedAs(
                 claim
@@ -339,7 +347,11 @@ class JwtTokenVerifierTest {
      */
     @Test
     fun aBlankSubjectIsInvalidOnTheRequestAndRefreshPaths() {
-        val authenticator = TokenAuthenticator(jwtTokenVerifier, RevocationReader.NONE)
+        val authenticator = TokenAuthenticator(
+            jwtTokenVerifier,
+            RevocationReader.NONE,
+            acceptUnavailableRevocations = false,
+        )
         for (subject in listOf(" ", "   ", "\t", "\u00A0")) {
             val access = signed { withSubject(subject).withIssuedAt(issuedAt) }
             assertThrows(TokenVerificationException::class.java) { jwtTokenVerifier.verify(access) }

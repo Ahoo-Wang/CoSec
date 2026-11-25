@@ -3,15 +3,15 @@
 # Tests: :architecture:test --tests me.ahoo.cosec.architecture.SafeDefaultsTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
-index f5d80850..5a0ce311 100644
+index e82164c35..51622e59e 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
-@@ -68,7 +68,7 @@ class TokenAuthenticator(
+@@ -73,7 +73,7 @@ class TokenAuthenticator(
       * the [me.ahoo.cosec.spi.token.TokenStore] logout writes to; [RevocationReader.NONE] accepts every revoked token
       * until it expires, and only fits a host where nothing is ever revoked.
       */
 -    private val revocations: RevocationReader,
 +    private val revocations: RevocationReader = RevocationReader.NONE,
-     /** How audit names this way of authenticating, and the credential of a verifier other than CoSec's. */
-     private val method: String = METHOD,
      /**
+      * Whether a token is accepted while its revocations cannot be read (PIP-7): true accepts it, counted and logged; false
+      * answers the request 503. Required, so that whoever builds one states it; the starter passes

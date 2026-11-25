@@ -83,7 +83,11 @@ class UnpairedSurrogatePipelineTest {
         for (tenant in listOf("beta\uD800", "\uDC00beta")) {
             val views = RecordingViews()
             val engine = StubEngine(IMPLICIT_DENY)
-            val authenticator = TokenAuthenticator(Verifier { token(tenant) }, RevocationReader.NONE)
+            val authenticator = TokenAuthenticator(
+                Verifier { token(tenant) },
+                RevocationReader.NONE,
+                acceptUnavailableRevocations = false,
+            )
             val outcome = pipeline(authenticator, engine, views).evaluate(withToken)
 
             outcome.status.assert().isEqualTo(ProblemType.TOKEN_INVALID.status)
@@ -98,7 +102,11 @@ class UnpairedSurrogatePipelineTest {
     fun `a token of tenant beta with a surrogate pair is the tenant it names`() = runTest {
         val views = RecordingViews()
         val engine = StubEngine(IMPLICIT_DENY)
-        val authenticator = TokenAuthenticator(Verifier { token("beta\uD83D\uDE00") }, RevocationReader.NONE)
+        val authenticator = TokenAuthenticator(
+            Verifier { token("beta\uD83D\uDE00") },
+            RevocationReader.NONE,
+            acceptUnavailableRevocations = false,
+        )
         pipeline(authenticator, engine, views).evaluate(withToken)
         views.keys.map { it.tenant }.assert().containsOnly(TenantId("beta\uD83D\uDE00"))
     }

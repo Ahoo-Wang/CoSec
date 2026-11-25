@@ -231,7 +231,13 @@ object IdentityHeader {
             // A routed request: a gateway forwards the identity only to a route that receives it (RC1-49).
             requestAttributes = mapOf(IdentityIssuer.FORWARD_ATTRIBUTE to "true"),
         )
-        val outcome = PermittingHost.pipeline(TokenAuthenticator(verifier, revocations)) {
+        val outcome = PermittingHost.pipeline(
+            TokenAuthenticator(
+                verifier,
+                revocations,
+                acceptUnavailableRevocations = false,
+            )
+        ) {
             forwardIdentity { this.claims = claims }
         }.use { runBlocking { it.evaluate(facts) } }
         check(outcome.status != INTERNAL_ERROR) {

@@ -176,8 +176,8 @@ public final class me/ahoo/cosec/runtime/authn/CompositeAuthenticator : me/ahoo/
 public final class me/ahoo/cosec/runtime/authn/TokenAuthenticator : me/ahoo/cosec/spi/authn/Authenticator {
 	public static final field Companion Lme/ahoo/cosec/runtime/authn/TokenAuthenticator$Companion;
 	public static final field METHOD Ljava/lang/String;
-	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/RevocationReader;Ljava/lang/String;Ljava/time/Duration;ZLme/ahoo/cosec/runtime/authn/UncheckedRevocations;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/RevocationReader;Ljava/lang/String;Ljava/time/Duration;ZLme/ahoo/cosec/runtime/authn/UncheckedRevocations;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/RevocationReader;ZLjava/lang/String;Ljava/time/Duration;Lme/ahoo/cosec/runtime/authn/UncheckedRevocations;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/RevocationReader;ZLjava/lang/String;Ljava/time/Duration;Lme/ahoo/cosec/runtime/authn/UncheckedRevocations;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun authenticate (Lme/ahoo/cosec/spi/authn/Credentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 

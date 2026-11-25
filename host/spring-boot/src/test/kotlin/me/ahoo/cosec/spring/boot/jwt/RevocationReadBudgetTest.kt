@@ -63,7 +63,12 @@ class RevocationReadBudgetTest {
         val started = System.nanoTime()
         val answer = runBlocking {
             withTimeout(OUTER_MILLIS) {
-                TokenAuthenticator(Verifier, hanging, unchecked = unchecked).authenticate(Credentials("t", null))
+                TokenAuthenticator(
+                    Verifier,
+                    hanging,
+                    unchecked = unchecked,
+                    acceptUnavailableRevocations = true,
+                ).authenticate(Credentials("t", null))
             }
         }
         val took = Duration.ofNanos(System.nanoTime() - started)

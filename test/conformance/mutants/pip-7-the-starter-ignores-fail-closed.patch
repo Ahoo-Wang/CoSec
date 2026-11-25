@@ -1,0 +1,17 @@
+# Rule: PIP-7
+# Mutant: the starter accepts a token while its revocations cannot be read, whatever cosec.authentication.revocation.fail-closed says
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.RevocationFailClosedWiringTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
+index b47d1f0a4..a20cf6e01 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
+@@ -195,7 +195,7 @@ class CoSecPipelineAutoConfiguration {
+                 cachedVerifier(own, tokenCache.ifAvailable),
+                 reader,
+                 revocationSkew = revocationProperties.skew,
+-                acceptUnavailableRevocations = !revocationProperties.failClosed,
++                acceptUnavailableRevocations = true,
+                 unchecked = unchecked.getIfAvailable { UncheckedRevocations() },
+             )
+         } ?: NO_TOKEN
