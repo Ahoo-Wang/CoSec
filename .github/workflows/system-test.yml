@@ -28,6 +28,10 @@ on:
         description: A published gateway image to test instead of building one from the ref (ghcr.io/ahoo-wang/ only); the control-plane image is always built from the ref
         required: false
         default: ''
+      previous:
+        description: A previous release (8.0.0-beta.9) to run beside the ref instead of the two deployments - its published gateway and control images, the services of the ref (RFC 0014 T)
+        required: false
+        default: ''
   schedule:
     - cron: '40 3 * * *'
   # Any base, so a batch stacked on another's branch runs too.
@@ -59,20 +63,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        leg: [ control-host, embedded ]
+        # With `previous`, its leg alone (README.md, "The previous release"): never on a pull request, at night or by default.
+        leg: ${{ fromJSON(inputs.previous != '' && '["previous"]' || '["control-host", "embedded"]') }}
     env:
-      COSEC_SYSTEM_TOPOLOGY: ${{ matrix.leg }}
+      # The leg of the previous release runs the control-host deployment.
+      COSEC_SYSTEM_TOPOLOGY: ${{ matrix.leg == 'previous' && 'control-host' || matrix.leg }}
       # Inputs reach the scripts through the environment only, never interpolated into a command.
       GATEWAY_IMAGE_INPUT: ${{ inputs.image }}
+      PREVIOUS_INPUT: ${{ inputs.previous }}
       ARTIFACT: system-test-${{ matrix.leg }}-${{ github.run_id }}-${{ github.run_attempt }}
       # Absolute: the scenarios' JVM runs in the module directory, and starts docker compose itself.
-      COMPOSE_FILE: ${{ github.workspace }}/test/system-test/compose.yaml:${{ github.workspace }}/test/system-test/compose.${{ matrix.leg }}.yaml
+      COMPOSE_FILE: ${{ github.workspace }}/test/system-test/compose.yaml:${{ github.workspace }}/test/system-test/compose.${{ matrix.leg == 'previous' && 'control-host' || matrix.leg }}.yaml
       COSEC_SYSTEM_BEHIND_IMAGE: cosec-system-behind:test
       COSEC_SYSTEM_AUTH_IMAGE: cosec-system-auth:test
       COSEC_SYSTEM_ENFORCER_IMAGE: cosec-system-enforcer:test
       # The control-plane host's image, built from the commit like the gateway's (a published one is not an input: the host's
-      # first tag is the release candidate's).
-      COSEC_SYSTEM_CONTROL_IMAGE: cosec-control:system
+      # first tag is the release candidate's); the previous release's own on its leg.
+      COSEC_SYSTEM_CONTROL_IMAGE: ${{ matrix.leg == 'previous' && format('ghcr.io/ahoo-wang/cosec-control:{0}', inputs.previous) || 'cosec-control:system' }}
       # A throwaway HMAC secret for this run's gateways: not a secret, and never a deployment's.
       COSEC_SYSTEM_JWT_SECRET: system-test-only-not-a-secret-0123456789abcdef
       COSEC_SYSTEM_GATEWAY_URL: http://127.0.0.1:8080
@@ -101,6 +108,16 @@ jobs:
           pattern='^ghcr\.io/ahoo-wang/[a-z0-9._/-]+(:[A-Za-z0-9._-]+)?(@sha256:[0-9a-f]{64})?$'
           if [ -n "$GATEWAY_IMAGE_INPUT" ] && ! [[ "$GATEWAY_IMAGE_INPUT" =~ $pattern ]]; then
             echo "::error::the image input must be an image of ghcr.io/ahoo-wang/"
+            exit 1
+          fi
+          # A release's version, which names its published images; never with an image of its own.
+          release='^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$'
+          if [ -n "$PREVIOUS_INPUT" ] && ! [[ "$PREVIOUS_INPUT" =~ $release ]]; then
+            echo "::error::the previous input must be a release, such as 8.0.0-beta.9"
+            exit 1
+          fi
+          if [ -n "$PREVIOUS_INPUT" ] && [ -n "$GATEWAY_IMAGE_INPUT" ]; then
+            echo "::error::the previous input names its own images: leave the image input empty"
             exit 1
           fi
 
@@ -150,7 +167,10 @@ jobs:
       # The image as the Dockerfile ships it, its AOT cache trained, for the runner's platform only.
       - name: Build or pull the gateway image
         run: |
-          if [ -n "$GATEWAY_IMAGE_INPUT" ]; then
+          if [ -n "$PREVIOUS_INPUT" ]; then
+            docker pull "ghcr.io/ahoo-wang/cosec-gateway:$PREVIOUS_INPUT"
+            echo "COSEC_SYSTEM_GATEWAY_IMAGE=ghcr.io/ahoo-wang/cosec-gateway:$PREVIOUS_INPUT" >> "$GITHUB_ENV"
+          elif [ -n "$GATEWAY_IMAGE_INPUT" ]; then
             docker pull "$GATEWAY_IMAGE_INPUT"
             echo "COSEC_SYSTEM_GATEWAY_IMAGE=$GATEWAY_IMAGE_INPUT" >> "$GITHUB_ENV"
           else
@@ -164,6 +184,10 @@ jobs:
         run: |
           ./gradlew :control-server:installDist
           docker build --build-context shared=platform --tag cosec-control:system platform/control-server
+
+      - name: Pull the previous release's control-plane host image
+        if: ${{ matrix.leg == 'previous' }}
+        run: docker pull "$COSEC_SYSTEM_CONTROL_IMAGE"
 
       - name: Build the services' images
         run: |
@@ -179,7 +203,12 @@ jobs:
       - name: Run the scenarios
         env:
           COSEC_SYSTEM_MIGRATE: ${{ github.workspace }}/migration/migrate/build/install/cosec-migrate/bin/cosec-migrate
-        run: ./gradlew :system-test:systemTest -PsystemLeg=${{ matrix.leg }}
+        run: |
+          if [ -n "$PREVIOUS_INPUT" ]; then
+            ./gradlew :system-test:systemTest -PsystemLeg=control-host "-PsystemPrevious=$PREVIOUS_INPUT"
+          else
+            ./gradlew :system-test:systemTest "-PsystemLeg=$COSEC_SYSTEM_TOPOLOGY"
+          fi
 
       # The TypeScript client through the gateway (cosec-fetcher): the same stack, a client that is not Kotlin. After the
       # scenarios whether or not they passed, so one run shows both; JUnit for the summary.
@@ -248,6 +277,8 @@ jobs:
   # the Compose stack above is what the scenarios drive; this proves the shipped manifests work as documented.
   kind:
     name: Kubernetes manifests on kind
+    # Not on the leg of the previous release, which is a run of its own.
+    if: ${{ inputs.previous == '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
