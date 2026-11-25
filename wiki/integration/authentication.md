@@ -106,9 +106,13 @@ The pipeline reads the request's credentials, then asks one `Authenticator` who 
   issuer and the same token passes once it is upgraded (a client keeps its session and retries). A malformed `crit`
   (not a non-empty array of distinct names, a name the header does not hold, a parameter the JOSE specifications
   register) is `401` `token-invalid`; a header member no `crit` names is ignored. A route of your own that switches
-  tenant answers `TokenNotUnderstoodException` with `503`. A `TokenVerifier` of your own must do the same, since a JWT
-  library may not (`java-jwt` ignores `crit`): once the signature is verified, throw `TokenNotUnderstoodException` for
-  a token whose `crit` names anything it does not understand, and `TokenVerificationException` for a malformed one.
+  tenant answers `TokenNotUnderstoodException` with `503`, and so does a refresh or logout endpoint of your own that
+  verifies a token itself: never `401`, which would make a client end a session that a newer instance reads. A
+  `TokenVerifier` of your own must do the same, since a JWT library may not (`java-jwt` ignores `crit`): once the
+  signature is verified, throw `TokenNotUnderstoodException` for a token whose `crit` names anything it does not
+  understand, and `TokenVerificationException` for a malformed one. A library that already refuses an unknown `crit`
+  does it with its own error: catch that one and throw `TokenNotUnderstoodException`, not `TokenVerificationException`,
+  so that the token is answered as unavailable (`503`), not as invalid (`401`).
   CoSec's own verifier answers a token it already verified from [its cache](#the-verified-token-cache).
 - **`ApiKeyAuthenticator`**, only with `cosec.api-key.enabled=true`, looks up the [API key](#api-keys).
 

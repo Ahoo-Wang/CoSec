@@ -114,7 +114,8 @@ write; an instance is live, for a shadow window and `propagation`, only with a s
 - `cosec.control.instances.releases`, a gauge on each control-plane host, is how many releases those readers ran at
   that host's last read of them. Every control-plane host reads them at each of its shadow passes (the shadow check
   interval of its startup line, at most a minute; at most once every 5 seconds), whichever replica holds the pass's
-  lease, so the gauge is never older than that on any replica, and needs no call of `GET /instances`. Above 1 for
+  lease, so the gauge needs no call of `GET /instances`. It reads `0` until the host's first pass, up to one interval
+  after it starts, and keeps its last value while the readers cannot be read (the failure is logged). Above 1 for
   longer than a rolling upgrade takes is an instance of an old release still reading the store
   ([Observability](./observability.md#metrics)). The control host also logs the releases once each time they change
   while more than one is there.
@@ -515,22 +516,46 @@ cosec-migrate check-patterns --to-redis redis://localhost:6379 [--cluster] [--ke
 Before upgrading from 8.0.0-beta.8, run it with the new release's `cosec-migrate` against the store of the version
 you run. It reads the head of every document the store lists, or of the one `--document` names, or of those whose key
 starts with `--prefix`, as that version stored it (only each document's current revision: the history is not read,
-and a rollback to an older revision publishes it again, compiled then), and compiles each action and resource of its statements, rate limit
-rules and catalog permissions with the new rules ([Reserved characters](../policies/language.md#reserved-characters),
-`DOC-15`). It prints:
+and a rollback to an older revision publishes it again, compiled then), then the operations of each of that document's
+open changes, which are also the candidates of the staged and shadowing ones, and compiles each action and resource of
+their statements, rate limit rules and catalog permissions with the new rules
+([Reserved characters](../policies/language.md#reserved-characters), `DOC-15`). A pattern it does not compile is a
+finding, and so is every pattern that holds a backslash, though it compiles: the earlier preview read a backslash as a
+character, this version reads it as an escape, so such a pattern means another thing after the upgrade without an
+error. An open change it names fails or changes meaning after the upgrade: its publish or rebase sends it back to
+`DRAFT` with a `COMPILE` finding naming the character, and its shadow window closes blocked on the first upgraded
+instance. Rewrite it, or abandon it and propose it again once every instance is upgraded. It prints, where `<doc>` is
+the document or `<doc> change <id>` one of its open changes:
 
-- `ok <doc>` for a document whose patterns all compile;
-- `PATTERN <doc> <JSON path>: <why>; write <pattern>, in JSON "<pattern>"` for a pattern that holds a reserved
-  character, read as the earlier preview read it (as text) and written escaped, as the new version needs it;
-- `PATTERN <doc> <JSON path>: <why>; no escape writes it: ...` for a path pattern that matches no request path (a `\`,
-  a `;`, a control character, a dot segment, a segment longer than 256 characters): it denied nothing before either,
-  so name the path as the pipeline sees it;
-- `FAILED <doc>: <reason>` when the head could not be read; the others are still checked.
+- `ok <doc>` for a document whose patterns all compile and hold no backslash;
+- `PATTERN <doc> <JSON path>: <why>; write <pattern>, in JSON "<pattern>", once every instance runs this version;
+  until then ...` for a pattern that holds a reserved character or a backslash: `<pattern>` is the pattern as the
+  earlier preview read it (a reserved character and a backslash as text), written as the new version needs it to mean
+  the same. What follows "until then" depends on what the entry does:
+  - for a DENY or a rate limit rule with an unescaped reserved character, the bridge both versions read alike for the
+    window of the upgrade (the character as `?` in a path pattern, the action's name or the typed segment that holds it
+    as `*`), which matches more; where no wildcard stands in (a reserved character in a typed resource's type), keep the
+    DENY as it is: an upgraded instance fails its document closed (`503`) until the exact form is published;
+  - for a DENY or a rate limit rule with a backslash in a typed resource or an action, keep the stored pattern and add
+    the exact form beside it in the same entry: each version matches what was meant with one of the two, and the other
+    matches a little more on this version, nothing that was meant on 8.0.0-beta.8. It never advises narrowing or
+    removing a DENY;
+  - for an ALLOW or a catalog permission, narrow or remove it for the window: a wildcard would grant more;
+- `PATTERN <doc> <JSON path>: <why>; no escape writes it: ...` for a path pattern that matches no request path (a `;`,
+  a control character, a dot segment, a segment longer than 256 characters, or a backslash before any other character):
+  it denied nothing before either, so name the path as the pipeline sees it;
+- `PATTERN <doc> <JSON path>: <why>; it granted nothing on 8.0.0-beta.8 and grants that path on this version: remove
+  it before the upgrade, ...` for an ALLOW whose path holds a backslash before a reserved character or `* ? { }`, which
+  matched nothing before and matches the escaped character now; for a DENY so written, `keep it, or remove it`;
+- `FAILED <doc>: <reason>` when the head or the change could not be read (`<doc> change *` when the open changes could
+  not be listed); the others are still checked.
 
-Then `Checked <n> document(s): <p> pattern(s) to rewrite in <d> document(s), <f> could not be read.` It exits with `1`
-when there is a pattern to rewrite or a document it could not read, so a deployment script can stop on it. Rewrite each
-document through the control plane, and publish the escaped spelling only once every instance runs the new version
-([Upgrading from 8.0.0-beta.8](./upgrading-previews.md#from-8-0-0-beta-8)). It only reads, so it may run while the
+Then `Checked <n> document(s) and <c> open change(s): <p> pattern(s) to rewrite in <d> of them, <f> could not be read.` It exits with `1`
+when there is a pattern to rewrite or a document it could not read, so a deployment script can stop on it. Then, through
+the control plane: on the version you run, publish each DENY with its bridge, or with its exact form beside it, and
+narrow or remove each affected ALLOW; upgrade every instance; publish the form the tool printed, alone. No other order works: an unescaped reserved character fails the whole
+document on the new version, and the old one reads the escaped form as a backslash and the character: in a path it
+matches nothing, in a typed resource or an action another id or verb ([Upgrading from 8.0.0-beta.8](./upgrading-previews.md#from-8-0-0-beta-8)). It only reads, so it may run while the
 control plane runs.
 
 #### Run it as a Kubernetes Job {#run-as-a-kubernetes-job}

@@ -365,6 +365,8 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 
 对 CoSec 来说探针是普通请求（`STA-4`，[应用上的 actuator](../integration/web.md#actuator-on-an-application)）：在应用的应用端口上，以及 WebFlux 应用的管理端口上，它经过管道，平台文档未安装时回答 `503`，之后对匿名调用方回答 `401`，除非有一条语句允许这条路径。Spring 的存活状态不受影响，但 HTTP 存活探针是一个请求，所以它和其余请求一起失败，kubelet 就重启 pod。
 
+以上说的是管道做判定的宿主（`enforce` 且 `caller: credential`，即默认）。闸门是转发身份的 WebFlux 宿主（`gateway` 模式，或 `caller: forwarded-identity`，如控制面镜像）对不带 `CoSec-Identity` 的请求什么也不判定：它的探针按 Spring 自己的方式回答，HTTP 探针在那里可用，管理端口上也一样（[应用上的 actuator](../integration/web.md#actuator-on-an-application)）。
+
 - **通过 HTTP 的就绪探针：** 用一条语句允许任何人对两个探针路径发 `GET`（[策略](../integration/web.md#actuator-on-an-application)）。第一次发布之前它仍回答 `503`，这正是“未就绪”该有的回答。Spring Boot 4 在任何平台上都提供探针（`management.endpoint.health.probes.enabled` 默认为 `true`）。
 - **管理端口不只是 actuator。** 在 WebFlux 上，Spring Boot 的管理服务器也提供应用自己的函数式路由，在 CoSec 之后；CoSec 的控制 API 和登录路由在应用端口上应答（控制 API 还有它的服务端口），在管理端口上是 `404`（`CTL-69`）。只在探针或抓取所用端口上回答 `404` 的控制调用，是调错了端口。
 - **存活与启动探针：** WebMvc 上把探针指向 `management.server.port`，它不经 CoSec。WebFlux 的管理端口同样经 CoSec：在应用端口上用 `tcpSocket` 探针。永远不要对应用的应用端口使用 HTTP 存活探针。
@@ -388,10 +390,11 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 
 ## 升级后模式无法编译 {#a-pattern-does-not-compile-after-an-upgrade}
 
-- `` '<c>' is reserved for a future pattern syntax; write \<c> for the character ``：模式里有未转义的 `[ ] ( ) | ! ^ $ \` 之一（`DOC-15`），以前的预览版把它当文本读。把它转义着写，`$` 写作 `\$`，在 JSON 里反斜杠要双写（[策略语言](../policies/language.md#reserved-characters)）。消息给出了位置。从 8.0.0-beta.8 之后的预览版起，含这种字符的已存储文档会被装为失败，读它的请求答 `503`：升级前用 [`cosec-migrate check-patterns`](./upgrading.md#check-the-patterns-before-an-upgrade) 找出这样的文档（[从 8.0.0-beta.8 升级](./upgrading-previews.md#from-8-0-0-beta-8)）。
+- `` '<c>' is reserved for a future pattern syntax; write \<c> for the character ``：模式里有未转义的 `[ ] ( ) | ! ^ $ \` 之一（`DOC-15`），以前的预览版把它当文本读。把它转义着写，`$` 写作 `\$`，在 JSON 里反斜杠要双写（[策略语言](../policies/language.md#reserved-characters)）。消息给出了位置。从 8.0.0-beta.9 起，含这种字符的已存储文档会被装为失败，读它的请求答 `503`：升级前用 [`cosec-migrate check-patterns`](./upgrading.md#check-the-patterns-before-an-upgrade) 找出这样的文档（[从 8.0.0-beta.8 升级](./upgrading-previews.md#from-8-0-0-beta-8)）。
 - `` \<c> escapes nothing ``：反斜杠后面的字符不是 `[ ] ( ) | ! ^ $ \ * ? { }` 之一。
 - `` a request path holds no backslash ``、`` hold no ';' ``、`` holds no control character ``、`` holds no dot segment `` 或 `` more than the 256 a request path's segment holds ``：这个模式匹配不到管道放行的任何路径（`PIP-5`、`PIP-14`、`PIP-30`），这样写的 DENY 什么也拒绝不了。按管道看到的样子写出路径。
 - 路由图因这些消息之一而加载失败：它的路径、动作或资源模板含有这个字符，规则相同。
+- **没有报错，但从 8.0.0-beta.8 升级后某条 DENY 不再拒绝、或某条 ALLOW 开始授予：** 升级前存下的模式含反斜杠，beta.8 把它当字符读，这个版本把它读作转义（`DOC-15`）。`doc/a\(b` 上的 DENY 以前拒绝 id `a\(b`，现在拒绝 `a(b`；`http:path:/files/\$x` 上的 ALLOW 以前什么也匹配不到，现在授予 `/files/$x`。`cosec-migrate check-patterns` 点名每个这样的模式，以及保持其含义的写法（反斜杠也转义，`doc/a\\\(b`）；发布它。
 
 ## 编译不结束 {#a-compilation-does-not-end}
 
@@ -499,6 +502,14 @@ This instance runs the control plane, and cosec.control.service-url names a cont
 ```
 
 实例带有 `cosec-control`（和 `cosec-cocache`）且控制面开启，同时又设置了 `cosec.control.service-url`。一个应用只有一个 `ControlService`：运行控制面时是进程内实现，调用控制面宿主时是 HTTP 实现。要内嵌控制面，删掉 `cosec.control.service-url`；要调用宿主，设置 `cosec.control.enabled=false`（或不引入 `cosec-control`）。`cosec.control.service-url needs cosec-control-http` 表示已指定宿主却缺少调用它的模块：添加 `me.ahoo.cosec:cosec-control-http`。
+
+### 因身份头上限启动失败 {#startup-fails-on-the-identity-header-limit}
+
+```text
+cosec.pipeline.identity.max-size is 4096 bytes, below the 6144 bytes HttpControlService relays this host's callers within: it would relay identity headers larger than its own gate admits (IDN-43). Set cosec.pipeline.identity.max-size to at least 6144 bytes.
+```
+
+读取身份的宿主（`gateway` 模式，或 `cosec.pipeline.caller=forwarded-identity`）若调用控制面主机（`HttpControlService`），转述每个调用方的身份时最多写 6 KB，即写方的上限（`IDN-43`）。它自己的读方上限 `cosec.pipeline.identity.max-size` 设得比这还小时，它会转述自己的门禁都会拒绝的头。把它调到至少 6 KB，或者不设：8.x 的每个服务默认读 8 KB。
 
 ### 经 HTTP 的控制调用因客户端或应答失败 {#a-control-call-over-http-fails-on-its-client-or-its-answer}
 
@@ -931,7 +942,7 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 - **以 `WARN` 记录 `[<doc>] revision <n> is published; its index or the references it dropped could not be updated`**，来自控制面的修订存储（`me.ahoo.cosec.control.store`）：写头之后的某一步失败了，即修订索引或反向引用索引的更新，而不是写入本身。这个修订已经生效，无需处理：`history` 会沿修订链重建索引，残留的引用最多误拦一次删除。如果变更本身没能结算，发布会返回错误，尽管修订已经生效；再次发布它会报 `PUBLISHED`，补做写入之后的步骤，并以原发布人的身份记录事件。
 - **只删除条目的平台或应用变更停在 `AWAITING_APPROVAL`**，带一项 `NOT_ANALYZED` 升级 `policy <id> of <doc>` 或 `binding <id> of <doc>`（`it removes a DENY: only the trust root does it alone`）：这个变更拿掉了一条 DENY，而平台和应用之上没有别的约束还在（`CTL-31`）。删除角色按角色派生的每条绑定计，即 `role:<role>@<app>:<permission>`。请另一位持有 `cosec:approve` 的平台主体审批它（[审批](../policies/testing.md#approval)）。
 - **发布时审批不再算数**：变更回到 `AWAITING_APPROVAL`，`APPROVAL` 发现写着 `the token the approver approved with is revoked`、`the approver's tokens are revoked`、`the approver no longer holds cosec:approve on the document`、`only a platform principal approves a boundary change`、`under four-eyes, only a platform principal approves a platform principal's change`、`the approval does not say its approver was a person: approve the change again`（8.0.0-beta.9 之前或仍运行它的控制面主机记下的审批没有种类，`APR-9`），或 `the approval does not say what credential its approver approved with`（升级前的审批、旧实例接受的审批，或用不带 id 的凭证给出的审批）。请重新申请审批。`:approve` 返回 `403` 而日志中写着 `a workload's credential (an API key, a service) cannot approve`：审批人以 API key 认证，或声明的是服务自己的身份（`IDN-34`）；请用人的令牌审批；写着 `an approval names the approver's credential, and this one names none`：请用带 id 的凭证审批，例如 CoSec 的令牌。
-- **从更早的 8.0 预览版升级后，一个人被拒绝且日志写着 `a workload's credential (an API key, a service) cannot approve`，或 break-glass 绑定到不了他**：这人的会话开始于 CoSec 的令牌说明种类之前，访问令牌没有 `cosec.kind` 声明，CoSec 的校验器把它读作工作负载的，刷新也保留它（`IDN-46`）。请让这人重新登录：新会话的令牌写着 `person`。你自己的登录若为人的登录声明了 `Kind.WORKLOAD`，每个新会话都会这样。
+- **从更早的 8.0 预览版升级后，一个人被拒绝且日志写着 `a workload's credential (an API key, a service) cannot approve`，或 break-glass 绑定到不了他**：这人的会话开始于 CoSec 的令牌说明种类之前，访问令牌没有 `cosec.kind` 声明，CoSec 的校验器把它读作工作负载的，刷新也保留它（`IDN-46`）。在签发方滚动升级期间或回滚之后，会话若在仍是 8.0.0-beta.8 的签发方副本上刷新或切换，也会这样丢掉这个声明。请让这人在升级后的签发方上重新登录：新会话的令牌写着 `person`。你自己的登录若为人的登录声明了 `Kind.WORKLOAD`，每个新会话都会这样。
 - **服务声明了平台管理员身份，它的变更仍要等人审批**：变更来自 `ControlService` 或控制面宿主的服务端口，那里没有人是信任根（`CTL-81`），所以它要经过分析：应用目录上是 `NOT_ANALYZED`，租户文档中的授予是 `CROSS_TENANT`。请由人在运维人员的路由上审批；对于投影进租户的角色，给服务[角色类](../policies/testing.md#the-role-class)。角色变更在等待且没有 `ROLE_CLASS`：该主体在租户文档上不持有 `cosec:manage-roles`，或者这个角色属于控制面自身的应用或没有应用，它们永远不属于角色类。
 - **发布在暂存槽上遇到另一个变更时出现 `FAILED` 变更事件**：`another change took the staging slot before the head write`（变更在发布期间被抢占，没有写入任何内容）、`the document moved before the head write`（变更最后一次检查暂存槽之后头变化了：取走其暂存槽的变更、bootstrap、迁移，或旧实例写了头，旧实例可能正在发布同一个变更；没有写入任何内容）、`revision <n> was published over the same base first, by <id>`（同一基准上另有一次发布先到：被它抢占、仍在一次存储往返之内发布的变更，或 bootstrap、迁移、旧实例的发布；请变基），或 `conflicted by <id>, which did not take the slot`（一次抢占在标记持有者之后放弃了；请变基持有者）。这个版本的发布写头时遇到的若是本变更自己的修订（同一变更的并发发布写下的），不记失败。
 - **吊销返回 `503`，break-glass 绑定仍在**：吊销的发布停住了（REQUIRED 变更监听器没有记录 `PUBLISHING`），它以 `READY` 留在平台文档的暂存槽中。等监听器的存储恢复后再吊销一次该绑定，即会把它发布出去；看不到它的吊销人用自己的吊销变更抢走它的槽。在此期间，吊销该主体的令牌照样有效。只有吊销的作者能放弃它（其他人得到 `403`，`BRK-10`），放弃同样需要这个监听器（`503`）。

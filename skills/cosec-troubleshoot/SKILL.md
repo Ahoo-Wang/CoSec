@@ -77,6 +77,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **`PIP-34: 2 ProblemRenderer beans of the application, [...]`**: a refusal has one body, so the starter takes one
   `ProblemRenderer`. Keep one, or one that delegates.
   https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-two-problem-renderers
+- **`cosec.pipeline.identity.max-size is <n> bytes, below the 6144 bytes HttpControlService relays this host's callers
+  within`** (IDN-43): a host that reads the identity and calls a control-plane host would relay headers its own gate
+  refuses. Raise `cosec.pipeline.identity.max-size` to at least 6 KB, or unset it (8 KB by default).
+  https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-identity-header-limit
 - **A gateway restarts once right after `kubectl apply`**, and `kubectl logs --previous` ends with
   `RedisConnectionException: Unable to connect to redis/...`: it started before Redis was reachable (the overlay is
   applied whole). Startup fails closed without the store of record, and the kubelet restarts it until Redis answers: no
@@ -103,6 +107,9 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   path (a `\`, `;`, control character, dot segment, a segment over 256 characters) are refused the same way. After an
   upgrade from 8.0.0-beta.8 such a stored document is installed as failed (`503` for what reads it): before upgrading,
   `cosec-migrate check-patterns --to-redis <uri>` names each such pattern and how to write it.
+- **No error, but after the upgrade from 8.0.0-beta.8 a DENY stopped denying or an ALLOW started granting** (`DOC-15`):
+  a stored pattern holds a backslash, which beta.8 read as a character and this version reads as an escape (`doc/a\(b`
+  denied `a\(b`, now denies `a(b`). `check-patterns` names it and the form that keeps its meaning; publish that.
 - **A document does not compile on a path pattern** (`DOC-4`): over 2,048 characters, a glob segment of more than 16
   parts (consecutive `*` count once), or more than 2,048 glob units in one document (each glob segment's parts and the
   characters of its text, twice after a leading `**`). The control plane answers a
@@ -430,7 +437,8 @@ with the host stopped. Its probes are on the management port 8081, never on 8080
 - Break-glass that does not apply: only a token CoSec's own `JwtTokenVerifier` verified, and read as a person's, gets it
   (BRK-8, IDN-46), never a token of a custom `TokenVerifier`, even through `TokenAuthenticator`. A session begun on an
   earlier 8.0 preview has no `cosec.kind` claim, reads as a workload's (no break-glass, no approving: `a workload's
-  credential ... cannot approve`) and stays so through refreshes: sign in again. An authenticator naming its method `jwt` makes every
+  credential ... cannot approve`) and stays so through refreshes, as does one refreshed or switched on a beta.8 replica
+  of the issuer (a rolling upgrade or a rollback of it): sign in again on an upgraded issuer. An authenticator naming its method `jwt` makes every
   request `503` (`The authentication method [jwt] is CoSec's own token's`): that name is reserved.
 - `token-invalid` for a token whose `tenantId` claim is empty or not a string, or whose `attributes` name `apiKeyId` (reserved
   for API keys).

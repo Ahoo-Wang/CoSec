@@ -21,7 +21,7 @@ application: it is published only as an image, never as a library.
 
 **Tags.** A branch push is tagged with the branch name (`main`, `7.x`; a `/` in the name becomes `-`), a pull request
 with `pr-<number>`, and the nightly build refreshes `main`: these tags move with every build, so never run one in
-production. A version tag `v8.0.0-beta.8` publishes `8.0.0-beta.8`, which names one release. A pre-release has no
+production. A version tag `v8.0.0-beta.9` publishes `8.0.0-beta.9`, which names one release. A pre-release has no
 other tag; a stable release also moves `<major>.<minor>` (`8.0`) to its newest patch version. Pin
 the exact version, or the digest of the image you tested (`ahoowang/cosec-gateway@sha256:...`): a floating tag can change
 under a deployment between two restarts. The manifests in [`k8s/`](#kubernetes) pin a version in

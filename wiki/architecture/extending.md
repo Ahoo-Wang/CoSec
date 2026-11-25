@@ -311,8 +311,11 @@ A token's JWS `crit` header lists the header parameters a reader must understand
 §4.1.11, `IDN-47`). Your verifier refuses a token whose `crit` names anything it does not understand: once the
 signature is verified, it throws `TokenNotUnderstoodException`, which the pipeline answers `503` `unavailable` (no
 refusal of the token: the verifier is older than the issuer), and for a malformed `crit` it throws
-`TokenVerificationException`. A JWT library may not do this for you: `java-jwt` ignores `crit`. CoSec's own verifier
-understands no critical parameter in 8.0.
+`TokenVerificationException`. A JWT library may not do this for you: `java-jwt` ignores `crit`. One that does refuses
+with its own error: catch it and throw `TokenNotUnderstoodException`, never `TokenVerificationException`, so the token is
+answered as unavailable (`503`) and a client keeps its session, not as invalid (`401`). An endpoint of yours that
+verifies a token itself (a refresh, a logout) answers `TokenNotUnderstoodException` with `503` alike. CoSec's own
+verifier understands no critical parameter in 8.0.
 
 A `TokenVerifier` is pure computation by contract: no I/O and nothing that blocks, since the pipeline calls it on the
 request's thread. Whether a token was revoked is not its question: `TokenAuthenticator`, refresh
