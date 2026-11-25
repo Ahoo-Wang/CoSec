@@ -20,6 +20,7 @@ a change that fails to compile. When unsure, deny, and ask.
 ./gradlew :code-coverage-report:codeCoverageReport
 ./gradlew :conformance:check                      # spec conformance suite: scenarios + verifyRuleCoverage
 ./gradlew :architecture:check                     # RFC 0011 §5: dependency, source and project-list rules
+./gradlew :compat:check                           # the previous release against this build (RFC 0014 T): needs Redis
 ./gradlew propertyStress -PpropertyIterations=1000   # the registered property tests, more cases (not in check)
 gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only, never on a local machine
 ./gradlew :conformance:mutationCheck -Pmutants=a,b  # break a security rule on purpose, expect a test to fail (not in check)
@@ -134,7 +135,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
   (RFC 0011 §3): `api/` (`annotations`, `api`), `core/` (`model`, `engine`, `spi`, `document`, `runtime`, `control`, `control-sdk`), `backends/`
   (`cocache`), `edge/` (`webflux`, `webmvc`, `gateway`, `openapi`), `extensions/` (`jwt`, `social`, `login`,
   `ip2region`, `micrometer`, `opentelemetry`, `cosid`, `kafka`, `control-http`), `host/` (`spring-boot`), `migration/` (`migrate`), `test/` (`testkit`,
-  `conformance`, `architecture`, `e2e`, `client-host`, `system-test`, `system-behind`, `system-auth`, `system-enforcer`,
+  `conformance`, `architecture`, `compat`, `e2e`, `client-host`, `system-test`, `system-behind`, `system-auth`, `system-enforcer`,
   `code-coverage-report`), `bom/` and `platform/` (`gateway-server`, `control-server`). A project
   is named after its directory, without the group or a `cosec-` prefix (`:runtime:check`, `:spring-boot:check`);
   artifact ids keep the prefix (`me.ahoo.cosec:cosec-runtime`). A package belongs to one project
@@ -156,6 +157,13 @@ the adapters, snapshots or the control plane. The parts that take several files 
   workflow ([`wiki/operations/deployment.md#the-system-test`](wiki/operations/deployment.md#the-system-test)). Its `check` runs
   only the harness's own tests; the scenarios run in `systemTest` against a running stack. A scenario waits for a
   property within a bound named after it, never a fixed sleep or a retry.
+  `test/compat` is the cross-version fixture (RFC 0014 T): the previous release, as published (`cosec-previous` in
+  `gradle/libs.versions.toml`), runs beside this build in a class loader of its own, through one side compiled
+  against each (`src/side/kotlin`); the two read what the other wrote, rewrite it and share counters on one Redis,
+  one `MIX-*` rule per cross-version format. A case that holds only from a later release is run and must still fail
+  (`Baseline.from`), so moving `cosec-previous` names the cases that now hold. After a release is published, set
+  `cosec-previous` to it, copy the side into `src/previous/kotlin` if the side changed since, and turn on the cases
+  `Baseline.from` reports.
   `test/architecture` holds the structural rules that scan several modules (RFC 0011 §5): `DependencyRulesTest`
   (declared main dependencies point inwards, with the reviewed exceptions in `DependencyRules.EXCEPTIONS`;
   `annotations`, `api`, `model` and `engine` resolve only the Kotlin standard library, `spi` adds coroutines and `document` Jackson;
@@ -343,6 +351,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | Who reports a status, its members or its life (`InstanceStatus`, `SNP-25`) | `ShadowCodec` and its test (an absent member reads as the narrower answer), `wiki/operations/storage.md` (the key and format tables, who may write which keys), `GET /instances` and `contract/control/instances.json` when the answer changes (`CTL-89`) |
 | A member added to a stored record or to the identity header | its member table (`StoredMembers` of the record, `IdentityMembers`): what its absence means, whether ignoring it or an older writer dropping it would widen; one that would is added only through `crit` (`IDN-41`, `IDN-42`, `SNP-27`, `SNP-28`, RFC 0014 R1, R2) |
 | A key, a channel, a stored field or the way a counter's window is cut that two releases share on one Redis | `FrozenLayout` and its golden samples (`SNP-26`, RFC 0014 R6): frozen within 8.x; a change goes to a new key space |
+| A format two versions exchange (a header, a token, a stored record, a key layout, a counter) | its `MIX-*` rule and a case in `test/compat`, through the side (`src/side/kotlin`); a case that needs a later reader than `cosec-previous` uses `Baseline.from` |
 | A public signature of a TypeScript package (a line of its API report) | the report, `wiki/integration/clients.md`, `skills/cosec-client`; after GA, `!` in the PR title when a line is removed or changed |
 | What a client receives: a problem type, its status, headers or body; a `CoSec-*` header; the token pair; a claim of CoSec's tokens; what the served refresh and logout routes answer | `contract/` (`./gradlew :runtime:updateClientContract :jwt:updateClientContract`, `PIP-25`), `wiki/integration/clients.md` (its claims table is held to `contract/token/claims.json` by `pnpm check:docs`), and `typescript/cosec-fetcher` in the same PR: its tests against `contract/` and the real host fail otherwise; `skills/cosec-client` where it states the answer. From GA, `!` in the PR title when a file's member, value, status or header is removed or changed |
 | What the control API answers: a change's members, the listing's, a revision's propagation, a closed set it writes (state, kind, severity, escalation reason, decision, cause, reason, effect, outcome, conflict), a problem's members (`conflict`, `heldBy`: `conflict.json`, `CTL-80`), what a check answers (`change-check.json`, `CTL-78`), the audit kind of a route | `contract/control/` (`./gradlew :control:updateClientContract`, `CTL-61`), `wiki/policies/testing.md#what-a-change-answers`: an answer is written member by member by its codec in `control/api/`, never copied from the stored record; `cosec-control-sdk`'s typed answers (`AnswerJson.CHANGE_READ`/`CHANGE_UNREAD` name every member of the change answer as read or left out, and its closed sets equal the vocabularies). From GA, `!` in the PR title when a member or value is removed or changed |

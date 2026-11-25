@@ -23,7 +23,7 @@ package me.ahoo.cosec.conformance
  */
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
-        "build" to SnapshotBoundGuards.BUILD + StoredRecordGuards.BUILD + setOf(
+        "build" to SnapshotBoundGuards.BUILD + StoredRecordGuards.BUILD + CompatGuards.BUILD + setOf(
             // SNP-25: every process that reads the store reports its status and release (RFC 0014 R5).
             "spi:InstanceStatusReleaseTest#the release is the version of the build",
             "spi:InstanceStatusReleaseTest#the release reads from a repackaged jar without a manifest",

@@ -1,0 +1,160 @@
+{
+  "rules": [
+    {
+      "id": "MIX-1",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 1",
+      "statement": "The CoSec-Identity header is ignorable with must-understand (IDN-41): a reader ignores a member it does not know unless the header's crit names it, which it refuses with 503; a malformed crit is 400; a missing member stays missing, memberships above all (IDN-42); its version v changes only with the major version. What one version of a gateway writes, the other version's receiver reads as the current receiver does.",
+      "level": "build",
+      "guards": [
+        "compat:IdentityHeaderCompatTest#each version reads what the other writes as the current reader does",
+        "compat:IdentityHeaderCompatTest#a header written without memberships is read without them, never as empty ones",
+        "compat:IdentityHeaderCompatTest#a member a later version adds is ignored by every reader, which reads the header it knows",
+        "compat:IdentityHeaderCompatTest#a later member crit names is refused as an outage by a reader that does not know it"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-2",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 2",
+      "statement": "CoSec's access token is ignorable: a verifier reads its named claims and ignores the others, except the claims whose presence refuses the token (cosec.token, act); a missing claim reads as its documented absence, never wider. A token one version issues, the other version verifies as the current verifier does.",
+      "level": "build",
+      "guards": [
+        "compat:TokenCompatTest#each version verifies what the other issues as the current verifier does"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-3",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 3",
+      "statement": "A refresh token is strict: only a token whose cosec.token is refresh is one, and no version takes it for an access token.",
+      "level": "build",
+      "guards": [
+        "compat:TokenCompatTest#a refresh token is refused as an access token by every version"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-4",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 4",
+      "statement": "A session record is ignorable with must-understand (SNP-27, SNP-28) and its format is frozen at 2 within 8.x (SNP-29): each version reads the session the other wrote; a rewrite by either keeps every member the rewriting version knows and drops a later member, leaving the same session; a record whose crit names a member a version does not know is refused by it and never rewritten.",
+      "level": "build",
+      "guards": [
+        "compat:SessionRecordCompatTest#each version reads the session the other wrote",
+        "compat:SessionRecordCompatTest#a rewrite by either version keeps every member, and the other reads it",
+        "compat:SessionRecordCompatTest#a later member without crit is dropped by a rewrite, which leaves the same session",
+        "compat:SessionRecordCompatTest#a record whose crit names a member a version does not know is refused by it, and never rewritten"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-5",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 5",
+      "statement": "The session index is frozen within the major version (RFC 0014 R6, SNP-26): sessions begun half by each version are held to the principal's one limit.",
+      "level": "build",
+      "guards": [
+        "compat:CounterCompatTest#sessions begun half by each version are held to the principal's limit"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-6",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 6",
+      "statement": "Revocations are frozen within the major version (RFC 0014 R6, SNP-26): a revocation not read is a token accepted again, so what either version writes, the other reads.",
+      "level": "build",
+      "guards": [
+        "compat:CredentialCompatTest#a revocation either version writes, the other reads"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-7",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 7",
+      "statement": "An API key record is strict (format 3, exactly its fields): what either version saves, the other reads alike.",
+      "level": "build",
+      "guards": [
+        "compat:CredentialCompatTest#an API key either version saves, the other reads alike"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-8",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 8",
+      "statement": "Rate limit counters are frozen within the major version (RFC 0014 R6, SNP-26): requests split between two versions on one rule get no more than one version alone allows.",
+      "level": "build",
+      "guards": [
+        "compat:CounterCompatTest#a rate limit taken half by each version allows no more than its quota"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-9",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 9",
+      "statement": "Social login states and their count are frozen within the major version (RFC 0014 R6, SNP-26): states recorded by either version are counted together, and one version takes what the other recorded.",
+      "level": "build",
+      "guards": [
+        "compat:CounterCompatTest#login states are counted together, and one version takes what the other recorded"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-11",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 11",
+      "statement": "Policy documents are strict (schema 2) and their feature level rises for anything that changes an older reader's decision or makes it refuse (RFC 0014 R4): a document either version compiles, the other compiles too; a pattern a later version reserves (DOC-15), an earlier one took as a literal, and the later one refuses.",
+      "level": "build",
+      "guards": [
+        "compat:DocumentCompatTest#a document either version compiles, the other compiles too",
+        "compat:DocumentCompatTest#a pattern the current version reserves is refused by it, though the previous one took it as a literal"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-12",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 12",
+      "statement": "A staged candidate record is ignorable with must-understand (SNP-27, SNP-28); its document stays strict (SNP-12).",
+      "level": "build",
+      "guards": [
+        "compat:RecordCompatTest#each version reads and writes back the record the other wrote, unchanged",
+        "compat:RecordCompatTest#a later member without crit is dropped by a rewrite, which leaves the same record",
+        "compat:RecordCompatTest#a record whose crit names a member a version does not know is refused by it"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-13",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 13",
+      "statement": "An instance's status, its resident documents and a shadow report are ignorable with must-understand (SNP-27, SNP-28).",
+      "level": "build",
+      "guards": [
+        "compat:RecordCompatTest#each version reads and writes back the record the other wrote, unchanged",
+        "compat:RecordCompatTest#a later member without crit is dropped by a rewrite, which leaves the same record",
+        "compat:RecordCompatTest#a record whose crit names a member a version does not know is refused by it"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-14",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 14",
+      "statement": "A change record and a staging slot are ignorable with must-understand (SNP-27, SNP-28); a change's operations stay strict (CTL-53).",
+      "level": "build",
+      "guards": [
+        "compat:RecordCompatTest#each version reads and writes back the record the other wrote, unchanged",
+        "compat:RecordCompatTest#a later member without crit is dropped by a rewrite, which leaves the same record",
+        "compat:RecordCompatTest#a record whose crit names a member a version does not know is refused by it"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MIX-22",
+      "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 22",
+      "statement": "What CoCache keeps around a value in Redis is read alike by both versions' CoCache: the cross-version tests read and write every store through each version's own CoCache, the previous release loaded as published, and a case that holds only from a later release must still fail against an earlier baseline.",
+      "level": "build",
+      "guards": [
+        "compat:SideIsolationTest#the previous side runs the published release and the current side this build",
+        "compat:SideIsolationTest#neither version is visible to the test's own class loader",
+        "compat:BaselineTest#a case before its release must fail, and one that already holds says so",
+        "compat:SessionRecordCompatTest#each version reads the session the other wrote"
+      ],
+      "pending": null
+    }
+  ]
+}
