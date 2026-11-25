@@ -87,7 +87,11 @@ gh workflow run system-test.yml --ref main -f ref=<sha>   # the system test on a
   `BUILD_FAILED`, to be run again, and a mutant whose tests fail without the patch too is `FAILS_WITHOUT_PATCH`, a
   flaky test or a wrong header to fix. A `--tests` name of a header must match a test class of its task's project
   (`MutationCheckTest`): move a test class and the headers that name it together. A local run leaves a Gradle
-  daemon alive for two minutes. The full run is the `mutation.yml` workflow (`.github/workflows/`), weekly and on
+  daemon alive for two minutes. A verdict counts only on builds that show the patched code compiled (`Recompilation`):
+  a mutant or control build that left the patched project's compilation up to date is `NOT_RECOMPILED`, no kill. A
+  patch that changes code its callers inline (a non-private `inline fun`'s body or defaults, a non-private `const val`)
+  carries `# Inlined: <what>` (`MutationCheckTest` fails otherwise): its builds compile from source without the build
+  cache, since incremental compilation can leave the callers with the old code. The full run is the `mutation.yml` workflow (`.github/workflows/`), weekly and on
   demand, never a local run: a mutant it reports as not killed is either a wrong patch or a missing test. `:conformance:check` requires every patch to apply to the working tree
   (`MutationCheckTest`): a refactoring that moves the code a mutant breaks fails `check` and names the patch. Rewrite
   it to break the same property where the code now lives (its header says what it is for), then run it.
@@ -163,7 +167,9 @@ the adapters, snapshots or the control plane. The parts that take several files 
   one `MIX-*` rule per cross-version format. A case that holds only from a later release is run and must still fail
   (`Baseline.from`), so moving `cosec-previous` names the cases that now hold. After a release is published, set
   `cosec-previous` to it, copy the side into `src/previous/kotlin` if the side changed since, and turn on the cases
-  `Baseline.from` reports.
+  `Baseline.from` reports. The system test has the same pairing over the network: `system-test.yml -f previous=<release>`
+  runs that release's published gateway and control-plane images in front of the services of the commit
+  (`PreviousRelease.LATER` lists, with its reason, a scenario that holds only from a later release).
   `test/architecture` holds the structural rules that scan several modules (RFC 0011 §5): `DependencyRulesTest`
   (declared main dependencies point inwards, with the reviewed exceptions in `DependencyRules.EXCEPTIONS`;
   `annotations`, `api`, `model` and `engine` resolve only the Kotlin standard library, `spi` adds coroutines and `document` Jackson;
@@ -317,7 +323,7 @@ Each one exists for a reason, and each has tests guarding it. Never weaken a tes
 | **Hot-path changes come with a JMH before/after** | Authorization runs on every request | `EngineAuthorizationBenchmark`, `PipelineBenchmark` |
 | **Public signatures change only on purpose**: each published module's ABI is in its `api/<project>.api` dump | Applications compile against CoSec and implement its SPIs | `checkKotlinAbi` (in `check`), `SpiMarkerTest` |
 
-Every normative rule of the RFCs has an id in `test/conformance/src/test/resources/rules/` and the tests that guard it;
+Every normative rule of the RFCs has an id in `test/conformance/src/test/resources/rules/` (one file per rule, `rules/<FAMILY>/<ID>.json`) and the tests that guard it; a `build`, `startup` or `timing` rule's guards are reviewed in its own file, and no list is kept beside the registry;
 `verifyRuleCoverage` fails when a rule loses them.
 
 ## Where a change has to land
@@ -368,7 +374,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | A bound on memory held for performance (a cache's size, a queue's capacity) | a share in `HeapBudget`, the one table (`STA-12`: the sum stays at or under half the heap; the snapshot documents' quarter is divided by `DocumentBudget`, `SNP-24`), a measured entry size held by a size test, the startup line, `wiki/operations/configuration.md#computed-not-configured`; never a count property, and nothing measured on the request path |
 | Who may write a document without a person (the trust root, the role class `cosec:manage-roles`, anything later) | `CTL-79` and its bounds tests (`RoleClassBoundsTest`): prove the bound by tests before the path admits anything; `wiki/policies/role-permissions.md`, `wiki/policies/testing.md`, `wiki/guide/security-model.md`; ask first |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |
-| A normative rule (an RFC "must / must not / always", RFC 0008 §3.2) | `test/conformance/src/test/resources/rules/<FAMILY>.json` and its scenarios: a positive and a negative one for each rule that is not `pending` (`verifyRuleCoverage`) |
+| A normative rule (an RFC "must / must not / always", RFC 0008 §3.2) | `test/conformance/src/test/resources/rules/<FAMILY>/<ID>.json`, one rule per file, and its scenarios: a positive and a negative one for each rule that is not `pending` (`verifyRuleCoverage`) |
 | Breaking change (public API, `cosec.*` property, authorization semantics) | `wiki/operations/upgrading.md`: what breaks and how to migrate from 7.x; a change between two 8.0 previews goes in `wiki/operations/upgrading-previews.md`, under the preview it comes after |
 
 Docs: link to files, never line numbers; verify claims against code, not other docs. Mermaid labels use
