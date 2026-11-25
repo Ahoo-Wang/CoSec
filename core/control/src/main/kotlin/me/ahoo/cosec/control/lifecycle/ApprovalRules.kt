@@ -247,8 +247,11 @@ internal class ApprovalRules(
     private fun kindProblem(approval: Approval): String? =
         if (approval.kind == Identity.Credential.Kind.PERSON) null else KIND_REFUSAL
 
-    /** Whether a workload's credential authenticated [operator] (`IDN-34`): by provenance or by its name (fail closed). */
-    fun workload(operator: Operator): Boolean = operator.security?.principal?.workload == true
+    /**
+     * Whether a workload's credential authenticated [operator] (`IDN-34`): as its credential declares (`IDN-44`), and an
+     * operator without a request, or without a principal, is a workload's: what says nothing is read as the less.
+     */
+    fun workload(operator: Operator): Boolean = operator.security?.principal?.workload ?: true
 
     private companion object {
         /** The id of the credential a recorded approver is checked with again: not a credential anyone presented. */

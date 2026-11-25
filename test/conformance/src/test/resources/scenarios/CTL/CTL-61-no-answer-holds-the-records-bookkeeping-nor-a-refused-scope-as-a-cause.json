@@ -100,7 +100,7 @@
       "SHADOWING",
       "reported",
       "SHADOWING",
-      "members author,base,candidate,createdAt,findings,id,key,kind,note,operations,shadow,state,updatedAt; shadow startedAt,window",
+      "members author,base,candidate,createdAt,findings,id,key,kind,note,operations,origin,shadow,state,updatedAt; shadow startedAt,window",
       "Rejected (reason SPACE_NOT_MEMBER)"
     ],
     "errors": {

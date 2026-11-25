@@ -310,6 +310,19 @@ object ChangeRunner : ScenarioRunner {
         }
         private val operators = securities.mapValues { (_, security) -> Operator.of(security)!! }
 
+        /**
+         * Who takes a step of a scenario without operators: the platform's administrator, a person with a token of its
+         * own in a request the host permitted, as a scenario's operators are by default; never an operator without a
+         * request, which the control plane reads as a workload's (`IDN-44`).
+         */
+        private val platform: Operator = Operator.of(
+            engine.security(
+                TenantId.PLATFORM,
+                PLATFORM.actor.principal.value,
+                credential = Identity.Credential(Identity.Method("oidc"), PERSON, "token-cosec", null),
+            )
+        )!!
+
         /** Revoked token ids, and the instant before which an operator's tokens are revoked. */
         private val revokedTokens = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
         private val revokedBefore = java.util.concurrent.ConcurrentHashMap<String, Instant>()
@@ -521,7 +534,7 @@ object ChangeRunner : ScenarioRunner {
                 ),
             )
             val found = plane.diff(
-                PLATFORM,
+                platform,
                 documentKey(argument.required("document").text()),
                 argument.required("from").longValue(),
                 argument.required("to").longValue(),
@@ -950,7 +963,7 @@ object ChangeRunner : ScenarioRunner {
                 )
             }
             if (name == null) {
-                return PLATFORM
+                return platform
             }
             return operators[name] ?: throw ScenarioFormatException("No operator $name")
         }

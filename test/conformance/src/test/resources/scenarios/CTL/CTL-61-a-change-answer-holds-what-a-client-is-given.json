@@ -45,9 +45,9 @@
   "expect": {
     "steps": [
       "CHECKED",
-      "members author,base,candidate,createdAt,findings,id,key,kind,note,operations,state,updatedAt",
+      "members author,base,candidate,createdAt,findings,id,key,kind,note,operations,origin,state,updatedAt",
       "SHADOWING",
-      "members author,base,candidate,createdAt,findings,id,key,kind,note,operations,shadow,state,updatedAt; shadow startedAt,window"
+      "members author,base,candidate,createdAt,findings,id,key,kind,note,operations,origin,shadow,state,updatedAt; shadow startedAt,window"
     ],
     "errors": {
       "c1": []
