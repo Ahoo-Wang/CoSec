@@ -1,14 +1,15 @@
 {
   "id": "MIX-1",
   "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 1",
-  "statement": "The CoSec-Identity header is ignorable with must-understand (IDN-41): a reader ignores a member it does not know unless the header's crit names it, which it refuses with 503; a malformed crit is 400; a missing member stays missing, memberships above all (IDN-42); its version v changes only with the major version. What one version of a gateway writes, the other version's receiver reads as the current receiver does. A header that states no auth.kind, as every header of a release before kinds, is a workload's to the current receiver (IDN-44); the current writer's headers, which state it, reach a previous receiver from the first release that ignores a member it does not know (8.0.0-beta.9).",
+  "statement": "The CoSec-Identity header is ignorable with must-understand (IDN-41): a reader ignores a member it does not know unless the header's crit names it, which it refuses with 503; a malformed crit is 400; a missing member stays missing, memberships above all (IDN-42); its version v changes only with the major version. What one version of a gateway writes, the other version's receiver reads as the current receiver does, auth.kind included: both writers state it and both receivers read it (IDN-44); a header that states none, or a kind neither version knows, is a workload's to both receivers, never a person's and never refused, and a kind that is not a string is malformed (400) to both.",
   "level": "build",
   "guards": [
     "compat:IdentityHeaderCompatTest#each version reads what the other writes as the current reader does",
     "compat:IdentityHeaderCompatTest#a header written without memberships is read without them, never as empty ones",
     "compat:IdentityHeaderCompatTest#a member a later version adds is ignored by every reader, which reads the header it knows",
     "compat:IdentityHeaderCompatTest#a later member crit names is refused as an outage by a reader that does not know it",
-    "compat:IdentityHeaderCompatTest#the current reader reads the kind the current writer states, and a header without one as a workload's"
+    "compat:IdentityHeaderCompatTest#each version reads the kind the other's writer states",
+    "compat:IdentityHeaderCompatTest#a header without a kind, or with one neither version knows, is a workload's to both readers"
   ],
   "pending": null
 }

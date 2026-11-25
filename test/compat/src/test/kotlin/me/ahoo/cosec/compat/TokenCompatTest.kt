@@ -18,10 +18,9 @@ import org.junit.jupiter.api.Test
 
 /**
  * MIX-2 and MIX-3, CoSec's tokens between versions: a token one version issues, the other verifies as the current
- * verifier does, and a refresh token is never taken for an access token by either. The current issuer's `cosec.kind`
- * is a claim beta.8's verifier ignores (`IDN-45`); a beta.8 token, which has none, is a workload's to the current
- * verifier (`IDN-46`). A `crit` header the current verifier does not understand makes it refuse the token, where beta.8
- * reads the token without it (`IDN-47`).
+ * verifier does, and a refresh token is never taken for an access token by either. Both issuers declare `cosec.kind`
+ * (`IDN-45`) and both verifiers read it (`IDN-46`); a `crit` header a verifier does not understand makes it refuse the
+ * token (`IDN-47`).
  */
 class TokenCompatTest {
     private val secret = "compat-secret-compat-secret-compat-secret"
@@ -39,27 +38,41 @@ class TokenCompatTest {
         }
     }
 
+    /** `IDN-45`, `IDN-46`: whose a token is, as one version's issuer declared it, the other version's verifier reads alike. */
+    @Test
+    fun `each version reads the kind the other's issuer declared`() {
+        for (sample in listOf("person", "platform")) {
+            for ((issuer, verifier) in PAIRS) {
+                val access = issuer("token.issue", "secret" to secret, "sample" to sample).substringBefore(' ')
+                verifier("token.kind", "secret" to secret, "token" to access).assert()
+                    .describedAs("$issuer -> $verifier, $sample").isEqualTo("person")
+            }
+        }
+    }
+
     /**
-     * `IDN-46`: the current verifier reads whose a token is from `cosec.kind`, and a token that does not say, as every
-     * token a previous release issued, as a workload's, never refusing it: such a session approves nothing until its
-     * user signs in again.
+     * `IDN-46`: a token without `cosec.kind`, as an earlier preview issued, or with a value neither version knows, a
+     * string or not, is a workload's to both verifiers: never a person's, never refused.
      */
     @Test
-    fun `the current verifier reads the kind the current issuer declared, and a token without one as a workload's`() {
-        for (sample in listOf("person", "platform")) {
-            val current = Side.CURRENT("token.issue", "secret" to secret, "sample" to sample).substringBefore(' ')
-            Side.CURRENT("token.kind", "secret" to secret, "token" to current).assert()
-                .describedAs("current -> current, $sample").isEqualTo("person")
-            val previous = Side.PREVIOUS("token.issue", "secret" to secret, "sample" to sample).substringBefore(' ')
-            Side.CURRENT("token.kind", "secret" to secret, "token" to previous).assert()
-                .describedAs("previous -> current, $sample").isEqualTo("workload")
+    fun `a token without a kind, or with one neither version knows, is a workload's to both verifiers`() {
+        for (issuer in listOf(Side.CURRENT, Side.PREVIOUS)) {
+            val access = issuer("token.issue", "secret" to secret, "sample" to "person").substringBefore(' ')
+            for ((what, value) in listOf("no kind" to null, "an unknown kind" to "\"robot\"", "a number" to "1")) {
+                val token = Jws.withKind(access, secret, value)
+                for (verifier in listOf(Side.CURRENT, Side.PREVIOUS)) {
+                    verifier("token.verify", "secret" to secret, "token" to token).assert()
+                        .describedAs("$issuer -> $verifier, $what").doesNotStartWith("refused:")
+                    verifier("token.kind", "secret" to secret, "token" to token).assert()
+                        .describedAs("$issuer -> $verifier, $what").isEqualTo("workload")
+                }
+            }
         }
     }
 
     /**
      * `IDN-47`: a token whose signed header marks an extension critical is not read by a version that does not understand
-     * it. The current verifier refuses it as a token it does not understand (`503`); beta.8's ignores `crit`, a gap that
-     * closes from 8.0.0-beta.9.
+     * it: each refuses it as a token it does not understand (`503`).
      */
     @Test
     fun `a token whose crit names an extension is refused by a version that does not understand it`() {
@@ -68,11 +81,9 @@ class TokenCompatTest {
                 issuer("token.issue", "secret" to secret, "sample" to "person").substringBefore(' '),
                 secret
             )
-            Side.CURRENT("token.verify", "secret" to secret, "token" to access).assert()
-                .describedAs("$issuer -> current").startsWith("refused:TokenNotUnderstoodException")
-            Baseline.from("8.0.0-beta.9", "the previous verifier refuses a token whose crit it does not understand") {
-                Side.PREVIOUS("token.verify", "secret" to secret, "token" to access).assert()
-                    .describedAs("$issuer -> previous").startsWith("refused:")
+            for (verifier in listOf(Side.CURRENT, Side.PREVIOUS)) {
+                verifier("token.verify", "secret" to secret, "token" to access).assert()
+                    .describedAs("$issuer -> $verifier").startsWith("refused:TokenNotUnderstoodException")
             }
         }
     }
@@ -88,14 +99,9 @@ class TokenCompatTest {
                 version("token.refresh", "secret" to secret, "access" to access, "refresh" to refresh).assert()
                     .describedAs("$issuer -> $version").doesNotStartWith("refused:")
             }
-            Side.CURRENT("token.refresh", "secret" to secret, "access" to access, "refresh" to critical).assert()
-                .describedAs("$issuer -> current").startsWith("refused:TokenNotUnderstoodException")
-            Baseline.from(
-                "8.0.0-beta.9",
-                "the previous verifier refuses a refresh token whose crit it does not understand"
-            ) {
-                Side.PREVIOUS("token.refresh", "secret" to secret, "access" to access, "refresh" to critical).assert()
-                    .describedAs("$issuer -> previous").startsWith("refused:")
+            for (version in listOf(Side.CURRENT, Side.PREVIOUS)) {
+                version("token.refresh", "secret" to secret, "access" to access, "refresh" to critical).assert()
+                    .describedAs("$issuer -> $version").startsWith("refused:TokenNotUnderstoodException")
             }
         }
     }

@@ -21,8 +21,8 @@ import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Instant
 
 /**
- * What the two versions make differently because only the current one has kinds (`IDN-44`): this copy, compiled against
- * the current build, declares them; the previous release's copy (src/previous/kotlin) has none to declare.
+ * The kinds of credential (`IDN-44`) each version declares and reads: one copy for both sides, since 8.0.0-beta.9, the
+ * previous release, has them too.
  */
 internal object Kinds {
     /** CoSec's own token's credential, a person's. */

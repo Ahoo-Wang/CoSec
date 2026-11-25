@@ -82,10 +82,9 @@ class RecordCompatTest {
     }
 
     /**
-     * `APR-9`, MIX-14: an approval records whose it was. One beta.8 recorded says nothing, and the current version reads
-     * it so (it does not count at publication); one that says a person's keeps it through the current version's rewrite.
-     * beta.8 drops the member when it rewrites the record, which narrows (the change is approved again): a gap until the
-     * previous release keeps it.
+     * `APR-9`, MIX-14: an approval records whose it was. One a release before kinds recorded says nothing, and both
+     * versions keep it so (it does not count at publication); one that says a person's keeps it through either version's
+     * rewrite.
      */
     @Test
     fun `an approval says whose it was, and one recorded before kinds says nothing`() {
@@ -95,9 +94,7 @@ class RecordCompatTest {
         val person = record.replace(""""credentialId":"k2",""", """"credentialId":"k2","kind":"PERSON",""")
         check(person != record) { "the sample has no approval credential to put the kind beside" }
         kind(Side.CURRENT, rewrite(Side.CURRENT, "change", person)).assert().isEqualTo("PERSON")
-        Baseline.from("8.0.0-beta.9", "the previous version keeps an approval's kind through a rewrite") {
-            kind(Side.CURRENT, rewrite(Side.PREVIOUS, "change", person)).assert().isEqualTo("PERSON")
-        }
+        kind(Side.CURRENT, rewrite(Side.PREVIOUS, "change", person)).assert().isEqualTo("PERSON")
     }
 
     @Test
@@ -115,9 +112,8 @@ class RecordCompatTest {
     fun `a record whose crit names a member a version does not know is refused by it`() {
         for ((kind, record) in all()) {
             val later = adding(kind, record, "\"device\":\"d1\"", "\"crit\":[\"device\"]")
-            rewrite(Side.CURRENT, kind, later).assert().describedAs(kind).isEqualTo("refused:format:later")
-            Baseline.from("8.0.0-beta.9", "the previous version refuses a $kind record crit names a member of") {
-                rewrite(Side.PREVIOUS, kind, later).assert().describedAs(kind).isEqualTo("refused:format:later")
+            for (side in listOf(Side.CURRENT, Side.PREVIOUS)) {
+                rewrite(side, kind, later).assert().describedAs("$side, $kind").isEqualTo("refused:format:later")
             }
         }
     }

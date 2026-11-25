@@ -19,9 +19,8 @@ import org.junit.jupiter.api.Test
 /**
  * MIX-1, the `CoSec-Identity` header between versions (RFC 0014 R1, R2; IDN-41, IDN-42): what one version's gateway
  * writes, the other's service reads as the current reader does; a missing member stays missing; a member a later
- * version adds is ignored, unless `crit` names it, which a reader that does not know it refuses with 503. The current
- * writer states `auth.kind` (`IDN-44`), a member beta.8's strict reader does not know: its headers reach a previous
- * reader only from the release that ignores what it does not know (8.0.0-beta.9).
+ * version adds is ignored, unless `crit` names it, which a reader that does not know it refuses with 503. Both writers
+ * state `auth.kind` (`IDN-44`), and both readers read it.
  */
 class IdentityHeaderCompatTest {
     private val samples = listOf("person", "workload", "session", "no-memberships")
@@ -33,54 +32,55 @@ class IdentityHeaderCompatTest {
         for (sample in samples) {
             for ((writer, reader) in PAIRS) {
                 val header = writer("identity.write", "sample" to sample)
-                val reads: () -> Unit = {
-                    read(reader, header).assert().describedAs("$writer -> $reader, $sample")
-                        .isEqualTo(read(Side.CURRENT, header))
-                    read(
-                        reader,
-                        header
-                    ).assert().describedAs("$writer -> $reader, $sample").doesNotStartWith("refused:")
-                }
-                if (writer == Side.CURRENT && reader == Side.PREVIOUS) {
-                    // The current writer's auth.kind is a member beta.8 refuses, not one it ignores (IDN-41, IDN-44).
-                    Baseline.from("8.0.0-beta.9", "the previous reader reads a header that states auth.kind", reads)
-                } else {
-                    reads()
-                }
+                read(reader, header).assert().describedAs("$writer -> $reader, $sample")
+                    .isEqualTo(read(Side.CURRENT, header))
+                read(reader, header).assert().describedAs("$writer -> $reader, $sample").doesNotStartWith("refused:")
             }
         }
     }
 
-    /**
-     * `IDN-44`: the current reader reads whose a credential is from `auth.kind`, and a header that does not say, as every
-     * header of a previous writer, as a workload's: a person's sign-in behind a beta.8 gateway approves nothing until
-     * that gateway states the kind.
-     */
+    /** `IDN-44`: whose a credential is, as one version's writer states it in `auth.kind`, the other version reads alike. */
     @Test
-    fun `the current reader reads the kind the current writer states, and a header without one as a workload's`() {
+    fun `each version reads the kind the other's writer states`() {
         mapOf("person" to "person", "session" to "person", "no-memberships" to "person", "workload" to "workload")
             .forEach { (sample, kind) ->
-                Side.CURRENT("identity.kind", "header" to Side.CURRENT("identity.write", "sample" to sample))
-                    .assert().describedAs("current -> current, $sample").isEqualTo(kind)
+                for ((writer, reader) in PAIRS) {
+                    reader("identity.kind", "header" to writer("identity.write", "sample" to sample))
+                        .assert().describedAs("$writer -> $reader, $sample").isEqualTo(kind)
+                }
             }
-        samples.forEach { sample ->
-            Side.CURRENT("identity.kind", "header" to Side.PREVIOUS("identity.write", "sample" to sample))
-                .assert().describedAs("previous -> current, $sample").isEqualTo("workload")
+    }
+
+    /**
+     * `IDN-44`: a header that states no `auth.kind`, or a kind neither version knows, is a workload's to both readers,
+     * never a person's and never refused: an application that writes its own header, or a value a later version adds,
+     * reads as the kind that can do less. A kind that is not a string is malformed to both (400).
+     */
+    @Test
+    fun `a header without a kind, or with one neither version knows, is a workload's to both readers`() {
+        for (sample in listOf("person", "session")) {
+            val json = HeaderJson.of(Side.CURRENT("identity.write", "sample" to sample))
+            for ((what, value) in listOf("no kind" to null, "an unknown kind" to "\"robot\"")) {
+                val header = HeaderJson.header(HeaderJson.withKind(json, value))
+                for (reader in listOf(Side.CURRENT, Side.PREVIOUS)) {
+                    read(reader, header).assert().describedAs("$reader, $sample, $what").doesNotStartWith("refused:")
+                    reader("identity.kind", "header" to header).assert().describedAs("$reader, $sample, $what")
+                        .isEqualTo("workload")
+                }
+            }
+            val malformed = HeaderJson.header(HeaderJson.withKind(json, "1"))
+            for (reader in listOf(Side.CURRENT, Side.PREVIOUS)) {
+                read(reader, malformed).assert().describedAs("$reader, $sample, a kind that is not a string")
+                    .isEqualTo("refused:identity:MALFORMED")
+            }
         }
     }
 
     @Test
     fun `a header written without memberships is read without them, never as empty ones`() {
         for ((writer, reader) in PAIRS) {
-            val reads: () -> Unit = {
-                read(reader, writer("identity.write", "sample" to "no-memberships")).assert()
-                    .describedAs("$writer -> $reader").endsWith(";memberships=null")
-            }
-            if (writer == Side.CURRENT && reader == Side.PREVIOUS) {
-                Baseline.from("8.0.0-beta.9", "the previous reader reads a header that states auth.kind", reads)
-            } else {
-                reads()
-            }
+            read(reader, writer("identity.write", "sample" to "no-memberships")).assert()
+                .describedAs("$writer -> $reader").endsWith(";memberships=null")
         }
     }
 
@@ -88,9 +88,8 @@ class IdentityHeaderCompatTest {
     fun `a member a later version adds is ignored by every reader, which reads the header it knows`() {
         val known = Side.CURRENT("identity.write", "sample" to "person")
         val later = HeaderJson.header(HeaderJson.adding(HeaderJson.of(known), "\"device\":\"d1\""))
-        read(Side.CURRENT, later).assert().isEqualTo(read(Side.CURRENT, known))
-        Baseline.from("8.0.0-beta.9", "the previous reader ignores a later member") {
-            read(Side.PREVIOUS, later).assert().isEqualTo(read(Side.CURRENT, known))
+        for (side in listOf(Side.CURRENT, Side.PREVIOUS)) {
+            read(side, later).assert().describedAs("$side").isEqualTo(read(Side.CURRENT, known))
         }
     }
 
@@ -100,9 +99,8 @@ class IdentityHeaderCompatTest {
         val later = HeaderJson.header(
             HeaderJson.adding(HeaderJson.of(known), "\"device\":\"d1\"", "\"crit\":[\"device\"]")
         )
-        read(Side.CURRENT, later).assert().isEqualTo("refused:identity:UNSUPPORTED_MEMBER")
-        Baseline.from("8.0.0-beta.9", "the previous reader refuses a crit member as an outage") {
-            read(Side.PREVIOUS, later).assert().isEqualTo("refused:identity:UNSUPPORTED_MEMBER")
+        for (side in listOf(Side.CURRENT, Side.PREVIOUS)) {
+            read(side, later).assert().describedAs("$side").isEqualTo("refused:identity:UNSUPPORTED_MEMBER")
         }
     }
 }

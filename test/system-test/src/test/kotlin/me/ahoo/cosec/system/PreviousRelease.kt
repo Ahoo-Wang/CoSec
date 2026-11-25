@@ -22,8 +22,8 @@ import org.junit.jupiter.api.extension.ExtensionContext
  * images of that release in front of the services of this commit. Every scenario of the control-host leg runs there,
  * except what holds only from a later release than the one under test: listed here, in one place, each with the release
  * it holds from and why. A listed scenario is reported as left out with that reason, never skipped silently, and runs
- * again once `previous` reaches its release. Previews are outside the compatibility promise: the leg is ready for the
- * day the previous release is the first with RFC 0014's readers (8.0.0-beta.9).
+ * again once `previous` reaches its release. 8.0.0-beta.9 is the first release with RFC 0014's readers, and the first
+ * the leg runs against whole.
  */
 object PreviousRelease {
     /** The release whose images the stack runs, or null outside that leg. */
@@ -33,40 +33,12 @@ object PreviousRelease {
     class Later(val since: String, val reason: String)
 
     /**
-     * Scenarios (`Class` or `Class#method`) that hold only from a later release than an earlier one under test. Against
-     * 8.0.0-beta.8 every entry follows from one change, the credential's kind (IDN-44 to IDN-46): this commit's writers of
-     * `CoSec-Identity` state `auth.kind`, and beta.8's reader refuses a member it does not know (400), as every reader
-     * before RFC 0014's did; beta.8's gateway writes no `auth.kind`, which this commit's services read as a workload's.
-     * 8.0.0-beta.9 is the first release whose reader ignores a member it does not know (IDN-41).
+     * Scenarios (`Class` or `Class#method`) that hold only from a later release than an earlier one under test, none so
+     * far: against 8.0.0-beta.9, the first release with RFC 0014's readers, every scenario of the leg runs (run
+     * 45570821364). A scenario that a later release changes and the previous one cannot meet is listed here, with the
+     * release it holds from and why, until `previous` reaches it.
      */
-    val LATER: Map<String, Later> = mapOf(
-        "ColdStartScenario#with no documents every request is unavailable and readiness refuses, while each process stays live"
-            to Later(BETA_9, "it states an identity with auth.kind to the control host, whose beta.8 reader answers 400, not 503"),
-        "ControlHostScenario#the operators' port, the service port and the management port each serve what they are for"
-            to Later(BETA_9, "it states identities with auth.kind to the control host's operators' and service ports, refused 400"),
-        "ControlHostScenario#the management port serves the probes and the scrape endpoint and no control API" to Later(
-            BETA_9,
-            "its stated identity carries auth.kind, and beta.8's management port is under its pipeline (WebFlux), which " +
-                "refuses it 400 before the route can answer 404; without an identity it would be 401, not the 404 it shows",
-        ),
-        "ControlHostScenario#an identity the host cannot trust is refused, be it none, doubled, expired or too old"
-            to Later(BETA_9, "its stated identities carry auth.kind, refused 400 before the expiry each case is about"),
-        "ControlReplicaScenario" to Later(BETA_9, "it proposes through the service port as a stated service, with auth.kind: refused 400"),
-        "ControlServiceScenario" to Later(BETA_9, "every case states its caller to the service port with auth.kind: refused 400"),
-        "TenantOnboardingScenario" to Later(
-            BETA_9,
-            "the IAM onboards through the control host's service port, and its relay states auth.kind there, refused 400; every " +
-                "case works on the tenant it onboards",
-        ),
-        "IdentityScenario#a permitted request reaches the service with the identity the gateway verified, and the path it decided on"
-            to Later(BETA_9, "it reads auth.kind of the identity the gateway forwards, which beta.8's gateway does not write"),
-        "IdentityScenario#a token CoSec's login issued reaches the service with its session, which a service relies on"
-            to Later(BETA_9, "it reads auth.kind of the identity the gateway forwards, which beta.8's gateway does not write"),
-        "IdentityScenario#a refreshed token stays a person's, and a token without its kind is forwarded as a workload's"
-            to Later(BETA_9, "it reads auth.kind of the identity the gateway forwards, which beta.8's gateway does not write"),
-    )
-
-    private const val BETA_9 = "8.0.0-beta.9"
+    val LATER: Map<String, Later> = emptyMap()
 
     /** What [scenario] needs of the release under test, if anything, or null when it runs. */
     fun leftOut(scenario: String, underTest: String? = this.underTest, listed: Map<String, Later> = LATER): String? {

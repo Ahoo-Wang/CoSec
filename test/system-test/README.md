@@ -49,8 +49,8 @@ by default, and it is not a required check: dispatch it at a release candidate, 
 
 Every scenario of the deployment runs there, except what holds only from a later release than the one under test: those are
 listed in one place, `PreviousRelease.LATER`, each with the release it holds from and why, and reported as left out with that
-reason; they run again once `previous` reaches that release. Previews are outside the compatibility promise: the leg is ready
-for the day `previous` is the first release with RFC 0014's readers (8.0.0-beta.9). What the services read of the previous
+reason; they run again once `previous` reaches that release. The list is empty: 8.0.0-beta.9, the first release with RFC
+0014's readers, runs every scenario of the deployment. What the services read of the previous
 release's formats, and the previous release of theirs, is `test/compat`'s (`MIX-*`), which runs in every build.
 
 Not run here, and why:

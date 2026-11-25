@@ -102,29 +102,15 @@ class ControlStoreCompatTest {
             val prefix = prefix()
             val later = HeaderJson.adding(record.json, "\"device\":\"d1\"", "\"crit\":[\"device\"]")
             put(prefix, record, later)
-            Side.CURRENT(record.rewrite, "prefix" to prefix, "key" to record.key).assert().describedAs(record.cache)
-                .isEqualTo("refused:format:later")
-            Side.CURRENT(
-                "raw.get",
-                "prefix" to prefix,
-                "cache" to record.cache,
-                "key" to record.key
-            ).assert().isEqualTo(later)
-            Baseline.from(
-                "8.0.0-beta.9",
-                "the previous control store refuses a ${record.cache} record crit names a member of"
-            ) {
-                Side.PREVIOUS(
-                    record.rewrite,
-                    "prefix" to prefix,
-                    "key" to record.key
-                ).assert().isEqualTo("refused:format:later")
+            for (side in listOf(Side.CURRENT, Side.PREVIOUS)) {
+                side(record.rewrite, "prefix" to prefix, "key" to record.key).assert()
+                    .describedAs("$side, ${record.cache}").isEqualTo("refused:format:later")
                 Side.CURRENT(
                     "raw.get",
                     "prefix" to prefix,
                     "cache" to record.cache,
                     "key" to record.key
-                ).assert().isEqualTo(later)
+                ).assert().describedAs("$side, ${record.cache}").isEqualTo(later)
             }
         }
     }
