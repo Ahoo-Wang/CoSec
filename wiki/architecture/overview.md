@@ -86,11 +86,12 @@ The rules behind the picture:
   verification and revocation (`TokenVerifier`, `RevocationReader`, `TokenStore`, `TokenRevoker`), API keys, rate
   limiters, attribute providers, authenticators, the forwarded identity, the audit sink, the id generator
   (`IdGenerator`, with its default `RandomIdGenerator`) and the shadow window's candidates and reports
-  (`CandidateStore`, `ShadowReportSink`, `ShadowReportReader`). It depends on
+  (`CandidateStore`, `ShadowReportSink`, `ShadowReportReader`, `@InternalCoSecApi`: CoSec's own, not an extension
+  point). It depends on
   `cosec-model`, `cosec-api`, `cosec-annotations` and kotlinx-coroutines only, so a third party implements a port
   against it alone. A port
   whose signature needs a layer's types stays with that layer: `DecisionListener` and `RequestGate` in
-  `cosec-runtime`; `ControlStore` and `ChangeListener` in `cosec-control`
+  `cosec-runtime`; `ChangeListener` in `cosec-control`, beside the control plane's internal `ControlStore`
   ([Extending](./extending.md)).
 - **`cosec-document`** (directory `core/document/`, `me.ahoo.cosec.document`) holds the formats CoSec stores and
   exchanges: the platform, app and tenant documents with their codec (`PolicyDocumentCodec`) and compiler

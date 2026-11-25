@@ -224,7 +224,7 @@ cosec:
   `token-invalid`; a scope that does not resolve here (for example a different `scope.app-id`) is 400; a member it
   does not know is ignored, unless the header's `crit` names it, which is 503 (`IDN-41`): upgrade the service.
 - Startup fails for an unknown `cosec.pipeline.mode`, and for `mode=gateway` on a Spring Cloud Gateway host.
-- Tests of such a service, without a gateway: `IdentityHeader` (`cosec-testkit`, experimental) writes the header a
+- Tests of such a service, without a gateway: `IdentityHeader` (`cosec-testkit`, stable: no opt-in) writes the header a
   gateway sends: `forSubject(subject, tenant, app, space, roles)` (a person's token), `forWorkload(...)` (a workload's:
   never approves, never the trust root, no break-glass), `of(identity)`, or `withToken(token, verifier,
   revocations)` for a real token's session. A header is refused after 60s: make one per request. Never hand-write the

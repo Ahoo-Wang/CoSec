@@ -571,7 +571,7 @@ class PolicyTest {
 
 ### 用真实管道测试代码 {#testing-your-code-against-a-real-pipeline}
 
-`PolicyTestKit` 断言文档的决策，`PipelineFixture` 则运行决策前后的其余部分：用你的文档，构建基于每个实例运行的编译器、快照源和引擎的真实 `Pipeline`。当被测代码读取已放行请求的 `SecurityContext`，或处理函数的结果取决于 CoSec 回答的状态码和 problem 时使用它。它是 `@ExperimentalCoSecApi`，与测试工具的其余部分相同。
+`PolicyTestKit` 断言文档的决策，`PipelineFixture` 则运行决策前后的其余部分：用你的文档，构建基于每个实例运行的编译器、快照源和引擎的真实 `Pipeline`。当被测代码读取已放行请求的 `SecurityContext`，或处理函数的结果取决于 CoSec 回答的状态码和 problem 时使用它。它是 `@ExperimentalCoSecApi`，与 `PolicyTestKit` 一样；测试工具中只有请求上下文是稳定的（[测试你的应用](#testing-your-application)）。
 
 ```kotlin
 @file:OptIn(ExperimentalCoSecApi::class)
@@ -619,7 +619,7 @@ class OrderPermissionsTest {
 
 ### 测试你的应用 {#testing-your-application}
 
-测试处理器或读取调用方的函数，需要一个由 CoSec 管道构造的 `SecurityContext`：自 `PIP-27` 起，读取入口只返回这种上下文，手工构造的上下文读作根本没有上下文。工具包提供三种，都是 `@ExperimentalCoSecApi`：
+测试处理器或读取调用方的函数，需要一个由 CoSec 管道构造的 `SecurityContext`：自 `PIP-27` 起，读取入口只返回这种上下文，手工构造的上下文读作根本没有上下文。工具包提供三种。它们是稳定的，下面的 `IdentityHeader` 和 `CoSecTestBindings` 也是，所以只用到它们的测试不需要 opt-in：
 
 | 形式 | 用途 | 上下文携带什么 |
 |---|---|---|
@@ -640,7 +640,7 @@ dependencies {
 **在 CoSec 自己的过滤器后面测试处理器。** `filter(gate)` 就是 starter 注册的过滤器，运行在测试管道之上。切片测试不需要 CoSec 的自动配置：它需要的是过滤器。在 `@WebFluxTest` 或 `@WebMvcTest` 的测试配置中把它声明为 Bean（Spring MVC 上为 `SecurityContext` 参数加上 `SecurityContextArgumentResolver`），或者像下面这样把它交给 `WebTestClient` 和 `MockMvc`。这些示例就是工具包的测试 `TestingYourWebFluxApplicationTest` 和 `TestingYourWebMvcApplicationTest`：
 
 ```kotlin
-@file:OptIn(ExperimentalCoSecApi::class)
+@file:OptIn(ExperimentalCoSecApi::class)   // 为了 PipelineFixture 和 Pipeline.behindGateway：其余都是稳定的
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.testkit.IdentityHeader

@@ -1042,7 +1042,7 @@ against the control host's providers.
 Where `PolicyTestKit` asserts what your documents decide, `PipelineFixture` runs the rest of the request around that
 decision: a real `Pipeline` over the compiler, snapshot source and engine every instance runs, from your documents. Use
 it when the code under test reads the permitted request's `SecurityContext`, or a handler's outcome depends on the
-status and problem CoSec answers. It is `@ExperimentalCoSecApi`, like the rest of the test kit.
+status and problem CoSec answers. It is `@ExperimentalCoSecApi`, like `PolicyTestKit`; only the kit's request contexts are stable ([Testing your application](#testing-your-application)).
 
 ```kotlin
 @file:OptIn(ExperimentalCoSecApi::class)
@@ -1125,8 +1125,8 @@ on with an anonymous context it did not ask for.
 ### Testing your application {#testing-your-application}
 
 A test of a handler, or of a function that reads the caller, needs a `SecurityContext` that CoSec's pipeline made: since
-`PIP-27` the readers answer nothing else, so a context built by hand reads as no context at all. The kit makes three, all
-`@ExperimentalCoSecApi`:
+`PIP-27` the readers answer nothing else, so a context built by hand reads as no context at all. The kit makes three.
+They are stable, like `IdentityHeader` and `CoSecTestBindings` below, so a test that uses only them needs no opt-in:
 
 | Form | Use it for | What the context carries |
 |---|---|---|
@@ -1156,7 +1156,7 @@ parameter), or pass it to `WebTestClient` and `MockMvc` as below. The samples ar
 `TestingYourWebFluxApplicationTest` and `TestingYourWebMvcApplicationTest`:
 
 ```kotlin
-@file:OptIn(ExperimentalCoSecApi::class)
+@file:OptIn(ExperimentalCoSecApi::class)   // for PipelineFixture and Pipeline.behindGateway: the rest is stable
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.testkit.IdentityHeader

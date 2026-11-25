@@ -870,12 +870,12 @@ fun cosecIdGenerator(ids: StringIdGenerator): IdGenerator = IdGenerator { ids.ge
 仍然可用：`SecurityContext`（新增 `scope`，即校验后的应用、空间和角色；应读取它，而不是客户端声明的 `CoSec-*` 请求头）、`ServerWebExchange`、
 Reactor `ContextView` 和 `HttpServletRequest` 上的读取入口（现在名为 `requireSecurityContext()`，会抛出异常，以及 `securityContextOrNull()`，见 [Web](../integration/web.md)）、`AuditEventSink`、`TokenStore`，以及 `cosec-api` 的审计类型，其中一些换了包（[模块、制品与包](#modules-artifacts-and-packages)）。
 
-8.0 预览版中，应用可以用自己的 bean 替换执行控制面授权与审批的部分：`ControlAuthorizer`、`ChangeAuthority`、`Changes`、`ControlPlane` 和 `ControlHttp`。现在不行了：这些类型中任何一个出现第二个 bean，启动都会失败（`ControlHttp` 是在提供控制面路由时）。`ControlAuthorizer`、`DocumentConfirmation`、`PipelineControlAuthorizer`、`ChangeAuthority`、`Changes`、`DefaultControlPlane`、`ControlHttp`、`ControlHttpRequest` 和 `ControlHttpResponse` 是 `@InternalCoSecApi`，`ControlPlane` 和它每个方法都要的 `Operator` 也是：控制面不是应用可以调用的库，应用通过它的 HTTP API 写入（[外部事实源同步角色](../scenarios/external-source.md)）。`ControlStore`、`ChangeOptions`、变更监听器、`Revisions`、`ControlSnapshot` 和维护相关的 bean 仍可替换。
+8.0 预览版中，应用可以用自己的 bean 替换执行控制面授权与审批的部分：`ControlAuthorizer`、`ChangeAuthority`、`Changes`、`ControlPlane` 和 `ControlHttp`。现在不行了：这些类型中任何一个出现第二个 bean，启动都会失败（`ControlHttp` 是在提供控制面路由时）。`ControlAuthorizer`、`DocumentConfirmation`、`PipelineControlAuthorizer`、`ChangeAuthority`、`Changes`、`DefaultControlPlane`、`ControlHttp`、`ControlHttpRequest` 和 `ControlHttpResponse` 是 `@InternalCoSecApi`，`ControlPlane` 和它每个方法都要的 `Operator` 也是：控制面不是应用可以调用的库，应用通过它的 HTTP API 写入（[外部事实源同步角色](../scenarios/external-source.md)）。控制面中，应用只实现变更监听器（[变更监听器](../architecture/extending.md#change-listeners)）：它的存储（`ControlStore` 及其记录、影子窗口端口）、`ChangeOptions` 和 `Revisions` 也是 `@InternalCoSecApi`（[控制面存储](../architecture/extending.md#control-store)）。
 
 #### 策略测试套件 {#policy-test-suites}
 
 8.0 的测试工具是 `cosec-testkit` 模块。`PolicyTestKit.load(dir)` 读取按 `cosec-migrate convert` 输出布局存放的文档，`tests(dir)` 为每个
-场景文件返回一个 JUnit 5 动态测试，供 `@TestFactory` 使用（[测试策略](../policies/testing.md)）。7.x 套件的 `policies`、`appPermissions` 和角色
+场景文件返回一个 JUnit 5 动态测试，供 `@TestFactory` 使用（[测试策略](../policies/testing.md)）。`PolicyTestKit` 在 8.0 中是 `@ExperimentalCoSecApi`，所以套件要用 `@file:OptIn(ExperimentalCoSecApi::class)` opt in；用于测试应用代码的请求上下文（`PermittedRequest`、`IdentityHeader`、`CoSecTestBindings`）是稳定的，不需要（[测试你的应用](../policies/testing.md#testing-your-application)）。7.x 套件的 `policies`、`appPermissions` 和角色
 授予变成转换得到的文档；它的每个 `cases` 条目变成一个场景文件：
 
 | 7.x 用例 | 8.0 场景 |
