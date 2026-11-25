@@ -13,7 +13,13 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import type { Fetcher } from '@ahoo-wang/fetcher';
-import { ResultExtractors } from '@ahoo-wang/fetcher';
+import {
+  FetchExchange,
+  HttpMethod,
+  ResultExtractors,
+  type FetchRequest,
+  type RequestOptions,
+} from '@ahoo-wang/fetcher';
 import type {
   AccessToken,
   CompositeToken,
@@ -89,7 +95,7 @@ describe('tokenRefresher.ts', () => {
       expect(refresher.options.endpoint).toBe('/test/endpoint');
     });
 
-    it('should call fetcher.post with correct parameters when refreshing token', async () => {
+    it('should send the pair as a POST that follows no redirect when refreshing token', async () => {
       const testToken: CompositeToken = {
         accessToken: 'test-access-token',
         refreshToken: 'test-refresh-token',
@@ -100,9 +106,13 @@ describe('tokenRefresher.ts', () => {
         refreshToken: 'new-refresh-token',
       };
 
-      const mockPost = vi.fn().mockResolvedValue(resultToken);
+      const mockRequest = vi.fn().mockResolvedValue(resultToken);
+      // A Fetcher's urlBuilder: the refresh is checked against its baseURL, as the exchange it builds, before it is sent.
       const mockFetcher = {
-        post: mockPost,
+        request: mockRequest,
+        resolveExchange: (request: FetchRequest, options: RequestOptions) =>
+          new FetchExchange({ fetcher: mockFetcher, request, ...options }),
+        urlBuilder: { baseURL: 'https://api.test' },
       } as unknown as Fetcher;
 
       const options: CoSecTokenRefresherOptions = {
@@ -114,9 +124,14 @@ describe('tokenRefresher.ts', () => {
 
       const result = await refresher.refresh(testToken);
 
-      expect(mockPost).toHaveBeenCalledWith<Parameters<Fetcher['post']>>(
-        '/api/auth/refresh',
-        { body: testToken, timeout: DEFAULT_REFRESH_TIMEOUT },
+      expect(mockRequest).toHaveBeenCalledWith<Parameters<Fetcher['request']>>(
+        {
+          url: '/api/auth/refresh',
+          method: HttpMethod.POST,
+          redirect: 'error',
+          body: testToken,
+          timeout: DEFAULT_REFRESH_TIMEOUT,
+        },
         {
           resultExtractor: ResultExtractors.Json,
           attributes: new Map([[IGNORE_REFRESH_TOKEN_ATTRIBUTE_KEY, true]]),

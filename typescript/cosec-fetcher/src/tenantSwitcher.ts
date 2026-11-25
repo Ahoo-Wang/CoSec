@@ -15,6 +15,7 @@ import type { Fetcher } from '@ahoo-wang/fetcher';
 import { ResultExtractors } from '@ahoo-wang/fetcher';
 import { pairOf } from './compositeToken.js';
 import { sessionRequestAttributes } from './sessionRequest.js';
+import { sendSessionRequest } from './sessionTrust.js';
 import {
   DEFAULT_REFRESH_TIMEOUT,
   type CompositeToken,
@@ -66,13 +67,16 @@ export class CoSecTenantSwitcher {
    *
    * @internal
    */
-  switch(
+  async switch(
     token: CompositeToken,
     request: TenantSwitchRequest,
     shouldNotifyUnauthorized?: () => boolean,
   ): Promise<CompositeToken> {
+    // An endpoint is a per-call argument, often built from the target: the pair
+    // goes only where the Fetcher's trust accepts this request, and never through a redirect.
     const pair = pairOf(token);
-    return this.options.fetcher.post<CompositeToken>(
+    return sendSessionRequest<CompositeToken>(
+      this.options.fetcher,
       request.endpoint,
       {
         headers: { [CoSecHeaders.AUTHORIZATION]: `Bearer ${pair.accessToken}` },

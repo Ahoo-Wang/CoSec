@@ -27,6 +27,7 @@ import {
   JwtTokenManager,
 } from './jwtTokenManager.js';
 import { ResourceAttributionRequestInterceptor } from './resourceAttributionRequestInterceptor.js';
+import { rememberTrust } from './sessionTrust.js';
 import type { TokenRefresher } from './tokenRefresher.js';
 import type { TokenRevoker } from './tokenRevoker.js';
 import type { CoSecTenantSwitcher } from './tenantSwitcher.js';
@@ -543,6 +544,8 @@ export class CoSecConfigurer implements FetcherConfigurer {
    * ```
    */
   applyTo(fetcher: Fetcher): void {
+    // A refresh, a logout or a switch on this Fetcher sends the token pair only where this trust accepts.
+    rememberTrust(fetcher, this.config.isTrusted);
     // Register CoSec request interceptor for security headers
     fetcher.interceptors.request.use(
       new CoSecRequestInterceptor({

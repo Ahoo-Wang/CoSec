@@ -11,6 +11,11 @@
  * limitations under the License.
  */
 
+import {
+  FetchExchange,
+  type FetchRequest,
+  type RequestOptions,
+} from '@ahoo-wang/fetcher';
 import { InMemoryStorage } from '@ahoo-wang/fetcher-storage';
 import { SerialTypedEventBus } from '@ahoo-wang/fetcher-eventbus';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -66,9 +71,19 @@ describe('a sign-in answer with members besides the pair', () => {
       config: {
         tokenRevoker: new CoSecTokenRevoker({
           fetcher: {
-            post: async (_url: string, request: { body: unknown }) => {
+            request: async (request: { body: unknown }) => {
               sent.push(request.body);
             },
+            resolveExchange: (request: FetchRequest, options: RequestOptions) =>
+              new FetchExchange({
+                fetcher: {
+                  urlBuilder: { baseURL: 'https://api.test' },
+                } as never,
+                request,
+                ...options,
+              }),
+            // A Fetcher's urlBuilder: the logout is checked against its baseURL before it is sent.
+            urlBuilder: { baseURL: 'https://api.test' },
           } as never,
           endpoint: '/auth/logout',
         }),
