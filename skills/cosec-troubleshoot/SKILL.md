@@ -38,7 +38,11 @@ Indeterminate in an explanation.
   (`SNP-27`): a newer instance wrote a session member this older one must understand (its `crit`); the record is
   refused, never rewritten, and the session kept. Upgrade the instance. `cosec.stored.refused{reason="later"}` counts
   these; `reason="malformed"` means a broken record, not a version. The control API answers such a record of the
-  control plane or a shadow window `503` without detail, logging `a later CoSec wrote a stored record`.
+  control plane or a shadow window `503` without detail, logging `a later CoSec wrote a stored record`. Outside a
+  rolling upgrade the instance is older than the records it meets (a rollback after the newer version wrote them, an
+  older image scaled out, an instance cut off from Redis for over an hour): not supported, and it refuses rather than
+  permits until it runs the newer version; `GET /instances` names each instance's release
+  (https://cosec.ahoo.me/operations/upgrading#what-is-not-supported).
 
 ## Interpret the status
 

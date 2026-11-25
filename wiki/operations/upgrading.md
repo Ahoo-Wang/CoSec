@@ -1,6 +1,6 @@
 ---
 title: "Upgrading"
-description: "How to upgrade a running 8.0 deployment, in what order and what is not promised, and how to upgrade a CoSec 7.x deployment to 8.0: what changes, and how to migrate the data, the code, the configuration and the clients."
+description: "What is promised when two 8.x versions run mixed, how to upgrade and roll back a running deployment in what order, what is not supported, and how to upgrade a CoSec 7.x deployment to 8.0: what changes, and how to migrate the data, the code, the configuration and the clients."
 ---
 
 # Upgrading
@@ -16,48 +16,110 @@ A deployment that already runs an 8.0 preview (an `8.0.0-alpha` or `8.0.0-beta`)
 
 ## Upgrading a running deployment {#upgrading-a-running-deployment}
 
-For an operator moving a running 8.0 deployment (a gateway, services behind it, a control plane and Redis) to another
-version. This section says what the code does when two versions meet, and so in what order to upgrade and roll back. It
-promises no more than that: what it does not promise is listed at the end. A move from 7.x is the next section.
+For an operator moving a running 8.x deployment (a gateway, services behind it, a control plane and Redis) to another
+version. This section says what is promised when two versions run side by side, how CoSec keeps that promise, in what
+order to upgrade and roll back, what is not supported and what happens then, and how to see a mixed deployment. A move
+from 7.x is the next section.
 
-Four things cross a process boundary, and each is read strictly:
+### What is promised {#what-is-promised}
 
-| What crosses | Who writes, who reads | What an instance that does not know the content does |
+From 8.0.0 GA, two adjacent minor versions of 8.x (8.n and 8.n+1) run mixed, whichever you upgrade first:
+
+- a request that both versions, each run alone, admit is not refused while they run mixed;
+- a request that both refuse is not permitted while they run mixed;
+- a rollback of one minor version is supported, with the exceptions under [What is not supported](#what-is-not-supported).
+
+Two versions further apart (8.n with 8.n+2) are not promised: finish one upgrade before you start the next. The 8.0
+previews (the alphas, betas and release candidates of 8.0.0) promise nothing to each other: each preview's order of upgrade is in
+[Upgrading between 8.0 previews](./upgrading-previews.md). A preview before 8.0.0-beta.9 refuses every identity
+member it does not know with `400` `invalid-request`, so a service of such a preview behind a newer gateway refuses
+what that gateway adds.
+
+### How the promise is kept {#how-the-promise-is-kept}
+
+| What crosses | Who writes, who reads | How an instance reads what a newer one wrote |
 |---|---|---|
-| The `CoSec-Identity` header, format `v: 1` | the gateway writes, each service in `gateway` mode reads | refuses it, and the status says why: `400` `invalid-request` for a member it does not know, a wrong type, a duplicate member, a repeated role, a value out of range, a header over the size limit or sent more than once; `401` `token-invalid` for a format version it does not read, a credential with no expiry, or an issue time in the future; `401` `token-expired` for a credential or an identity that is too old. The members are checked before the version, so an identity that raises `v` and adds a member is `400`, and one that only raises `v` is `401` ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)) |
-| A policy document, `schema: 2` | the control plane and `cosec-migrate` write, every instance reads | refuses a document of another `schema` when it reads it, and does not install one it cannot compile (an unknown member, a repeated key, a wrong type): the requests that need it fail closed (`503`, `DocumentInvalid` or `SourceUnavailable` in the decision event, unless a DENY matches first; [Troubleshooting](./troubleshooting.md)) |
-| A value in Redis (revocations, sessions, API keys, memberships, control-plane records) | the instance that wrote it, and every other that reads | a value it cannot decode fails the read and stays in Redis: it is never deleted. A revocation entry it cannot decode makes the request `503`, never "not revoked"; a document record it cannot decode is never "no document", so the requests that need it are `503` unless a DENY matches first; a stored document or record the control API reads and cannot decode is `500`, and a change record it cannot decode is `503` ([Redis is the store of record](./storage.md#redis-is-the-store-of-record)) |
-| A token | the issuer signs, every verifier reads | reads the claims it knows ([the claims a client may read](../integration/clients.md#the-claims-a-client-may-read)) and ignores the rest; refuses a token with an `act` claim, a refresh token where an access token belongs, or incomplete session claims |
+| The `CoSec-Identity` header, format `v: 1` | the gateway (and `HttpControlService`'s relay) writes, each service in `gateway` mode reads | It ignores a member it does not know, at any level, unless the header's `crit` lists it. A member `crit` lists that it does not know refuses the request with `503` `unavailable`, never read without it (`IDN-41`): once the service is upgraded the same request passes. A malformed `crit` is `400` `invalid-request`; a format version other than `v: 1` is `401` `token-invalid`. Every 8.x service reads a header up to 8 KB, and no 8.x version lowers that; CoSec's writers write at most 6 KB, so what a later version adds fits (`IDN-43`, [Services behind the gateway](../integration/web.md#services-behind-the-gateway)) |
+| A record in Redis that carries `format` (sessions, the control plane's and the shadow windows' records) | the instance that wrote it, and every other that reads it | It ignores a member it does not know unless the record's `crit` lists it. A member `crit` lists that it does not know, or a later format, refuses that one record, which it neither reads nor rewrites: the call that read it is `503`, and every other record reads as before (`SNP-27`). Format numbers change only with a major version (`SNP-29`) ([When a reader does not know a record's format](./storage.md#record-formats)) |
+| A policy document, `schema: 2` | the control plane and `cosec-migrate` write, every instance reads | Always strictly: it does not install a document it cannot compile (a member it does not know, a repeated key, a wrong type, a reserved character in a pattern), and the requests that need it fail closed: `503`, `DocumentInvalid` in the decision event, unless a DENY matches first. Each instance reports the document format level it reads (`formatLevel`, 1 in 8.0, [the readers of the store](../policies/testing.md#instances)) |
+| An API key record, `format: 3` | `RedisApiKeyStore` writes, every instance that authenticates API keys reads | Strictly, as an input of authentication, like a document: a missing cap must never read as "not capped". A key of another format or with a member it does not know is never read without it: the request that presents it fails closed with `503`. A later 8.x release writes a new member only on a key that uses it, so a key that uses nothing new is the same record in both versions |
+| A token | the issuer signs, every verifier reads | It reads the claims it knows ([the claims a client may read](../integration/clients.md#the-claims-a-client-may-read)) and ignores the rest; it refuses a token with an `act` claim, a refresh token where an access token belongs, or incomplete session claims |
+| What two releases share on one Redis: how each key is derived, what the rate limit, session index and social count scripts store, the invalidation channels | every instance | Frozen within 8.x ([Redis keys](./storage.md#redis-keys), `SNP-26`): instances of two releases count a client once, see each other's revocations and read the same documents. A later 8.x release that counts or derives a key another way uses a new key space |
 
-**Order of an upgrade.**
+The rule behind the first two rows: a member that an older reader may ignore, or drop when it rewrites a record, is
+one whose absence never widens what is decided or kept. A member whose absence would widen anything, a new
+restriction, is listed in `crit`, so an older reader refuses rather than permits. CoSec's 8.0 writers write no `crit`. A
+later 8.x release does not write a new header or record member that is a restriction until every instance that reads
+the store runs a release that understands it, judged from the releases the instances report (below); until then it
+writes what every reader understands, and no request is refused for it. A document is written by a person, not by
+CoSec: a later release's control plane does not publish a document that needs a level some instance that reads the
+store does not report.
 
-1. **Do not publish a document that uses something new until every instance runs the new version.** An instance that
-   does not know a new member does not install the document, and fails the requests that need it closed. A shadow
-   window that has such an instance reports `CANDIDATE_ERROR` and never closes clean, so the change is not published
-   through it ([Testing policies](../policies/testing.md#trying-changes-in-shadow-mode)).
-2. **Services behind a gateway before the gateway.** A service reads the identity strictly, so one older than its
-   gateway refuses a member the gateway added with `400` `invalid-request`; a gateway that raises the identity's format version `v` makes it `401` `token-invalid`, or `400` if it also adds a member.
-3. **Then the control plane, and `cosec-migrate`**, and, once every control-plane instance and every `cosec-migrate`
+### Order of an upgrade and a rollback {#order-of-an-upgrade-and-a-rollback}
+
+Within the promise any order works. This one keeps the documents readable everywhere and leaves the control plane's
+repairs for last:
+
+1. **The data plane: services behind a gateway, the gateway, every other instance.** In any order among them.
+2. **Then the control plane, and `cosec-migrate`**, and, once every control-plane instance and every `cosec-migrate`
    that writes to this Redis runs the new version, `cosec-migrate repair-references` once
    ([Repair the back-reference index](#repair-the-back-reference-index)) and `verify-chain` ([Verify the revision chains](#verify-the-revision-chains)).
+3. **Publish a document that uses something the new version added only once every instance runs it**, which
+   `GET /instances` shows (below). An instance that cannot compile the document does not install it, and fails the
+   requests that need it closed; a shadow window that has such an instance reports `CANDIDATE_ERROR` and never closes
+   clean, so the change is not published through it ([Testing policies](../policies/testing.md#trying-changes-in-shadow-mode)).
 4. **Redis is upgraded as Redis is**, not by CoSec: CoSec's keys live under `cosec.key-prefix`, and a restart or
    failover is covered by [Redis requirements](./storage.md#redis-requirements).
 
-**Order of a rollback** is the reverse: the gateway first, then the services behind it. A rollback of a document needs
-no instance to change: `POST /documents/<doc>:rollback` makes the document what it was at an earlier revision, as a
+**A rollback** of one minor version goes in the reverse order: the documents first, then the control plane and
+`cosec-migrate`, then the data plane. Roll back any document that uses something only the newer version reads: `POST /documents/<doc>:rollback` makes a document what it was at an earlier revision, as a
 change that is checked like any other ([Revisions, history and rollback](./storage.md#revisions-history-and-rollback)).
 After a downgrade of the control plane or of `cosec-migrate`, run `repair-references` and `verify-chain` again.
 
-**The signature of a mixed fleet** is `503` for the requests that need a document an older instance cannot compile
-(`DocumentInvalid`), `400` `invalid-request` from a service that refuses a member a newer gateway added, `401` `token-invalid` from one that only meets a higher identity format version, and `401` `token-invalid` from an
-instance that holds another signing secret. Each ends when the last instance runs one version.
+### What is not supported {#what-is-not-supported}
 
-**What is not promised.** That two versions interoperate on any of the four formats above: while an 8.0 pre-release is
-the latest, no promise holds between versions at all ([Upgrading between 8.0 previews](./upgrading-previews.md)), and
-afterwards each release's notes say what it changed. That a newer service reads every older gateway's identity, or an
-older one a newer's. That a value a newer version writes to Redis is readable by an older one. That a token a newer
-issuer signs, with a claim an older verifier does not read, means the same to it. Keep a mixed fleet short, and test an
-upgrade on a copy of the documents with the new version's `simulate` and `explain` before it carries traffic.
+Each of these fails closed: an instance refuses what it must understand and does not, and never permits for want of it.
+
+- **An older instance that appears after newer records were written**: a rollback, scaling out with an older image, or
+  an instance cut off from Redis for longer than its status lives (an hour, below). The newer side did not count it
+  among the readers when it started writing. Such an instance refuses each header or record whose `crit` lists a
+  member it does not know, and each record of a later format: the request or call is `503` `unavailable`, counted by
+  `cosec.stored.refused{record, reason="later"}` for a stored record and by `cosec.identity.refused{problem="unavailable"}`
+  for a header ([Observability](./observability.md#metrics)), and its log says a later version wrote it
+  ([A record a later version wrote](./troubleshooting.md#a-record-a-later-version-wrote)). It passes once the instance
+  is upgraded again. A process without `cosec-cocache` writes no status, so nothing sees it either: upgrade it before
+  anything new is used, or it refuses the same way.
+- **An API key that uses something a later release added** is refused with `503` by an instance that does not read
+  it. Issue such keys only once every instance runs that release, and before a rollback disable or reissue them.
+- **Rolling the data plane back below the document format level of a published document.** An instance that cannot
+  compile a document fails the requests that need it (`503`, `DocumentInvalid`). Roll the documents back first, then
+  the instances.
+- **Clients that do not report a status**: `cosec-control-sdk`, `cosec-fetcher`, the consumers of the Kafka decision
+  and change events, and an application that writes `CoSec-Identity` itself. No later release can see them before it
+  writes something new, so they rely only on reading leniently: a client ignores the members of an answer it does not
+  know ([Clients](../integration/clients.md)). `cosec-control-sdk` reads a document's entries strictly, so that writing
+  back what it read never drops a member: an older SDK refuses an entry with a member a later control plane added. The
+  control API reads a request strictly too, so a newer `cosec-control-sdk` that sends an operation, or a member of one,
+  that an older control plane does not know is answered `400` `invalid-request`: use what a release added to the
+  control API only once the control plane runs it.
+
+### Seeing a mixed deployment {#seeing-a-mixed-deployment}
+
+Every CoSec process with `cosec-cocache` writes a status with the CoSec release it runs, once as it starts and then
+every 10 seconds, or every shadow report interval with shadowing on (`SNP-25`); its startup summary says `status=<instance> (release <v>)`. A status lives an hour after its last
+write; an instance is live, for a shadow window and `propagation`, only with a status from the last minute.
+
+- `GET /instances`, on the control API, lists every process that reported in the last hour with its release, and
+  counts the releases ([The readers of the store](../policies/testing.md#instances)).
+- `cosec.control.instances.releases`, a gauge on the control host, is how many releases those readers ran: above 1 for
+  longer than a rolling upgrade takes is an instance of an old release still reading the store
+  ([Observability](./observability.md#metrics)).
+
+While two versions run, expect `503` with `DocumentInvalid` for a document an older instance cannot compile, `503`
+`unavailable` for what an older instance must understand and does not (above), and `401` `token-invalid` from an
+instance that holds another signing secret. Each ends when the last instance runs one version. Keep a mixed deployment
+short, and try an upgrade on a copy of the documents with the new version's `simulate` and `explain` before it carries
+traffic.
 
 ## 7.x to 8.0
 
