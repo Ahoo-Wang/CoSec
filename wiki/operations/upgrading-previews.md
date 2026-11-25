@@ -26,10 +26,29 @@ section above it:
 | `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the eight above |
 | `8.0.0-alpha.3`, `alpha.2`, `alpha.1` | [From alpha.3](#from-8-0-0-alpha-3), [alpha.2](#from-8-0-0-alpha-2) or [alpha.1](#from-8-0-0-alpha-1), then every section above it |
 
-Which preview of the library may run behind which preview of the gateway image: see
-[Upgrading a running deployment](./upgrading.md#upgrading-a-running-deployment).
+Which preview of the library may run behind which preview of the gateway image: a preview whose readers and writers of
+one header or record must be upgraded in an order says so in its section, under **Upgrade in this order**
+([from beta.8](#from-8-0-0-beta-8), [from beta.7](#from-8-0-0-beta-7), [from beta.5](#from-8-0-0-beta-5)).
 
 ## From 8.0.0-beta.8 {#from-8-0-0-beta-8}
+
+**Upgrade in this order.** This preview's `CoSec-Identity` header states whose the credential is, `auth.kind`
+(`IDN-44`), a member a beta.8 reader refuses, so a rolling upgrade has an order; finish each step before the next:
+
+1. **Every reader of the header**: the services in `gateway` mode, the control-plane hosts, and an IAM service that
+   embeds the control plane. An upgraded one reads a header with or without `auth.kind`; a beta.8 one refuses a header
+   that has it with `400` `invalid-request`, as it refuses any member it does not know. With the gateway upgraded
+   first, every identified request to a beta.8 service is refused.
+2. **Then the gateways, and each application that calls a host's service port (`HttpControlService`), after the host
+   it calls.** Both write `auth.kind`.
+
+Between the two steps nothing is refused, but an upgraded reader takes a beta.8 gateway's or application's header,
+which states no kind, as a workload's: requests are decided as before, except that a person a beta.8 gateway forwards,
+or a beta.8 application relays to an upgraded host (`HttpControlService`), cannot approve a change, is not the control
+plane's trust root and gets no break-glass until that gateway or application is upgraded. The service that
+issues CoSec's tokens may be upgraded at any step, since a beta.8 gateway ignores the new `cosec.kind` claim; but a
+session signed in before this preview stays a workload's, through refreshes and tenant switches, until its user signs
+in again (`IDN-46`, below).
 
 - **Every CoSec process with `cosec-cocache` writes its status, with its release** (`SNP-25`, RFC 0014 R5). Affected:
   the Redis users of a control-plane host (the `cosec-control` image), of an IAM service behind a gateway
@@ -1226,7 +1245,7 @@ changed, and the gateway and control-plane images differ only by their version.
   on a misplaced document; `PipelineFixture.load` reads a directory by the same rules. Name the fields, move the files.
 - **The `cosec-gateway-server` image: no JMX agent, the actuator on a management port, and the image's defaults kept
   under a mounted file** (`UB-2`, `UB-21`). Affected: whoever runs the image. A service on one preview of the library
-  behind a gateway image of another: [Upgrading a running deployment](./upgrading.md#upgrading-a-running-deployment).
+  behind a gateway image of another: the **Upgrade in this order** of each later preview ([Start here](#start-here)).
   - Through beta.3 the start script started a JMX agent on port 5555 with no authentication, on every interface. It no
     longer starts one. To attach, set it in `JAVA_OPTS`, bound to loopback ([the image](./deployment.md#the-image)); the
     `-Dcom.sun.management.jmxremote.host=127.0.0.1` the Kubernetes base set is gone with it.
