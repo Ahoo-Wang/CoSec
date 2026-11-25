@@ -103,7 +103,7 @@ class ControlStoreCompatTest {
             val later = HeaderJson.adding(record.json, "\"device\":\"d1\"", "\"crit\":[\"device\"]")
             put(prefix, record, later)
             Side.CURRENT(record.rewrite, "prefix" to prefix, "key" to record.key).assert().describedAs(record.cache)
-                .isEqualTo("refused:format")
+                .isEqualTo("refused:format:later")
             Side.CURRENT(
                 "raw.get",
                 "prefix" to prefix,
@@ -118,7 +118,7 @@ class ControlStoreCompatTest {
                     record.rewrite,
                     "prefix" to prefix,
                     "key" to record.key
-                ).assert().isEqualTo("refused:format")
+                ).assert().isEqualTo("refused:format:later")
                 Side.CURRENT(
                     "raw.get",
                     "prefix" to prefix,

@@ -37,6 +37,8 @@ import me.ahoo.cosec.engine.CompiledRateLimit
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.spi.apikey.ApiKeys
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -118,6 +120,32 @@ class FrozenLayoutTest {
             "an escaped value that is too long is hashed as written",
             "h:f1e4628da5e66d537275a3d906f1373aac611a977c59790ac8c969cd4ae4994a",
         ) { bucket("x".repeat(255) + "\uD800") },
+        Golden(FrozenLayout.RATE_LIMIT_COUNTERS, "a platform rule's id", "platform/api") {
+            CompiledRateLimit.counterId(DocumentKind.PLATFORM, "", "api")
+        },
+        Golden(FrozenLayout.RATE_LIMIT_COUNTERS, "an app rule's id, its owner holding . and -", "app:order.v2-eu/api") {
+            CompiledRateLimit.counterId(DocumentKind.APP, "order.v2-eu", "api")
+        },
+        Golden(
+            FrozenLayout.RATE_LIMIT_COUNTERS,
+            "a tenant rule's id, its owner holding . and -",
+            "tenant:acme.eu-1/api"
+        ) {
+            CompiledRateLimit.counterId(DocumentKind.TENANT, "acme.eu-1", "api")
+        },
+        Golden(FrozenLayout.RATE_LIMIT_COUNTERS, "the bucket of a rule without a key", "global") {
+            CompiledRateLimit.SHARED_BUCKET
+        },
+        Golden(
+            FrozenLayout.RATE_LIMIT_COUNTERS,
+            "the script's arguments of 0.1 a second over a minute: the quota per window, the window in milliseconds",
+            "6.0 60000",
+        ) { RateLimitSpec(0.1, 60).let { "${it.limitPerWindow} ${it.windowMillis}" } },
+        Golden(
+            FrozenLayout.RATE_LIMIT_COUNTERS,
+            "a fractional quota is passed as written: 0.5 a second over 3 seconds",
+            "1.5 3000",
+        ) { RateLimitSpec(0.5, 3).let { "${it.limitPerWindow} ${it.windowMillis}" } },
         Golden(FrozenLayout.RATE_LIMIT_COUNTERS, "the counter's key", "cosec:rate-limiter:api:k:alice") {
             limiter.keyOf("api", "k:alice")
         },
@@ -127,11 +155,32 @@ class FrozenLayoutTest {
         Golden(FrozenLayout.REVOKED_TOKEN, "a token id", "cosec:token:revoked:jti-1") {
             storageKey("cosec", CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, RevokedTokenCache.key("jti-1"))
         },
+        Golden(FrozenLayout.REVOKED_TOKEN, "the value a revocation writes", "true") {
+            CoSecCacheSpecs.revokedToken().codec.encode(true).decodeToString()
+        },
+        Golden(FrozenLayout.REVOKED_TOKEN, "the value a revocation reads", true) {
+            CoSecCacheSpecs.revokedToken().codec.decode("true".encodeToByteArray())
+        },
         Golden(FrozenLayout.REVOKED_TOKEN, "a token id, hash-tagged", "{cosec}:token:revoked:jti-1") {
             storageKey("{cosec}", CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, RevokedTokenCache.key("jti-1"))
         },
         Golden(FrozenLayout.REVOKED_SUBJECT, "a principal of a tenant", "cosec:token:subject:revoked:4:acme:alice") {
             storageKey("cosec", CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME, subject("acme", "alice"))
+        },
+        Golden(
+            FrozenLayout.REVOKED_SUBJECT,
+            "the value it writes: issuedBefore in epoch milliseconds",
+            "1764000000123"
+        ) {
+            CoSecCacheSpecs.revokedSubject().codec.encode(Instant.parse("2025-11-24T16:00:00.123Z").toEpochMilli())
+                .decodeToString()
+        },
+        Golden(
+            FrozenLayout.REVOKED_SUBJECT,
+            "the value it reads, as epoch milliseconds",
+            Instant.parse("2025-11-24T16:00:00.123Z")
+        ) {
+            Instant.ofEpochMilli(CoSecCacheSpecs.revokedSubject().codec.decode("1764000000123".encodeToByteArray()))
         },
         Golden(FrozenLayout.REVOKED_SUBJECT, "the length counts UTF-16 units", "3:a😀:b:c") {
             subject("a😀", "b:c")
@@ -302,6 +351,25 @@ class FrozenLayoutTest {
         ) {
             ListedCodec.decode("""{"c-1":"2026-11-24T00:00:00Z"}""".encodeToByteArray()).toString()
         },
+        Golden(FrozenLayout.CONTROL_LEASES, "the reclaim pass's lease", "cosec:control:lease:reclaim-pass") {
+            storageKey("cosec", CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME, ControlMaintenance.RECLAIM_LEASE)
+        },
+        Golden(FrozenLayout.CONTROL_LEASES, "a document's reclaim lease", "cosec:control:lease:reclaim:tenant:acme") {
+            storageKey(
+                "cosec",
+                CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME,
+                "reclaim:" + SnapshotKey.Tenant("acme").toString()
+            )
+        },
+        Golden(FrozenLayout.CONTROL_LEASES, "the platform document's reclaim lease", "reclaim:platform") {
+            "reclaim:" + SnapshotKey.Platform.toString()
+        },
+        Golden(FrozenLayout.CONTROL_LEASES, "an app document's reclaim lease", "reclaim:app:order") {
+            "reclaim:" + SnapshotKey.App("order").toString()
+        },
+        Golden(FrozenLayout.CONTROL_LEASES, "cosec-migrate's repair lease", "cosec:control:lease:repair-references") {
+            storageKey("cosec", CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME, "repair-references")
+        },
         Golden(FrozenLayout.CONTROL_LEASES, "the shadow windows' lease", "cosec:control:lease:shadow-windows") {
             storageKey("cosec", CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME, ControlMaintenance.SHADOW_LEASE)
         },
@@ -348,7 +416,9 @@ class FrozenLayoutTest {
     @Test
     fun aFailureSaysTheFormatIsFrozen() {
         frozen(FrozenLayout.REVOKED_TOKEN, "a token id", "a", "b").assert()
-            .contains("The key of a token's revocation is a format frozen within 8.x (RFC 0014 R6, SNP-26")
+            .contains(
+                "The key of a token's revocation and its value is a format frozen within 8.x (RFC 0014 R6, SNP-26"
+            )
             .contains("Changing it needs a new key space")
             .contains("lets through what both releases refuse")
     }

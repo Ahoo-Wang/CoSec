@@ -96,9 +96,9 @@ class RecordCompatTest {
     fun `a record whose crit names a member a version does not know is refused by it`() {
         for ((kind, record) in all()) {
             val later = adding(kind, record, "\"device\":\"d1\"", "\"crit\":[\"device\"]")
-            rewrite(Side.CURRENT, kind, later).assert().describedAs(kind).isEqualTo("refused:format")
+            rewrite(Side.CURRENT, kind, later).assert().describedAs(kind).isEqualTo("refused:format:later")
             Baseline.from("8.0.0-beta.9", "the previous version refuses a $kind record crit names a member of") {
-                rewrite(Side.PREVIOUS, kind, later).assert().describedAs(kind).isEqualTo("refused:format")
+                rewrite(Side.PREVIOUS, kind, later).assert().describedAs(kind).isEqualTo("refused:format:later")
             }
         }
     }

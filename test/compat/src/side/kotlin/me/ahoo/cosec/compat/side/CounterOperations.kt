@@ -34,6 +34,8 @@ import java.time.Instant
  * `social.put` and `social.take` record and consume a login state.
  */
 internal object CounterOperations {
+    private const val MILLIS = 1_000L
+
     val ALL: Map<String, (Map<String, String>) -> String> = mapOf(
         "limit.acquire" to { a ->
             val spec = RateLimitSpec(a.getValue("permits").toDouble(), a.getValue("window").toLong())
@@ -41,6 +43,16 @@ internal object CounterOperations {
                 ReactiveRedisRateLimiter(Redis.reactive, a.getValue("prefix")).tryAcquire(a.getValue("rule"), a.getValue("bucket"), spec)
             }
             "allowed=${result.allowed}"
+        },
+        // A counter as if the window before this one had counted `previous`: the next take rolls it into `p` (MIX-8).
+        "limit.seed" to { a ->
+            val windowMs = a.getValue("window").toLong() * MILLIS
+            val nowMs = checkNotNull(Redis.strings.execute { connection -> connection.serverCommands().time() })
+            val key = "${a.getValue("prefix")}:${a.getValue("rule")}:${a.getValue("bucket")}"
+            Redis.strings.opsForHash<String, String>()
+                .putAll(key, mapOf("w" to (nowMs / windowMs - 1).toString(), "c" to a.getValue("previous"), "p" to "0"))
+            Redis.strings.expire(key, Duration.ofMillis(windowMs * 2))
+            "elapsed=${nowMs % windowMs}"
         },
         "session.admit" to { a ->
             val now = Instant.ofEpochMilli(a.getValue("now").toLong())

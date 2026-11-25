@@ -56,4 +56,42 @@ class DocumentCompatTest {
         Side.CURRENT("document.compile", "key" to "tenant:acme", "body" to reserved).assert().startsWith("refused:")
         Side.PREVIOUS("document.compile", "key" to "tenant:acme", "body" to reserved).assert().startsWith("ok:")
     }
+
+    /**
+     * A DENY written with an escape, the current version's (DOC-15): the current version denies the path it names. A
+     * reader of 8.0.0-beta.8 compiles the same document, since it read a backslash as text before DOC-15 reserved it, to
+     * a pattern that matches another path, and does not deny that one: the one reader for which an escape gives another
+     * meaning, which the upgrade notes order around (MIX-11, beta.9 review C-1). From 8.0.0-beta.9 as the previous
+     * release, both decide alike. Decided through each version's engine, not judged by compiling alone.
+     */
+    @Test
+    fun `an escaped DENY denies its path on the current version, and beta_8 compiles it and does not`() {
+        val escaped =
+            """{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z",""" +
+                """"policies":[{"id":"p","statements":[""" +
+                """{"effect":"allow","action":"http:*","resource":"http:path:/odata/**"},""" +
+                """{"effect":"deny","action":"*","resource":"http:path:/odata/\\${'$'}metadata"}]}],""" +
+                """"bindings":[{"id":"anyone","subject":"*","app":"*","space":"*","policy":"p"}]}"""
+        fun decide(side: Side, path: String) =
+            side(
+                "document.decide",
+                "owner" to "acme",
+                "body" to escaped,
+                "principal" to "alice",
+                "action" to "http:GET",
+                "resource" to "http:$path"
+            )
+        decide(Side.CURRENT, "/odata/${'$'}metadata").assert().isEqualTo("deny")
+        decide(Side.CURRENT, "/odata/orders").assert().isEqualTo("permit")
+        Side.PREVIOUS("document.compile", "key" to "tenant:acme", "body" to escaped).assert().startsWith("ok:")
+        Baseline.from("8.0.0-beta.9", "the previous version denies the path an escaped DENY names") {
+            decide(Side.PREVIOUS, "/odata/${'$'}metadata").assert().isEqualTo("deny")
+        }
+        if (!Baseline.reached("8.0.0-beta.9")) {
+            decide(
+                Side.PREVIOUS,
+                "/odata/${'$'}metadata"
+            ).assert().describedAs("beta.8 read the backslash as text").isEqualTo("permit")
+        }
+    }
 }

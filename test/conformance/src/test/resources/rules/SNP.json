@@ -460,7 +460,8 @@
         "cocache:FrozenScriptsTest#aRateLimitCounterAndItsFrozenScriptCountOneQuota",
         "cocache:FrozenScriptsTest#aSessionIndexAndItsFrozenScriptKeepTheNewestSessions",
         "cocache:FrozenScriptsTest#aSocialCountAndItsFrozenScriptHoldOneBound",
-        "social:RedisAuthStateCacheTest#theStateKeyIsFrozen"
+        "social:RedisAuthStateCacheTest#theStateKeyIsFrozen",
+        "migrate:RepairLeaseFrozenTest#theRepairLeaseIsFrozen"
       ],
       "pending": null
     },
