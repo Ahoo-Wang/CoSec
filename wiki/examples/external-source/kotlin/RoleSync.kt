@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class)
+@file:OptIn(ExperimentalCoSecApi::class) // cosec-control-sdk is experimental in 8.0
 
 package com.example.sync
 

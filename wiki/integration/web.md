@@ -845,7 +845,7 @@ The forwarded identity is the credential here, and its app is what it declares: 
 that names another app, or none, is refused (`400` `invalid-request`).
 
 **Testing such a service** without a gateway in front, or calling it from a local client during development, needs
-the header a gateway would send. `IdentityHeader` in `cosec-testkit` (experimental) writes it with CoSec's own encoder,
+the header a gateway would send. `IdentityHeader` in `cosec-testkit` (stable: no opt-in) writes it with CoSec's own encoder,
 and reads it back as a service does before returning it. Malformed input throws and names the member at fault:
 
 ```kotlin

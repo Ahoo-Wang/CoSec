@@ -602,8 +602,12 @@ or a request that bypassed the gateway:
   surrogate (IDN-10), a blank `sub`, `tenant` or `rid` (IDN-38), over
   `cosec.pipeline.identity.max-size` (8KB), sent more than once, or a scope that does not resolve here.
 - 431, or a 400 without CoSec's problem body: the web server refused the headers before CoSec read them
-  (`server.max-http-request-header-size`). On a host that reads the identity it is derived, 16 KB at the defaults,
-  unless set; a value set below that is named at startup at WARN with both numbers (IDN-43).
+  (`server.max-http-request-header-size`; Reactor Netty and Jetty answer 431, Tomcat 400). On a host that reads the
+  identity it is derived, 16 KB at the defaults, unless set, however the mode is set. The startup line names the limit
+  in effect: `derived from`, the headers really are over it; `below ... as the operator set it`, raise it or unset it;
+  `not derived`, something other than CoSec set or created `ServerProperties` first: set the property explicitly
+  (IDN-43). In 8.0.0-beta.9 a host whose own environment post-processor set the mode late kept 8 KB while the line
+  said `derived`.
 - 503 `unavailable`: a member the header's `crit` names that the service does not know (IDN-41): a later CoSec
   version wrote it and this service is older; counted as `cosec.identity.refused{problem=unavailable}`, never a store
   outage. Upgrade the service.

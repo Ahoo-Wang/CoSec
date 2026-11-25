@@ -80,7 +80,9 @@ starter 注册的监听器：
 ## 审计事件 {#audit-events}
 
 审计监听器把每个决策事件映射为一个 `AuditEvent`。它保留响应体省略的内容：显式拒绝和隐式拒绝的区别、凭证被拒绝的
-原因，以及请求为什么是 `503`。
+原因，以及请求为什么是 `503`。它那些看似封闭的取值会在次版本中增长：决策事件增加成员时，`kind`、`authorization.decision`、
+`authorization.reasonCode` 和 `authorization.source.via` 也随之增加，所以接收器、日志读取方或 Kafka 消费者要接受它不认识的值
+（[会增长的集合](../architecture/extending.md#sets-that-grow)）。
 
 | 字段 | 内容 |
 |---|---|

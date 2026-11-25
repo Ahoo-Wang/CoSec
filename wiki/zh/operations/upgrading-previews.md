@@ -13,18 +13,58 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 | 你运行的版本 | 阅读 |
 |---|---|
-| `8.0.0-beta.8` | [从 beta.8 升级](#from-8-0-0-beta-8) |
-| `8.0.0-beta.7` | [从 beta.7 升级](#from-8-0-0-beta-7)，然后是上面那一节 |
-| `8.0.0-beta.6` | [从 beta.6 升级](#from-8-0-0-beta-6)，然后是上面两节 |
-| `8.0.0-beta.5` | [从 beta.5 升级](#from-8-0-0-beta-5)，然后是上面三节 |
-| `8.0.0-beta.4` | [从 beta.4 升级](#from-8-0-0-beta-4)，然后是上面四节 |
-| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3)，然后是上面五节 |
-| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面六节 |
-| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面七节 |
-| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面八节 |
+| `8.0.0-beta.9` | [从 beta.9 升级](#from-8-0-0-beta-9) |
+| `8.0.0-beta.8` | [从 beta.8 升级](#from-8-0-0-beta-8)，然后是上面那一节 |
+| `8.0.0-beta.7` | [从 beta.7 升级](#from-8-0-0-beta-7)，然后是上面两节 |
+| `8.0.0-beta.6` | [从 beta.6 升级](#from-8-0-0-beta-6)，然后是上面三节 |
+| `8.0.0-beta.5` | [从 beta.5 升级](#from-8-0-0-beta-5)，然后是上面四节 |
+| `8.0.0-beta.4` | [从 beta.4 升级](#from-8-0-0-beta-4)，然后是上面五节 |
+| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3)，然后是上面六节 |
+| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面七节 |
+| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面八节 |
+| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面九节 |
 | `8.0.0-alpha.3`、`alpha.2`、`alpha.1` | [从 alpha.3](#from-8-0-0-alpha-3)、[alpha.2](#from-8-0-0-alpha-2) 或 [alpha.1](#from-8-0-0-alpha-1) 升级，然后是它上面的每一节 |
 
 库的哪个预览版可以运行在网关镜像的哪个预览版之后：同一个头或记录的读方与写方必须按顺序升级的预览版，在它的一节里写明，见 **按这个顺序升级**（[从 beta.8](#from-8-0-0-beta-8)、[从 beta.7](#from-8-0-0-beta-7)、[从 beta.5](#from-8-0-0-beta-5)）。
+
+## 从 8.0.0-beta.9 升级 {#from-8-0-0-beta-9}
+
+- **安全：构建 `TokenAuthenticator` 的人要说明读不到吊销时是否接受令牌**（`PIP-7`）。`acceptUnavailableRevocations` 没有默认值，是第三个参数：
+  `TokenAuthenticator(verifier, reader, acceptUnavailableRevocations = !failClosed, …)`。到 beta.9 为止它默认为 `true`：手工构建的认证器在吊销存储故障期间接受每个令牌，
+  不管 `cosec.authentication.revocation.fail-closed` 怎么设置。不带这个参数构建它的代码不再能编译；像 starter 那样传入运维的选择
+  （[认证器](../architecture/extending.md#authenticators)），或传 `false` 拒绝。二进制不兼容：构造函数的签名变了。starter 和测试工具无需你改动：
+  测试工具的 `PermittedRequest.withToken` 和 `IdentityHeader.withToken` 选择拒绝。
+- **适配器契约、测试工具的请求上下文和 `document.identity.IdentityHeader` 是稳定的。** `RequestGate`、`HttpFacts`、`Headers`、`Cookies`、`Outcome`、
+  `Problem`、`ProblemEncoder`、`ProblemRenderer`、`RequestSecurity` 和 `Pipeline.evaluate`；测试工具的 `PermittedRequest`、`IdentityHeader` 和
+  `CoSecTestBindings`；以及 `document.identity.IdentityHeader` 去掉了 `@ExperimentalCoSecApi`：在没有别的东西需要的地方删除
+  `@OptIn(ExperimentalCoSecApi::class)`。测试读取调用方的处理器不再需要它；用到 `PipelineFixture`、`PolicyTestKit` 或 `Pipeline.behindGateway` 的测试
+  仍然需要。`Headers` 和 `Cookies` 是 `@CoSecSpi`：以后加的成员带方法体。不使用 Spring 构建管道（`Pipeline.builder`、它的设置、`Pipeline.behindGateway`、
+  `awaitDocuments`）、`SnapshotDocumentStore`、测试工具的策略与管道测试、`cosec-control-sdk` 与 `HttpControlService`、求值轨迹仍是实验性的
+  （[稳定性等级](../architecture/extending.md#stability-levels)）。
+- **变更事件是稳定的。** `ChangeListener.onChange`、`ChangeEvent`、`MovedHead`、`RevisionRef`、`Escalation` 和 `ChangeOrigin` 去掉了
+  `@ExperimentalCoSecApi`：删掉你为它们写的 `@OptIn(ExperimentalCoSecApi::class)`。`ChangeEvent.change` 现在是 `String`，即控制 API 答复的变更 id
+  （`GET /changes/{id}`，SDK 的 `Change.id`），取代内部的 `ChangeId`：把 `event.change.value` 改为 `event.change`。`MovedHead` 和 `RevisionRef`
+  是普通类，不再是 data class：没有 `copy`，不能解构；相等性和 `toString` 不变。`ChangeEvent` 现在按值比较。Kafka 变更日志的载荷不变。
+- **控制面的存储不是扩展点。** `ControlStore` 及其记录和异常（`ControlStoreException`、`InMemoryControlStore`、`IndexedReference`、`ReferrerEntry` 等）、
+  除 `Escalation`、`ChangeOrigin`、`Confirmation` 和 `ShadowSummary` 以外的 `control.change.*`、`ChangeRequestCodec`、`CoCacheControlStore`、
+  `ProvenanceKind`，以及 `spi.shadow` 中影子窗口的端口与值（`CandidateStore`、`ShadowReportSink`、`ShadowReportReader`、`ShadowReport`、
+  `InstanceStatus`、`ResidentDocuments`、`StagedCandidates`、`StoredCandidate`）和 `CoCacheShadowReports` 原为 `@ExperimentalCoSecApi`，
+  现在是 `@InternalCoSecApi`；`ControlStore`、`CandidateStore`、`ShadowReportSink` 和 `ShadowReportReader` 不再是 `@CoSecSpi`。你自己的
+  `ControlStore` 或影子端口不再能编译；starter 装配 CoSec 在 Redis 上的实现（[控制面存储](../architecture/extending.md#control-store)）。
+- **`JustAuthProvider` 是内部的**（`@InternalCoSecApi`）。starter 为每个配置的注册构建一个；通过 `SocialAuthentication` 登录。`JustAuthCredentials`
+  保留 JustAuth 的 `AuthCallback` 作为超类型，这是 CoSec API 中唯一的 JustAuth 类型，经过审查：回调的参数就是 `AuthCallback` 的属性，按名字绑定。
+- **审计与决策的集合是开放的**（[会增长的集合](../architecture/extending.md#sets-that-grow)）：`DecisionEvent.Kind`、`StatementRef`、`BindingRef`、
+  `AuditDecision`、`AuditReasonCode`、`AuditEventKind`、`AuditVia` 和 `Escalation.Reason` 可能在次版本中增加成员。对它们的 `when` 要有 `else`，
+  接收器或 Kafka 消费者要接受它不认识的值。CoSec 今天写出的内容没有变化。
+- **读取身份的宿主，无论模式怎样设置，请求头上限都会推出**（`IDN-43`）。
+  - **beta.9 的问题：** 只有在 starter 自己的环境后处理器运行之前，环境里已有 `cosec.pipeline.mode=gateway` 或
+    `cosec.pipeline.caller=forwarded-identity` 时，它才推出 `server.max-http-request-header-size`。宿主自己的后处理器较晚才设置模式时，
+    上限仍是 Spring Boot 的 8 KB，启动日志却仍写着 `derived`。身份头与其余请求头合计超过 8 KB 的请求，在 CoSec 读取之前就被服务器拒绝
+    （`431`，Tomcat 上是 `400`）。
+  - **现在：** 环境确定之后，上限才写到 Web 服务器的属性上。
+  - **会破坏什么：** 无需改动。有一处不同：推出的上限不再是环境里的属性，所以从 `Environment` 读取 `server.max-http-request-header-size`
+    来得知上限的代码，现在只能读到你设置的值。改为读取 `ServerProperties.maxHttpRequestHeaderSize`。
+  - **启动日志**现在写出生效的上限：推出的、你的、你的但太小，或没有推出（[故障排查](./troubleshooting.md)）。
 
 ## 从 8.0.0-beta.8 升级 {#from-8-0-0-beta-8}
 

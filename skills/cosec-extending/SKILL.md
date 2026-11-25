@@ -19,7 +19,9 @@ the ones that carry runtime types in `core/runtime/src/main/kotlin/me/ahoo/cosec
 `host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt` and
 `CoSecPipelineIntegrationAutoConfiguration.kt`. A library that only implements a `cosec-spi` port depends on
 `cosec-spi` alone. Never opt in to `@InternalCoSecApi` declarations: they are CoSec-internal. The interfaces meant to be implemented carry
-`@CoSecSpi`; an `@ExperimentalCoSecApi` one may still change in a minor release. Inspect the target version's interfaces
+`@CoSecSpi`; an `@ExperimentalCoSecApi` one may still change in a minor release (in 8.0: `SnapshotDocumentStore`,
+building a pipeline without Spring, the kit's policy and pipeline tests, `cosec-control-sdk`, the evaluation trace). The
+adapter contract (`HttpFacts`, `Headers`, `Cookies`, `Outcome`, `ProblemRenderer`, ...) and change events are stable. Inspect the target version's interfaces
 before writing code.
 
 ## Rules for every extension
@@ -50,24 +52,17 @@ The starter collects these beans:
 | `Authenticator` | `me.ahoo.cosec.spi.authn` | one; yours replaces the built-in token and API key authenticator | turns credentials into a principal |
 | `BlacklistSource` | `me.ahoo.cosec.runtime.attribute` | one; the starter wraps it in `BlacklistAttributeProvider` | says who and what is blocked |
 | `AuditEventSink` | `me.ahoo.cosec.spi.audit` | any number; each becomes a BEST_EFFORT listener named after its bean | the flat audit record of each decision |
-| `ControlStore` | `me.ahoo.cosec.control.store` | one, with `cosec-control`; replaces `CoCacheControlStore` | where the control plane keeps its records |
 | `IdGenerator` | `me.ahoo.cosec.spi.id` | one; replaces `RandomIdGenerator` | request, decision event, token (`jti`) and change ids |
-| `ProblemRenderer` | `me.ahoo.cosec.runtime.http` | at most one; two fail startup (`PIP-34`) | the body of every refusal (adapters and login routes); experimental |
+| `ProblemRenderer` | `me.ahoo.cosec.runtime.http` | at most one; two fail startup (`PIP-34`) | the body of every refusal (adapters and login routes) |
+| `ChangeListener` | `me.ahoo.cosec.control.audit` | any number, with `cosec-control`; next to `LoggingChangeListener` | hears every step of a control-plane change; `ChangeEvent.change` is the change's id as the control API answers it |
 
 Declare them as ordinary `@Bean`s. There is no `META-INF/services` registration for these SPIs.
 
-The shadow window ports (`CandidateStore`, `ShadowReportSink`, `ShadowReportReader`, in `me.ahoo.cosec.spi.shadow`) go
-with a `ControlStore` of your own. A `ShadowReportReader` overrides `readings(window)`: the reports that read, and in
-`ShadowReadings.unreadable` the instances whose listed report is missing or does not decode, which the control plane
-treats as missing evidence (the window waits, then closes insufficient naming them, `CTL-56`). Throw when the store
-does not answer, never name an instance unreadable for it. Without the override, `readings` throws where `reports`
-does, and a window with an unreadable report stays open past its longest. Override `statusReadings()` too: the
-recent statuses that read, and in `StatusReadings.unreadable` the instances whose listed status does not decode, which
-the control plane takes as live and acknowledging nothing (`CTL-73`). Without it, one status that does not decode fails
-the whole read, holding every window and `propagation`. Implement `write(ResidentDocuments)` and `residents(instances)`
-as well (abstract, `CTL-75`): the documents each instance holds are a record of their own beside its small status,
-stored per instance for `ShadowReportReader.RESIDENT_TTL`; `residents` names in `unreadable` the instances whose record
-is missing or does not decode, which `propagation` counts as `unknown`.
+Not extension points in 8.0, and `@InternalCoSecApi`: the control plane's storage (`ControlStore` and its records,
+`CoCacheControlStore`), the shadow window ports of `me.ahoo.cosec.spi.shadow` (`CandidateStore`, `ShadowReportSink`,
+`ShadowReportReader`), and the social login's providers (`JustAuthProvider`; social providers are JustAuth's, by each
+registration's `type`). The starter wires CoSec's own; read the control plane through its HTTP API,
+`cosec-control-sdk` or change events.
 
 Not an extension point: `RequestGate` (`me.ahoo.cosec.runtime.http`), what the web adapters call. `Pipeline` is one;
 `IdentityGate` is the other, for a service behind a CoSec gateway (`cosec.pipeline.mode=gateway`). Both build every
@@ -209,7 +204,10 @@ names no one. Ids are not trimmed. Memberships
 you pass have source `Memberships.Source.CLAIMS` (`MembershipClaims.parse(roles, policies)` builds them from
 `role`/`role@space` strings); pass `null` to ask the `MembershipProvider`. A bean of yours replaces the built-in `CompositeAuthenticator`
 (JWT with revocation, plus API keys when enabled): compose it yourself, for example
-`CompositeAuthenticator(myTokenAuthenticator, apiKeyAuthenticator)`, if you still need API keys.
+`CompositeAuthenticator(myTokenAuthenticator, apiKeyAuthenticator)`, if you still need API keys. A
+`TokenAuthenticator(verifier, revocations, acceptUnavailableRevocations, ...)` you build states its third parameter,
+which has no default (PIP-7): pass `!failClosed` read from `cosec.authentication.revocation.fail-closed`, as the starter
+does, never a constant `true`.
 
 Set `credential` (`Identity.Credential(method, kind, id, expiresAt)`, never the credential's value). `kind` is required
 (IDN-44): `Identity.Credential.Kind.PERSON` for a person's sign-in (SSO, SAML, LDAP), `WORKLOAD` for a machine client
@@ -218,21 +216,6 @@ root and has no break-glass; the method is only a label. `API_KEY` and `SERVICE`
 construction, and a principal with no credential is a workload. On a gateway, without a credential the principal is
 forwarded to no backend, and with `expiresAt = null` the gateway answers 500 rather than forward an identity that never
 expires.
-
-## ControlStore: the control plane's records
-
-Replace `CoCacheControlStore` only to keep control-plane records outside Redis. Besides keyed, conditional reads and
-writes, implement `documents()` (every document with indexed revisions; may name more, never fewer),
-`openChanges()` (the non-terminal change requests as stored now, each read once; override `eachOpenChange` to hand
-them out one record at a time with the size each is stored with, which the control plane reads and weighs them by: the
-default reads them whole and weighs each record as one at the cap), `acquireLease` / `releaseLease`
-(release only while the holder still has it, checked and removed in one atomic step), `withdrawCandidate(key, window)`
-(remove the candidate only while it is still that window's, in one atomic step), `stagedCandidate` and `putCandidate`
-with the digest it read (write only over the candidate read), referrers with the revision that
-indexed each, and `RevisionIndex.reclaiming` kept with the index. A failed read throws; never answer "absent":
-`ControlStoreException` when the store cannot answer (the control API answers 503), `SnapshotFormatException` when a
-value does not decode (500). Start from
-`InMemoryControlStore` and the KDoc of `core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlStore.kt`.
 
 ## IdGenerator: CoSec's ids
 

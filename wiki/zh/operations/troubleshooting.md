@@ -293,7 +293,7 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
 | `401` `token-invalid` | 本服务不读取的版本、没有 `auth.exp`，或签发时间晚于当前时间加 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)。 | 让服务与网关一起升级；同步时钟。 |
 | `503` `unavailable` | 请求头的 `crit` 点了名、而本服务不认识的成员（`IDN-41`）：更新版本的 CoSec 网关或服务写的，本服务比它预期的旧。日志写出该成员；`cosec.identity.refused{problem=unavailable}` 计数，与存储故障分开。 | 升级本服务。 |
 | `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。在没有网关的测试中，头只生成一次并被重复使用：每个请求生成一个（[`IdentityHeader`](../integration/web.md#services-behind-the-gateway)）。 |
-| `431`，或不带 CoSec 问题体的 `400` | Web 服务器在 CoSec 读取之前就拒绝了请求：请求头合计超过 `server.max-http-request-header-size`。在读取身份的宿主上，没有设置时 starter 会推出这个上限（默认时 16 KB，`IDN-43`）；设置得比它小时，启动时以 `WARN` 写出：`server.max-http-request-header-size is <n> bytes, below cosec.pipeline.identity.max-size (<r> bytes) and 8192 bytes for the request's other headers (<d> bytes) ...`。 | 不设置它，让它推出；或者至少调到推出的值。 |
+| `431`，或不带 CoSec 问题体的 `400` | Web 服务器在 CoSec 读取之前就拒绝了请求：请求头合计超过服务器的请求头上限（Reactor Netty 和 Jetty 答 `431`，Tomcat 答 `400`）。在读取身份的宿主上，没有设置 `server.max-http-request-header-size` 时 starter 会推出这个上限（默认时 16 KB，`IDN-43`）。启动日志写出生效的上限及原因：`… derived from …`，请求头确实超过了它；`… below … as the operator set it`，你设置的值太小；`… not derived …`，CoSec 能改之前，别的东西设置或创建了 Web 服务器的属性：找一找写 `ServerProperties` 的应用 Bean 或定制器。在 8.0.0-beta.9 中，宿主自己的环境后处理器在 CoSec 的之后才设置 `cosec.pipeline.mode` 时（例如一个没有顺序的后处理器），上限仍是 Spring Boot 的 8 KB，而启动日志仍写着 `derived`。 | 不设置 `server.max-http-request-header-size`，让它推出；或者至少调到推出的值；对 `not derived`，明确设置它。 |
 
 在任何环境中，响应都只说明问题，从不说明原因。原因在服务的日志里，来自 logger `me.ahoo.cosec.runtime.identity.IdentityGate`：
 

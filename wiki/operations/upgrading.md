@@ -1329,14 +1329,19 @@ longer can: a second bean of one of these types fails startup (for `ControlHttp`
 `DefaultControlPlane`, `ControlHttp`, `ControlHttpRequest` and `ControlHttpResponse` are `@InternalCoSecApi`, and
 so are `ControlPlane` and the `Operator` every one of its methods takes: the control plane is not a library an application
 calls, and an application writes through its HTTP API
-([Roles from an external source](../scenarios/external-source.md)). `ControlStore`, `ChangeOptions`, the change listeners,
-`Revisions`, `ControlSnapshot` and the maintenance beans stay replaceable.
+([Roles from an external source](../scenarios/external-source.md)). Of the control plane, an application implements
+only change listeners ([Change listeners](../architecture/extending.md#change-listeners)): its storage (`ControlStore`
+and its records, the shadow window ports), `ChangeOptions` and `Revisions` are `@InternalCoSecApi` too
+([Control store](../architecture/extending.md#control-store)).
 
 #### Policy test suites
 
 The 8.0 test kit is the `cosec-testkit` module. `PolicyTestKit.load(dir)` reads documents laid out as
 `cosec-migrate convert` writes them, and `tests(dir)` returns a JUnit 5 dynamic test for each scenario file, for a
-`@TestFactory` ([Testing policies](../policies/testing.md)). A 7.x suite's `policies`, `appPermissions` and role grants
+`@TestFactory` ([Testing policies](../policies/testing.md)). `PolicyTestKit` is `@ExperimentalCoSecApi` in 8.0, so a
+suite opts in with `@file:OptIn(ExperimentalCoSecApi::class)`; the kit's request contexts for testing application code
+(`PermittedRequest`, `IdentityHeader`, `CoSecTestBindings`) are stable and need none
+([Testing your application](../policies/testing.md#testing-your-application)). A 7.x suite's `policies`, `appPermissions` and role grants
 become the converted documents; each of its `cases` becomes one scenario file:
 
 | 7.x case | 8.0 scenario |

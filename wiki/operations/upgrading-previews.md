@@ -15,20 +15,77 @@ section above it:
 
 | You run | Read |
 |---|---|
-| `8.0.0-beta.8` | [From beta.8](#from-8-0-0-beta-8) |
-| `8.0.0-beta.7` | [From beta.7](#from-8-0-0-beta-7), then the one above |
-| `8.0.0-beta.6` | [From beta.6](#from-8-0-0-beta-6), then the two above |
-| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5), then the three above |
-| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the four above |
-| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the five above |
-| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the six above |
-| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the seven above |
-| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the eight above |
+| `8.0.0-beta.9` | [From beta.9](#from-8-0-0-beta-9) |
+| `8.0.0-beta.8` | [From beta.8](#from-8-0-0-beta-8), then the one above |
+| `8.0.0-beta.7` | [From beta.7](#from-8-0-0-beta-7), then the two above |
+| `8.0.0-beta.6` | [From beta.6](#from-8-0-0-beta-6), then the three above |
+| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5), then the four above |
+| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the five above |
+| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the six above |
+| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the seven above |
+| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the eight above |
+| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the nine above |
 | `8.0.0-alpha.3`, `alpha.2`, `alpha.1` | [From alpha.3](#from-8-0-0-alpha-3), [alpha.2](#from-8-0-0-alpha-2) or [alpha.1](#from-8-0-0-alpha-1), then every section above it |
 
 Which preview of the library may run behind which preview of the gateway image: a preview whose readers and writers of
 one header or record must be upgraded in an order says so in its section, under **Upgrade in this order**
 ([from beta.8](#from-8-0-0-beta-8), [from beta.7](#from-8-0-0-beta-7), [from beta.5](#from-8-0-0-beta-5)).
+
+## From 8.0.0-beta.9 {#from-8-0-0-beta-9}
+
+- **Security: whoever builds a `TokenAuthenticator` states whether a token is accepted while its revocations cannot
+  be read** (`PIP-7`). `acceptUnavailableRevocations` has no default and is the third parameter:
+  `TokenAuthenticator(verifier, reader, acceptUnavailableRevocations = !failClosed, …)`. Until beta.9 it defaulted to
+  `true`: a hand-built authenticator accepted every token during a revocation-store outage, whatever
+  `cosec.authentication.revocation.fail-closed` said. Code that builds one without the argument no longer compiles;
+  pass what the operator chose, as the starter does
+  ([Authenticators](../architecture/extending.md#authenticators)), or `false` to refuse. Not binary compatible: the
+  constructor's signature changed. The starter and the kit need no change from you: the kit's
+  `PermittedRequest.withToken` and `IdentityHeader.withToken` refuse.
+- **The adapter contract, the kit's request contexts and `document.identity.IdentityHeader` are stable.**
+  `RequestGate`, `HttpFacts`, `Headers`, `Cookies`, `Outcome`, `Problem`, `ProblemEncoder`, `ProblemRenderer`,
+  `RequestSecurity` and `Pipeline.evaluate`; the kit's `PermittedRequest`, `IdentityHeader` and `CoSecTestBindings`; and
+  `document.identity.IdentityHeader` lose `@ExperimentalCoSecApi`: remove `@OptIn(ExperimentalCoSecApi::class)` where
+  nothing else needs it. A test of a handler that reads the caller no longer needs one; a test that uses
+  `PipelineFixture`, `PolicyTestKit` or `Pipeline.behindGateway` still does. `Headers` and `Cookies` are `@CoSecSpi`: a
+  member added later comes with a body. Building a pipeline without Spring (`Pipeline.builder`, its settings,
+  `Pipeline.behindGateway`, `awaitDocuments`), `SnapshotDocumentStore`, the kit's policy and pipeline tests,
+  `cosec-control-sdk` with `HttpControlService`, and the evaluation trace stay experimental
+  ([Stability levels](../architecture/extending.md#stability-levels)).
+- **Change events are stable.** `ChangeListener.onChange`, `ChangeEvent`, `MovedHead`, `RevisionRef`, `Escalation` and
+  `ChangeOrigin` lose `@ExperimentalCoSecApi`: drop your `@OptIn(ExperimentalCoSecApi::class)` for them.
+  `ChangeEvent.change` is now a `String`, the change's id as the control API answers it (`GET /changes/{id}`, the SDK's
+  `Change.id`), in place of the internal `ChangeId`: replace `event.change.value` with `event.change`. `MovedHead` and
+  `RevisionRef` are plain classes, no longer data classes: no `copy`, no destructuring; equality and `toString` are
+  unchanged. `ChangeEvent` now compares by value. The Kafka change log's payload is unchanged.
+- **The control plane's storage is not an extension point.** `ControlStore` with its records and exceptions
+  (`ControlStoreException`, `InMemoryControlStore`, `IndexedReference`, `ReferrerEntry`, ...), `control.change.*` but
+  `Escalation`, `ChangeOrigin`, `Confirmation` and `ShadowSummary`, `ChangeRequestCodec`, `CoCacheControlStore`,
+  `ProvenanceKind`, and the shadow window's ports and values in `spi.shadow` (`CandidateStore`, `ShadowReportSink`,
+  `ShadowReportReader`, `ShadowReport`, `InstanceStatus`, `ResidentDocuments`, `StagedCandidates`, `StoredCandidate`)
+  with `CoCacheShadowReports` were `@ExperimentalCoSecApi` and are `@InternalCoSecApi` now; `ControlStore`,
+  `CandidateStore`, `ShadowReportSink` and `ShadowReportReader` are no longer `@CoSecSpi`. A `ControlStore` or shadow
+  port of your own no longer compiles; the starter wires CoSec's on Redis
+  ([Control store](../architecture/extending.md#control-store)).
+- **`JustAuthProvider` is internal** (`@InternalCoSecApi`). The starter builds one per configured registration; sign in
+  through `SocialAuthentication`. `JustAuthCredentials` keeps JustAuth's `AuthCallback` as its supertype, the one
+  JustAuth type in CoSec's API, reviewed: the callback's parameters are `AuthCallback`'s properties, bound by name.
+- **The audit and decision sets are open** ([Sets that grow](../architecture/extending.md#sets-that-grow)):
+  `DecisionEvent.Kind`, `StatementRef`, `BindingRef`, `AuditDecision`, `AuditReasonCode`, `AuditEventKind`, `AuditVia`
+  and `Escalation.Reason` may gain a member in a minor release. A `when` over one has an `else`, and a sink or a Kafka
+  consumer accepts a value it does not know. Nothing changes in what CoSec writes today.
+- **The request-header limit of a host that reads the identity is derived however the mode is set** (`IDN-43`).
+  - **What was wrong in beta.9:** the starter derived `server.max-http-request-header-size` only when
+    `cosec.pipeline.mode=gateway` or `cosec.pipeline.caller=forwarded-identity` was in the environment before its own
+    environment post-processor ran. A host whose own post-processor set the mode later kept Spring Boot's 8 KB, and
+    its startup line still said `derived`. A request whose identity header and other headers together passed 8 KB was
+    refused by the server (`431`, or `400` on Tomcat) before CoSec read it.
+  - **Now:** the limit is applied to the web server's properties once the environment is final.
+  - **What breaks:** nothing to change. One difference: the derived limit is no longer a property of the environment,
+    so code that read `server.max-http-request-header-size` from the `Environment` to learn it now finds only a value
+    you set. Read `ServerProperties.maxHttpRequestHeaderSize` instead.
+  - **The startup line** now names the limit in effect: derived, yours, yours and too small, or not derived
+    ([Troubleshooting](./troubleshooting.md)).
 
 ## From 8.0.0-beta.8 {#from-8-0-0-beta-8}
 

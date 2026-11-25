@@ -101,7 +101,10 @@ A bean that is both is registered once, as the `DecisionListener` it is.
 ## Audit events
 
 The audit listeners map each decision event to an `AuditEvent`. It keeps what the response body leaves out: explicit
-and implicit denies apart, why a credential was rejected, and why a request was `503`.
+and implicit denies apart, why a credential was rejected, and why a request was `503`. Its closed-looking values grow in a
+minor release: `kind`, `authorization.decision`, `authorization.reasonCode` and `authorization.source.via` gain a member
+when the decision event does, so a sink, a log reader or a Kafka consumer accepts a value it does not know
+([Sets that grow](../architecture/extending.md#sets-that-grow)).
 
 | Field | Contents |
 |---|---|
