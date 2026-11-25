@@ -110,7 +110,7 @@ flowchart BT
 | `host/spring-boot/` | `:spring-boot` | `cosec-spring-boot` | 自动配置，只做装配（D2） |
 | `migration/migrate/` | `:migrate` | `cosec-migrate` | 7.x 数据迁移 |
 | `test/testkit/` | `:testkit` | `cosec-testkit` | 用户的策略测试工具 |
-| `test/conformance/`、`test/architecture/`、`test/e2e/`、`test/client-host/`、`test/system-test/`、`test/system-behind/`、`test/system-auth/`、`test/system-enforcer/`、`test/code-coverage-report/` | | 不发布 | 规范一致性、架构规则、端到端、客户端测试所对的宿主、系统测试及其服务、覆盖率 |
+| `test/conformance/`、`test/architecture/`、`test/compat/`、`test/e2e/`、`test/client-host/`、`test/system-test/`、`test/system-behind/`、`test/system-auth/`、`test/system-enforcer/`、`test/code-coverage-report/` | | 不发布 | 规范一致性、架构规则、跨版本测试装置（RFC 0014 T）、端到端、客户端测试所对的宿主、系统测试及其服务、覆盖率 |
 | `bom/bom/` | `:bom` | `cosec-bom` | 只对齐 CoSec 自己的、作为依赖使用的模块（不含 `cosec-migrate`），不导入任何第三方平台 |
 | `bom/dependencies/` | `:dependencies` | 不发布 | CoSec 自己构建与测试所用版本的内部平台；任何发布的模块都不提它（下文） |
 | `platform/gateway-server/` | `:gateway-server` | Docker 镜像（不发布到 Maven） | 给用户直接部署的网关服务；也是端到端、AOT 与压测的对象（D5） |

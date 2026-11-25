@@ -370,7 +370,7 @@ break-glass 等待 broker 的确认（把生产者配置为 `acks=all`）。设�
 | `cosec.control.listener.dropped` | 因队列已满而丢弃的 BEST_EFFORT 事件 |
 | `cosec.control.listener.lost` | REQUIRED 监听器错过的已存储步骤的事件，因队列已满或调用失败：任何一个都应告警 |
 
-`cosec.control.shadow.status.unreadable`（无标签）统计控制面主机读到的、无法解码的实例状态：每个这样的实例在其状态能读取或过期之前，都会挡住所有影子窗口（`CTL-73`），日志会点名它（[故障排查](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)）。任何一个都应告警。
+`cosec.control.shadow.status.unreadable`（无标签）统计控制面主机读到的、无法解码的实例状态：每个这样的实例在最后一次写入后一分钟内挡住所有影子窗口（由键剩下的寿命得知，与任何实例的状态一样，`CTL-73`），日志会点名它（[故障排查](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)）。任何一个都应告警。
 
 **存储的读方**（`SNP-25`）。每个带 `cosec-cocache` 的 CoSec 进程都写自己的状态，带上它运行的发布版本。`cosec.instance.status.failed`（计数器，无标签，在该进程上）统计它写状态失败的次数：控制面在读方中看不见它，通常是 Redis 用户没有对自己的 `<s>:shadow:status:<instance>` 的写权限（[存储](./storage.md#who-may-write-which-keys)）。任何一次都应告警。`cosecInstanceStatus` 健康指标显示它的 `instance`、`release`、`lastWritten`，写入失败时还有 `failingSince` 与 `failedWrites`；它总是 `UP`，不属于任何就绪分组。在控制面主机上，`cosec.control.instances.releases`（仪表，无标签）是上次读取时最近一小时读方运行的版本数（`GET /instances`，[测试策略](../policies/testing.md#instances)）：持续高于 1 的时间超过一次滚动升级，说明还有旧版本的实例在读存储。
 

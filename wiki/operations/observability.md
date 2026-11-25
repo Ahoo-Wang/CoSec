@@ -511,7 +511,7 @@ Meters, each tagged `listener`:
 | `cosec.control.listener.lost` | events of stored steps a REQUIRED listener missed, its queue full or its call failed: alert on any |
 
 `cosec.control.shadow.status.unreadable` (no tags) counts the instance statuses a control host read that did not
-decode: each such instance holds every shadow window until its status reads or expires (`CTL-73`), and the log names it
+decode: each such instance holds every shadow window for a minute after its last write, which its key's remaining life tells, as any instance's status (`CTL-73`), and the log names it
 ([Troubleshooting](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)). Alert on any.
 
 **The readers of the store** (`SNP-25`). Every CoSec process with `cosec-cocache` writes its status, with the release it
