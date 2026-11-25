@@ -1,0 +1,52 @@
+{
+  "rules": [
+    "IDN-46"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "CoSec's own token for cosec says cosec.kind person: the verifier reads it as a person's, and with the REQUIRED audit listener the root binding's break-glass lets the request proceed.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "root",
+          "subject": {
+            "principal": "cosec",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "cosec:root",
+          "breakGlass": true,
+          "expiresAt": "2099-12-31T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "jwt",
+    "jwt": {
+      "jti": "t1",
+      "sub": "cosec",
+      "tenantId": "(platform)",
+      "kind": "person"
+    }
+  },
+  "listeners": [
+    {
+      "name": "audit",
+      "delivery": "required"
+    }
+  ],
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

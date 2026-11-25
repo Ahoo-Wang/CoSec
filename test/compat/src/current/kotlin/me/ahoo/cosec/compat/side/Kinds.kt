@@ -16,6 +16,7 @@ package me.ahoo.cosec.compat.side
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.TokenSession
+import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Instant
 
 /**
@@ -51,4 +52,7 @@ internal object Kinds {
 
     /** Whose [credential] is, as this version read it: `person` or `workload`. */
     fun of(credential: Identity.Credential): String = credential.kind.name.lowercase()
+
+    /** Whose [token] is, as this version's verifier read it (`IDN-46`): `person` or `workload`. */
+    fun of(token: VerifiedToken): String = token.kind.name.lowercase()
 }

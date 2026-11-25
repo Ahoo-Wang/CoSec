@@ -270,7 +270,9 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 `kind` (`Identity.Credential.Kind`, `IDN-45`) is required: whose the token is, a person's or a workload's. Declare a
 user's sign-in a person's and a machine's (client credentials, a service account) a workload's: a workload never
 approves a change, is never the control plane's trust root and has no break-glass. CoSec writes it into the access
-token as `cosec.kind`, and a refresh or a tenant switch keeps it. `TokenSubject("alice", Kind.PERSON, "acme")` is the
+token as `cosec.kind`, its verifier reads it back (`IDN-46`), and a refresh or a tenant switch keeps the kind of the
+token presented, whatever its hook answers. A token without the claim, which an earlier 8.0 preview issued, reads as a
+workload's, and so does every token refreshed from it, until its user signs in again. `TokenSubject("alice", Kind.PERSON, "acme")` is the
 tenant `acme`: `tenant` comes before `app`, as it does in every other CoSec API (`TokenFamilies.start(tenant,
 principal)`). The samples write every argument after `id` by name, which reads better still.
 

@@ -25,6 +25,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.token.TokenFamily
 import me.ahoo.cosec.spi.token.TokenRevokedException
@@ -60,7 +61,7 @@ class CoCacheTokenFamilyStoreTest {
     }
 
     private fun token(session: TokenSession) =
-        VerifiedToken("jti-${session.generation}", "alice", "acme", null, session = session)
+        VerifiedToken("jti-${session.generation}", "alice", "acme", null, PERSON, session = session)
 
     @Test
     fun `a family reads back as written, and expires with its session`() = runBlocking<Unit> {

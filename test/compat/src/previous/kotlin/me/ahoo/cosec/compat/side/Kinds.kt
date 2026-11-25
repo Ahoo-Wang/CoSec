@@ -16,6 +16,7 @@ package me.ahoo.cosec.compat.side
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.TokenSession
+import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Instant
 
 /**
@@ -36,4 +37,8 @@ internal object Kinds {
     /** A release before kinds reads none. */
     @Suppress("UNUSED_PARAMETER")
     fun of(credential: Identity.Credential): String = "none"
+
+    /** A release before kinds reads none from a token either. */
+    @Suppress("UNUSED_PARAMETER")
+    fun of(token: VerifiedToken): String = "none"
 }

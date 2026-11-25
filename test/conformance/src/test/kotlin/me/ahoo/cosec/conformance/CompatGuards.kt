@@ -52,5 +52,6 @@ internal object CompatGuards {
         "compat:LocalStateCompatTest#one route map is resolved alike by both versions",
         "compat:LocalStateCompatTest#no module of CoSec consumes Kafka",
         "compat:EdgeCompatTest#the CoSec parameters are read alike, and an ambiguous one refused, by both versions",
+        "compat:TokenCompatTest#the current verifier reads the kind the current issuer declared, and a token without one as a workload's",
     )
 }

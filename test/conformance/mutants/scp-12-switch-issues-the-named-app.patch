@@ -3,17 +3,17 @@
 # Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchTenantAuthenticationTest :conformance:test
 
 diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt
-index d296a555c..232674685 100644
+index cb40f219f..b30044fbb 100644
 --- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt
 +++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt
-@@ -73,7 +73,9 @@ class SwitchTenantAuthentication<C : SwitchTenantCredentials>(
+@@ -74,7 +74,9 @@ class SwitchTenantAuthentication<C : SwitchTenantCredentials>(
              throw TokenVerificationException("The token pair presented is not the one the switch was asked with.")
          }
          val live = sessions.presented(token)
--        val subject = inTarget(previous, credentials.targetTenantId, tenantSwitch.switchTenant(credentials))
+-        val subject = inTarget(previous, token, credentials.targetTenantId, tenantSwitch.switchTenant(credentials))
 +        val answer = tenantSwitch.switchTenant(credentials)
 +        val asked = credentials.targetAppId?.let { TenantMembership(answer.roles, answer.policies, answer.attributes, it) }
-+        val subject = inTarget(previous, credentials.targetTenantId, asked ?: answer)
++        val subject = inTarget(previous, token, credentials.targetTenantId, asked ?: answer)
          return subject.inSession(live.fork(TenantId(credentials.targetTenantId)))
      }
  

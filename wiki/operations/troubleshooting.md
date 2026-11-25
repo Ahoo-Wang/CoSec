@@ -1359,6 +1359,11 @@ for a check, `412` for an `ifMatch` that does not hold).
   id). Ask for a new approval. A `403` on `:approve` with `a workload's credential (an API key, a service) cannot approve` in the log: the approver
   authenticated with an API key or stated a service's own identity (`IDN-34`); approve with a person's token; with `an approval names the approver's credential, and this one names none`: approve with a
   credential that has an id, such as CoSec's token.
+- **A person is refused with `a workload's credential (an API key, a service) cannot approve`, or a break-glass binding
+  does not reach them, after an upgrade from an earlier 8.0 preview**: their session began before CoSec's tokens said
+  whose they are, so their access token has no `cosec.kind` claim, which CoSec's verifier reads as a workload's, and a
+  refresh keeps it (`IDN-46`). Have them sign in again: the new session's token says `person`. A login of your own that
+  declares `Kind.WORKLOAD` for a person's sign-in shows the same, for every new session.
 - **A service's change waits for a person although it states a platform administrator**: the change came through
   `ControlService` or the control-plane host's service port, where no one is the trust root (`CTL-81`), so it is
   analyzed: `NOT_ANALYZED` on an app's catalog, `CROSS_TENANT` on a grant in a tenant's document. Have a person approve

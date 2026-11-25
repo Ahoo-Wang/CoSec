@@ -22,6 +22,7 @@ import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenRevoker
@@ -56,7 +57,7 @@ class SubjectRevocationTest {
     }
 
     private fun token(issuedAt: Instant?, tenantId: String? = tenant.value, id: String = alice.value): VerifiedToken =
-        VerifiedToken("jti-$issuedAt", id, tenantId, null, issuedAt = issuedAt)
+        VerifiedToken("jti-$issuedAt", id, tenantId, null, PERSON, issuedAt = issuedAt)
 
     private val verifier = FixedVerifier(token(now))
     private val accessToken = "access"

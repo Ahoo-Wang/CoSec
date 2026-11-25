@@ -18,6 +18,7 @@ package me.ahoo.cosec.spi.token
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.scope.ScopeResolver
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
 import java.util.Collections
@@ -50,6 +51,12 @@ class VerifiedToken(
     val tenant: String?,
     /** The app the token is for (`aud`, RFC 0012 §3.5), null when it declares none. No default: a verifier says which. */
     val app: String?,
+    /**
+     * Whose the token is, a person's or a workload's (`IDN-46`), the kind of the credential it authenticates. No default:
+     * a verifier says which from what the token declares, and one that cannot tell says [Identity.Credential.Kind.WORKLOAD],
+     * the kind that can do less.
+     */
+    val kind: Identity.Credential.Kind,
     roles: Set<String> = emptySet(),
     policies: Set<String> = emptySet(),
     attributes: Map<String, Any> = emptyMap(),
@@ -100,5 +107,5 @@ class VerifiedToken(
 
     private fun invalid(reason: String): Nothing = throw TokenVerificationException("The token $reason.")
 
-    override fun toString(): String = "VerifiedToken(id=$id, principal=$principal, tenant=$tenant, app=$app)"
+    override fun toString(): String = "VerifiedToken(id=$id, principal=$principal, tenant=$tenant, app=$app, kind=$kind)"
 }

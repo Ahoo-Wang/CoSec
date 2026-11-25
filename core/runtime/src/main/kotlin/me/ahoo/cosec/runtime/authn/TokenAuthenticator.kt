@@ -138,9 +138,9 @@ class TokenAuthenticator(
                 tenant,
                 MembershipSource.of(token),
                 token.attributes,
-                // A person's, as every token was before kinds (IDN-44); the token's own kind replaces it (VerifiedToken).
-                Identity.Credential(credentialMethod, Identity.Credential.Kind.PERSON, token.id, token.expiresAt),
-                breakGlass = ownTokens,
+                // Whose the token is, as its verifier read it (IDN-46): a workload's token never uses break-glass.
+                Identity.Credential(credentialMethod, token.kind, token.id, token.expiresAt),
+                breakGlass = ownTokens && token.kind == Identity.Credential.Kind.PERSON,
                 issuedAt = token.issuedAt,
                 apiKeyCredential = false,
                 app = token.app?.let(::AppId),

@@ -22,6 +22,7 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.id.RandomIdGenerator
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.VerifiedToken
@@ -128,7 +129,8 @@ class CoCacheRevocationReaderTest {
      */
     @Test
     fun aRevokedTokenIsNeverJudgedNotRevokedWhileRedisFails() = runBlocking<Unit> {
-        val token = VerifiedToken(tokenId(), alice.value, tenant.value, null, issuedAt = Instant.now().minusSeconds(60))
+        val token =
+            VerifiedToken(tokenId(), alice.value, tenant.value, null, PERSON, issuedAt = Instant.now().minusSeconds(60))
         val judgement = TokenRevocation(reader)
         store.revoke(token.id, Duration.ofMinutes(1))
         store.revokeSubject(tenant, alice, Instant.now(), Duration.ofMinutes(1))

@@ -23,7 +23,9 @@ import javax.crypto.spec.SecretKeySpec
 /**
  * Access tokens the gateways accept, HS256 over the workflow's throwaway secret, signed here as `aot-smoke.sh` signs
  * them: until the system's own login service runs (batch 2), a scenario needs a token without one. Only the claims of
- * `contract/token/claims.json` that a token without a session carries.
+ * `contract/token/claims.json` that a token without a session carries, `cosec.kind` among them: it stands in for a token
+ * CoSec issued, which always says whose it is (`IDN-45`), a person's unless a scenario says otherwise. A null [kind]
+ * leaves the claim out, as an earlier 8.0 preview did, which CoSec's verifier reads as a workload's (`IDN-46`).
  */
 class Token(val value: String, val jti: String, val issuedAt: Instant, val expiresAt: Instant) {
     val bearer: Pair<String, String> get() = "Authorization" to "Bearer $value"
@@ -34,6 +36,7 @@ class Token(val value: String, val jti: String, val issuedAt: Instant, val expir
             tenant: String,
             roles: List<String> = emptyList(),
             app: String? = null,
+            kind: String? = "person",
             issuedAt: Instant = Instant.now(),
             validity: Duration = Duration.ofMinutes(10),
             secret: String = SystemTopology.jwtSecret,
@@ -53,6 +56,9 @@ class Token(val value: String, val jti: String, val issuedAt: Instant, val expir
             }
             if (app != null) {
                 claims["aud"] = app
+            }
+            if (kind != null) {
+                claims["cosec.kind"] = kind
             }
             val signing = part(mapOf("alg" to "HS256", "typ" to "JWT")) + "." + part(claims)
             val mac = Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(secret.toByteArray(), "HmacSHA256")) }

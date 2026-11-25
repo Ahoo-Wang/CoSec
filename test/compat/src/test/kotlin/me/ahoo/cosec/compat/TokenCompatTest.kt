@@ -18,7 +18,9 @@ import org.junit.jupiter.api.Test
 
 /**
  * MIX-2 and MIX-3, CoSec's tokens between versions: a token one version issues, the other verifies as the current
- * verifier does, and a refresh token is never taken for an access token by either.
+ * verifier does, and a refresh token is never taken for an access token by either. The current issuer's `cosec.kind`
+ * is a claim beta.8's verifier ignores (`IDN-45`); a beta.8 token, which has none, is a workload's to the current
+ * verifier (`IDN-46`).
  */
 class TokenCompatTest {
     private val secret = "compat-secret-compat-secret-compat-secret"
@@ -33,6 +35,23 @@ class TokenCompatTest {
                 read.assert().describedAs("$issuer -> $verifier, $sample")
                     .isEqualTo(Side.CURRENT("token.verify", "secret" to secret, "token" to access))
             }
+        }
+    }
+
+    /**
+     * `IDN-46`: the current verifier reads whose a token is from `cosec.kind`, and a token that does not say, as every
+     * token a previous release issued, as a workload's, never refusing it: such a session approves nothing until its
+     * user signs in again.
+     */
+    @Test
+    fun `the current verifier reads the kind the current issuer declared, and a token without one as a workload's`() {
+        for (sample in listOf("person", "platform")) {
+            val current = Side.CURRENT("token.issue", "secret" to secret, "sample" to sample).substringBefore(' ')
+            Side.CURRENT("token.kind", "secret" to secret, "token" to current).assert()
+                .describedAs("current -> current, $sample").isEqualTo("person")
+            val previous = Side.PREVIOUS("token.issue", "secret" to secret, "sample" to sample).substringBefore(' ')
+            Side.CURRENT("token.kind", "secret" to secret, "token" to previous).assert()
+                .describedAs("previous -> current, $sample").isEqualTo("workload")
         }
     }
 

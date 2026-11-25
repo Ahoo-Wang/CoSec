@@ -25,6 +25,7 @@ import me.ahoo.cosec.document.json.StoredFormat
 import me.ahoo.cosec.document.json.StoredRecord
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.token.TokenFamily
 import me.ahoo.cosec.spi.token.TokenFamilyStore
@@ -73,7 +74,7 @@ class LaterSessionRecordTest {
     @Test
     fun `a refresh of a session a later version wrote is an outage, and the record is never rewritten`() = runTest {
         val session = TokenSession("f1", Instant.now(), 1)
-        val token = VerifiedToken("jti", "alice", "acme", null, session = session)
+        val token = VerifiedToken("jti", "alice", "acme", null, PERSON, session = session)
         val refusal = assertThrows<SessionStoreUnavailableException> { families.rotate(token) }
         StoredFormat.later(refusal)?.members.assert().containsExactly("device")
         assertThrows<SessionStoreUnavailableException> {

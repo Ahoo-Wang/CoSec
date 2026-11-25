@@ -16,7 +16,6 @@ package me.ahoo.cosec.login.token
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.runtime.token.TokenRevocation
-import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spi.token.VerifiedToken
@@ -59,7 +58,8 @@ class RefreshTokenAuthentication<C : RefreshTokenCredentials>(
     /** The token's principal, tenant and app, with what its user holds now. */
     private fun current(token: VerifiedToken, now: TenantMembership) = TokenSubject(
         id = token.principal,
-        kind = Identity.Credential.Kind.PERSON,
+        // The presented token's kind: the refresh's hook answers memberships, never whose the token is (IDN-46).
+        kind = token.kind,
         app = token.app,
         tenant = token.tenant,
         roles = now.roles,

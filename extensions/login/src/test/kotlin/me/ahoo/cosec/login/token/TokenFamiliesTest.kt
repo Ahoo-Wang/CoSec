@@ -22,6 +22,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenFamily
@@ -62,7 +63,7 @@ class TokenFamiliesTest {
 
     /** The access token of [session], as the verifier reads it. */
     private fun token(session: TokenSession?, principal: String = "alice", tenant: String? = "acme") =
-        VerifiedToken("jti-${session?.generation}", principal, tenant, null, session = session)
+        VerifiedToken("jti-${session?.generation}", principal, tenant, null, PERSON, session = session)
 
     private fun start(): TokenSession = runBlocking { families.start(acme, alice) }.session
 
