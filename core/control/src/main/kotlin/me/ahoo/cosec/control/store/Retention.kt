@@ -105,7 +105,7 @@ internal class Retention(
         if (!reclaimable(key)) {
             return Reclaimed.NOTHING
         }
-        val lease = "reclaim:$key"
+        val lease = ReclaimLease.of(key)
         if (!store.acquireLease(lease, holder, retention.leaseDuration)) {
             return Reclaimed.NOTHING
         }

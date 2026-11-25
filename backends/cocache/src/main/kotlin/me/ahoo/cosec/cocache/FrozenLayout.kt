@@ -166,7 +166,7 @@ internal enum class FrozenLayout(val what: String, val ifChanged: IfChanged) {
 
     /**
      * `<s>:control:lease:<name>`: `shadow-windows` and `reclaim-pass` (`ControlMaintenance`), `reclaim:<doc>` for each
-     * document whose revision records are deleted (`Retention`, `SnapshotKey.toString()`, `CTL-26`), and
+     * document whose revision records are deleted (`me.ahoo.cosec.control.store.ReclaimLease.of`, the key's `toString()`, `CTL-26`), and
      * `repair-references` (`cosec-migrate`'s `ReferenceRepair.LEASE`). The exclusion a lease exists for is lost: two
      * replicas close the same shadow windows, reclaim the same revisions or document at once, or two repairs run.
      */

@@ -16,7 +16,14 @@
 package me.ahoo.cosec.cocache
 
 import io.mockk.mockk
+import kotlinx.coroutines.future.await
+import kotlinx.coroutines.runBlocking
+import me.ahoo.cocache.api.ConditionalGet
+import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Keyspace
+import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.KeyEncoder
+import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.control.CoCacheControlStore
 import me.ahoo.cosec.cocache.control.ControlSets
@@ -31,8 +38,10 @@ import me.ahoo.cosec.cocache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.cocache.snapshot.rawStore
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.lifecycle.ControlMaintenance
+import me.ahoo.cosec.control.store.ReclaimLease
 import me.ahoo.cosec.engine.CompiledRateLimit
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
@@ -48,6 +57,7 @@ import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestFactory
 import org.junit.jupiter.api.TestInstance
+import java.time.Duration
 import java.time.Instant
 
 /**
@@ -61,7 +71,11 @@ class FrozenLayoutTest {
     private val caches = listOf("cosec", "{cosec}").associateWith { CoSecTestCaches(keyPrefix = it) }
 
     @AfterAll
-    fun close() = caches.values.forEach(CoSecTestCaches::close)
+    fun close() {
+        caches.values.forEach(CoSecTestCaches::close)
+        revocationCaches.close()
+        rawRuntime.close()
+    }
 
     private fun admin(prefix: String, cacheName: String) = checkNotNull(
         caches.getValue(prefix).runtime.admin(cacheName)
@@ -71,6 +85,33 @@ class FrozenLayoutTest {
         admin(prefix, cacheName).inspect(encodedKey).storageKey
 
     private fun channel(prefix: String, cacheName: String): String = channelOf(admin(prefix, cacheName).keyspace)
+
+    /**
+     * The token store and its reader as an instance runs them, and a second runtime over the same backend that reads and
+     * writes the bytes of their values, as another instance would.
+     */
+    private val revocations = InMemoryBackend()
+    private val revocationCaches = CoSecTestCaches(revocations, keyPrefix = "cosec")
+    private val tokens by lazy {
+        CoCacheTokenStore(revocationCaches.revokedTokenCache, revocationCaches.revokedSubjectCache)
+    }
+    private val rawRuntime = CacheRuntime.builder().backend(revocations).build()
+    private val raws = HashMap<String, Store<String, ByteArray>>()
+
+    private fun raw(cacheName: String) = raws.getOrPut(cacheName) {
+        rawRuntime.create(rawStore("Raw-$cacheName", "cosec", cacheName, KeyEncoder<String> { it }))
+    }
+
+    private fun rawRead(cacheName: String, key: String): String = runBlocking {
+        when (val read = raw(cacheName).async().getIfChanged(key, null).await()) {
+            is ConditionalGet.Present -> read.value.decodeToString()
+            else -> "absent"
+        }
+    }
+
+    private fun rawWrite(cacheName: String, key: String, value: String) = runBlocking {
+        raw(cacheName).async().put(key, value.encodeToByteArray()).await()
+    }
 
     /**
      * The Redis channel of a keyspace, `{keyPrefix}inv:{namespace}`: CoCache's naming (its `RedisInvalidationChannel`,
@@ -155,11 +196,13 @@ class FrozenLayoutTest {
         Golden(FrozenLayout.REVOKED_TOKEN, "a token id", "cosec:token:revoked:jti-1") {
             storageKey("cosec", CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, RevokedTokenCache.key("jti-1"))
         },
-        Golden(FrozenLayout.REVOKED_TOKEN, "the value a revocation writes", "true") {
-            CoSecCacheSpecs.revokedToken().codec.encode(true).decodeToString()
+        Golden(FrozenLayout.REVOKED_TOKEN, "the value the token store writes", "true") {
+            runBlocking { tokens.revoke("jti-written", Duration.ofMinutes(10)) }
+            rawRead(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, RevokedTokenCache.key("jti-written"))
         },
-        Golden(FrozenLayout.REVOKED_TOKEN, "the value a revocation reads", true) {
-            CoSecCacheSpecs.revokedToken().codec.decode("true".encodeToByteArray())
+        Golden(FrozenLayout.REVOKED_TOKEN, "the value the revocation reader reads", true) {
+            rawWrite(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, RevokedTokenCache.key("jti-read"), "true")
+            runBlocking { tokens.reader.isRevoked("jti-read") }
         },
         Golden(FrozenLayout.REVOKED_TOKEN, "a token id, hash-tagged", "{cosec}:token:revoked:jti-1") {
             storageKey("{cosec}", CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, RevokedTokenCache.key("jti-1"))
@@ -169,18 +212,26 @@ class FrozenLayoutTest {
         },
         Golden(
             FrozenLayout.REVOKED_SUBJECT,
-            "the value it writes: issuedBefore in epoch milliseconds",
+            "the value the token store writes: issuedBefore in epoch milliseconds",
             "1764000000123"
         ) {
-            CoSecCacheSpecs.revokedSubject().codec.encode(Instant.parse("2025-11-24T16:00:00.123Z").toEpochMilli())
-                .decodeToString()
+            runBlocking {
+                tokens.revokeSubject(
+                    TenantId("acme"),
+                    PrincipalId("written"),
+                    Instant.parse("2025-11-24T16:00:00.123Z"),
+                    Duration.ofMinutes(10)
+                )
+            }
+            rawRead(CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME, subject("acme", "written"))
         },
         Golden(
             FrozenLayout.REVOKED_SUBJECT,
-            "the value it reads, as epoch milliseconds",
+            "the value the revocation reader reads, as epoch milliseconds",
             Instant.parse("2025-11-24T16:00:00.123Z")
         ) {
-            Instant.ofEpochMilli(CoSecCacheSpecs.revokedSubject().codec.decode("1764000000123".encodeToByteArray()))
+            rawWrite(CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME, subject("acme", "read"), "1764000000123")
+            runBlocking { tokens.reader.subjectRevokedBefore(TenantId("acme"), PrincipalId("read")) }
         },
         Golden(FrozenLayout.REVOKED_SUBJECT, "the length counts UTF-16 units", "3:a😀:b:c") {
             subject("a😀", "b:c")
@@ -358,14 +409,14 @@ class FrozenLayoutTest {
             storageKey(
                 "cosec",
                 CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME,
-                "reclaim:" + SnapshotKey.Tenant("acme").toString()
+                ReclaimLease.of(SnapshotKey.Tenant("acme"))
             )
         },
         Golden(FrozenLayout.CONTROL_LEASES, "the platform document's reclaim lease", "reclaim:platform") {
-            "reclaim:" + SnapshotKey.Platform.toString()
+            ReclaimLease.of(SnapshotKey.Platform)
         },
         Golden(FrozenLayout.CONTROL_LEASES, "an app document's reclaim lease", "reclaim:app:order") {
-            "reclaim:" + SnapshotKey.App("order").toString()
+            ReclaimLease.of(SnapshotKey.App("order"))
         },
         Golden(FrozenLayout.CONTROL_LEASES, "cosec-migrate's repair lease", "cosec:control:lease:repair-references") {
             storageKey("cosec", CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME, "repair-references")

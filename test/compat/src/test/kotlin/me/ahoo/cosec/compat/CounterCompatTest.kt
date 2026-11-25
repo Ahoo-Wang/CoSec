@@ -21,6 +21,11 @@ import org.junit.jupiter.api.Test
  * between the versions never get more than one version alone would allow.
  */
 class CounterCompatTest {
+    private companion object {
+        const val TAKES = 120
+        const val QUOTA = 100.0
+    }
+
     private val sides = listOf(Side.CURRENT, Side.PREVIOUS)
 
     @Test
@@ -40,39 +45,50 @@ class CounterCompatTest {
 
     /**
      * Across a window's roll-over: the count of the window before is carried into `p` and weighted by what is left of the
-     * new window, by whichever version takes first. A window of 2^16 seconds, so a quota of 100 is exact and the weight
-     * barely moves while the test runs; each run starts from the same carried count.
+     * new window, by whichever version takes first after the roll-over, then by both in turn. Each run starts from the
+     * same carried count and allows exactly what the script's rule allows at the moment it runs: the weight moves while
+     * the runs go on, so each is compared with the count due at its own start and end, never with another run's. A window
+     * of 2^16 seconds, so a quota of 100 is exact.
      */
     @Test
     fun `a rate limit carried over a window's roll-over allows, taken by both versions, what either alone allows`() {
-        val window = "65536"
-        val permits = (100.0 / 65536).toString()
-        fun run(takers: List<Side>): Int {
+        val window = 65_536L
+        val windowMs = window * 1_000
+        val permits = (100.0 / window).toString()
+
+        // What the script allows from 40 carried, `elapsed` milliseconds into the window: each take while the weighted
+        // count before it stays under the quota.
+        fun due(elapsed: Long): Int {
+            val carried = 40.0 * ((windowMs - elapsed).toDouble() / windowMs)
+            return (0 until TAKES).count { taken -> carried + taken < QUOTA }
+        }
+        fun elapsed(answer: String): Long = answer.substringAfter("elapsed=").toLong()
+        fun run(takers: List<Side>, what: String) {
             val prefix = prefix()
-            Side.CURRENT(
-                "limit.seed",
-                "prefix" to prefix,
-                "rule" to "r1",
-                "bucket" to "alice",
-                "previous" to "40",
-                "window" to window
+            val start = elapsed(
+                Side.CURRENT(
+                    "limit.seed",
+                    "prefix" to prefix,
+                    "rule" to "r1",
+                    "bucket" to "alice",
+                    "previous" to "40",
+                    "window" to window.toString()
+                )
             )
-            return (0 until 120).count { i ->
+            val allowed = (0 until TAKES).count { i ->
                 takers[i % takers.size](
-                    "limit.acquire", "prefix" to prefix, "rule" to "r1", "bucket" to "alice", "permits" to permits, "window" to window,
+                    "limit.acquire", "prefix" to prefix, "rule" to "r1", "bucket" to "alice", "permits" to permits,
+                    "window" to window.toString(),
                 ) == "allowed=true"
             }
+            val end = elapsed(Side.CURRENT("limit.elapsed", "window" to window.toString()))
+            // The carried count took its share, never all 100 permits; the weight only falls, so the count only rises.
+            allowed.assert().describedAs(what).isIn(setOf(due(start), due(end)))
         }
-        val mixed = run(sides)
-        val current = run(listOf(Side.CURRENT))
-        val previous = run(listOf(Side.PREVIOUS))
-        listOf(
-            mixed,
-            current,
-            previous
-        ).distinct().assert().describedAs("mixed, current, previous").containsExactly(current)
-        // The carried count took its share: 40 weighted by what is left of the window, never all 100 permits.
-        mixed.assert().isLessThanOrEqualTo(100).isGreaterThanOrEqualTo(60)
+        run(listOf(Side.CURRENT, Side.PREVIOUS), "the current version rolls the window, then both take")
+        run(listOf(Side.PREVIOUS, Side.CURRENT), "the previous version rolls the window, then both take")
+        run(listOf(Side.CURRENT), "the current version alone")
+        run(listOf(Side.PREVIOUS), "the previous version alone")
     }
 
     @Test
