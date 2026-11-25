@@ -1,14 +1,14 @@
 {
   "id": "MIX-11",
   "source": "RFC 0014 §3 R1, R2, R6, T (the coordinator's ruling of 2026-11-24 on the cross-version fixture); the red-team inventory, row 11",
-  "statement": "A policy document is read strictly (schema 2) by every version (RFC 0014 R4). A later version changes what an older reader decides only in a form the older reader refuses to compile (a member it does not know, a reserved character), never by giving another meaning to what the older reader already compiles; that is why the characters a later syntax needs are reserved from 8.0.0-beta.9 (DOC-15). A document either version compiles, the other compiles too; a pattern the current version reserves, which an earlier one took as a literal, the current one refuses. 8.0.0-beta.8, which read a backslash as text, is the one reader for which an escape compiles to another pattern: its case states it, and the upgrade notes give the order. The bridge the upgrade notes give, a wildcard in the reserved character's place, means the same to both versions, while an escape is a backslash and the character to the earlier one. A DENY whose pattern holds a backslash, kept beside its exact form, denies what was meant in both: each with one of the two.",
+  "statement": "A policy document is read strictly (schema 2) by every version (RFC 0014 R4). A later version changes what an older reader decides only in a form the older reader refuses to compile (a member it does not know, a reserved character), never by giving another meaning to what the older reader already compiles; that is why the characters a later syntax needs are reserved from 8.0.0-beta.9 (DOC-15). A document either version compiles, the other compiles too; a pattern one version refuses, the other refuses too; an escape and a wildcard mean the same to both, decided through each version's engine. A DENY stored while 8.0.0-beta.8 ran, whose pattern holds a backslash beta.8 read as text, rewritten as the upgrade notes give (kept beside its exact form), denies in both versions what beta.8 denied.",
   "level": "build",
   "guards": [
     "compat:DocumentCompatTest#a document either version compiles, the other compiles too",
-    "compat:DocumentCompatTest#a pattern the current version reserves is refused by it, though the previous one took it as a literal",
-    "compat:DocumentCompatTest#an escaped DENY denies its path on the current version, and beta_8 compiles it and does not",
-    "compat:DocumentCompatTest#the bridge for a reserved character matches alike in both versions, a wildcard that matches more",
-    "compat:DocumentCompatTest#an escape is the character to the current version and a backslash and the character to the previous one",
+    "compat:DocumentCompatTest#a pattern one version reserves, the other refuses too",
+    "compat:DocumentCompatTest#an escaped DENY denies its path in both versions",
+    "compat:DocumentCompatTest#a wildcard matches alike in both versions, and one within a segment or a verb is refused by both",
+    "compat:DocumentCompatTest#an escape is the character to both versions",
     "compat:DocumentCompatTest#a backslash DENY kept beside its exact form denies what was meant in both versions"
   ],
   "pending": null

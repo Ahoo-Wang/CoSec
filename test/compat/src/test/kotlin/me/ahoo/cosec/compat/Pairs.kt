@@ -39,6 +39,25 @@ object HeaderJson {
         check(json.startsWith("{")) { "not a JSON object: [${json.take(120)}]" }
         return "{" + members.joinToString("") { "$it," } + json.substring(1)
     }
+
+    /**
+     * [json] whose `auth.kind` (`IDN-44`) is [value], a JSON value as written (`"robot"`, `1`), or absent when [value]
+     * is null, as a writer that does not state it, or states what no version knows, would send.
+     */
+    fun withKind(json: String, value: String?): String = Claims.withMember(json, "kind", value)
+}
+
+/** A JSON object's one string member [name], set to another value or removed: what a later or foreign writer sends. */
+private object Claims {
+    fun withMember(json: String, name: String, value: String?): String {
+        val member = Regex(""""${Regex.escape(name)}":"[^"]*"""")
+        check(member.findAll(json).count() == 1) { "not one string member $name in [${json.take(200)}]" }
+        return if (value != null) {
+            member.replace(json, Regex.escapeReplacement(""""$name":$value"""))
+        } else {
+            json.replace(Regex(""","${Regex.escape(name)}":"[^"]*"|"${Regex.escape(name)}":"[^"]*",?"""), "")
+        }
+    }
 }
 
 /** A token's JWS header, changed as a later issuer would and signed again (HS256, as the sides issue): JDK types only. */
@@ -54,8 +73,22 @@ object Jws {
         val changed = encoder.encodeToString(
             ("{\"crit\":[\"cosec.later\"],\"cosec.later\":true," + json.substring(1)).encodeToByteArray()
         )
+        return signed(changed, payload, secret)
+    }
+
+    /**
+     * [token] whose `cosec.kind` claim (`IDN-45`) is [value], a JSON value as written (`"robot"`, `1`), or absent when
+     * [value] is null: a token of an earlier preview, or one a later issuer declares a kind no version knows.
+     */
+    fun withKind(token: String, secret: String, value: String?): String {
+        val (header, payload) = token.split('.')
+        val json = Claims.withMember(decoder.decode(payload).decodeToString(), "cosec.kind", value)
+        return signed(header, encoder.encodeToString(json.encodeToByteArray()), secret)
+    }
+
+    private fun signed(header: String, payload: String, secret: String): String {
         val mac = Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(secret.encodeToByteArray(), "HmacSHA256")) }
-        val signature = encoder.encodeToString(mac.doFinal("$changed.$payload".encodeToByteArray()))
-        return "$changed.$payload.$signature"
+        val signature = encoder.encodeToString(mac.doFinal("$header.$payload".encodeToByteArray()))
+        return "$header.$payload.$signature"
     }
 }

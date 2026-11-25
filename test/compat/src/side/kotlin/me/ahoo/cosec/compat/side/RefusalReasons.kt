@@ -19,8 +19,8 @@ import me.ahoo.cosec.document.json.StoredFormat
 
 /**
  * Why this version refused a stored record (`SNP-27`): `later` for one a later version wrote (a later format, or a member
- * its `crit` names that this version does not know), `malformed` for one that is not a record of its kind. The previous
- * release's copy (src/previous/kotlin) cannot tell the two apart.
+ * its `crit` names that this version does not know), `malformed` for one that is not a record of its kind. One copy for
+ * both sides: 8.0.0-beta.9, the previous release, tells the two apart too.
  */
 internal object RefusalReasons {
     fun of(error: Throwable): String = if (StoredFormat.later(error) != null) "later" else "malformed"
