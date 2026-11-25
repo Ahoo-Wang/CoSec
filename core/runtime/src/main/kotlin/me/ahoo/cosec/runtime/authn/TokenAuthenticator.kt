@@ -62,7 +62,8 @@ import java.time.Duration
  * the documented exception to failing closed (PIP-7), which [acceptUnavailableRevocations] false turns off (503). Each
  * token so accepted is counted, and logged at most every few seconds ([UncheckedRevocations]).
  * Nothing that issues a token reads it so (`IDN-14`). Anything else [revocations] or [verifier] throws reaches the
- * pipeline, which answers 503.
+ * pipeline, which answers 503: a token whose `crit` names what the verifier does not understand among it
+ * ([me.ahoo.cosec.spi.token.TokenNotUnderstoodException], `IDN-47`), which is no refusal of the token.
  */
 class TokenAuthenticator(
     private val verifier: TokenVerifier,

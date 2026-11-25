@@ -98,6 +98,17 @@ The pipeline reads the request's credentials, then asks one `Authenticator` who 
   the credential method `token`, no session (so no [tenant switch](#switching-tenant-and-app) from it, and none
   forwarded behind a gateway) and no break-glass. Declare one for another issuer's tokens; to keep CoSec's own tokens
   CoSec's, declare none.
+
+  **A token's `crit` header** (`IDN-47`). `JwtTokenVerifier` reads the JWS `crit` header of every token it verifies,
+  access and refresh, once the signature is verified: in the pipeline, on refresh, tenant switch and logout. 8.0
+  understands no critical header parameter, so a token whose `crit` names any is refused, never read without it: the
+  pipeline and the served refresh and logout routes answer `503` `unavailable`, since the instance is older than the
+  issuer and the same token passes once it is upgraded (a client keeps its session and retries). A malformed `crit`
+  (not a non-empty array of distinct names, a name the header does not hold, a parameter the JOSE specifications
+  register) is `401` `token-invalid`; a header member no `crit` names is ignored. A route of your own that switches
+  tenant answers `TokenNotUnderstoodException` with `503`. A `TokenVerifier` of your own must do the same, since a JWT
+  library may not (`java-jwt` ignores `crit`): once the signature is verified, throw `TokenNotUnderstoodException` for
+  a token whose `crit` names anything it does not understand, and `TokenVerificationException` for a malformed one.
   CoSec's own verifier answers a token it already verified from [its cache](#the-verified-token-cache).
 - **`ApiKeyAuthenticator`**, only with `cosec.api-key.enabled=true`, looks up the [API key](#api-keys).
 

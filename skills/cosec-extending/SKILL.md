@@ -200,7 +200,10 @@ fun interface Authenticator {
 
 `Credentials` holds the bearer token (`Authorization` header, or the query or the cookie when allowed) and the API key header.
 Return `AuthnResult.Authenticated(AuthenticatedPrincipal(id, tenant, memberships, attributes, credential), Identity.Method("name"))`,
-`Anonymous` (no credentials), `Rejected(reason)` (401 `token-*` on deny), or `Unavailable(cause)` (503). The id is
+`Anonymous` (no credentials), `Rejected(reason)` (401 `token-*` on deny), or `Unavailable(cause)` (503). A `TokenVerifier`
+of your own refuses a token whose JWS `crit` header names anything it does not understand (IDN-47): after the signature
+check, throw `TokenNotUnderstoodException` (the pipeline answers 503), and `TokenVerificationException` for a malformed
+`crit`; `java-jwt` ignores `crit`, so check it yourself. The id is
 never blank (IDN-38): `PrincipalId(" ")` throws, which makes the request 503, so answer `Rejected` for a credential that
 names no one. Ids are not trimmed. Memberships
 you pass have source `Memberships.Source.CLAIMS` (`MembershipClaims.parse(roles, policies)` builds them from

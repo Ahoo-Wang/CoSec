@@ -24,6 +24,11 @@ import me.ahoo.cosec.api.token.CompositeToken
  * revoked is not its question: that is a [RevocationReader]'s, read by the caller after this answers (the pipeline's
  * `TokenAuthenticator`, refresh, `TokenRevoker`) through `TokenRevocation` of `cosec-runtime`, which is public and a
  * bean of the starter. Code that calls this outside the pipeline calls `TokenRevocation.check` with what it returns.
+ *
+ * A token's JWS `crit` header names extensions a reader must understand to read the token at all (RFC 7515 §4.1.11,
+ * `IDN-47`): an implementation refuses a token whose `crit` names anything it does not understand, never reading it
+ * without, with [TokenNotUnderstoodException] once the signature is verified (the pipeline answers `503`), and a
+ * malformed `crit` with [TokenVerificationException]. A JWT library may not do it for you: `java-jwt` ignores `crit`.
  */
 @CoSecSpi
 interface TokenVerifier {
@@ -34,6 +39,7 @@ interface TokenVerifier {
      * @return What the token says
      * @throws TokenVerificationException if verification fails; [DelegationUnsupportedException] for a token that
      *   delegates (an `act` claim), which must never become a principal (`IDN-4`)
+     * @throws TokenNotUnderstoodException for a token whose `crit` names what this verifier does not understand
      */
     @Throws(TokenVerificationException::class)
     fun verify(accessToken: String): VerifiedToken
@@ -44,6 +50,7 @@ interface TokenVerifier {
      * @param token The composite token containing refresh token
      * @return What the access token of [token] says, for the new token to say again
      * @throws TokenVerificationException if refresh fails
+     * @throws TokenNotUnderstoodException when either token's `crit` names what this verifier does not understand
      */
     @Throws(TokenVerificationException::class)
     fun refresh(token: CompositeToken): VerifiedToken

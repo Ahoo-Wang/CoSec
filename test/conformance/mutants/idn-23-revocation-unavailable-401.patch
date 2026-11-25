@@ -3,16 +3,16 @@
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.LoginRoutesTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.ServedLoginRoutesTest
 
 diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/RouteFailure.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/RouteFailure.kt
-index 5292c454..42f9a7dc 100644
+index 74c7c695c..df9c9f49c 100644
 --- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/RouteFailure.kt
 +++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/RouteFailure.kt
-@@ -55,7 +55,8 @@ internal object RouteFailure {
+@@ -65,7 +65,8 @@ internal object RouteFailure {
          is TokenExpiredException -> ProblemType.TOKEN_EXPIRED
          is TokenRevokedException -> ProblemType.TOKEN_REVOKED
          is TokenVerificationException -> ProblemType.TOKEN_INVALID
 -        is RevocationUnavailableException, is SessionStoreUnavailableException -> ProblemType.UNAVAILABLE
 +        is RevocationUnavailableException -> ProblemType.TOKEN_INVALID
 +        is SessionStoreUnavailableException -> ProblemType.UNAVAILABLE
+         // A later issuer's token this instance must not read without what its crit names: upgrade, not sign in (IDN-47).
+         is TokenNotUnderstoodException -> ProblemType.UNAVAILABLE
          else -> ProblemType.INTERNAL_ERROR
-     }
- }

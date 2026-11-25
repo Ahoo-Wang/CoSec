@@ -91,10 +91,15 @@ class JwtTokenVerifier @InternalCoSecApi constructor(
     fun cached(cache: VerifiedTokenCache): JwtTokenVerifier = JwtTokenVerifier(algorithm, issuerSkew, clock, cache)
 
     @Suppress("TooGenericExceptionCaught")
-    private fun decodeVerified(token: String): DecodedJWT = try {
-        jwtVerifier.verify(token)
-    } catch (exception: Exception) {
-        throw translated(exception)
+    private fun decodeVerified(token: String): DecodedJWT {
+        val decoded = try {
+            jwtVerifier.verify(token)
+        } catch (exception: Exception) {
+            throw translated(exception)
+        }
+        // A token the issuer signed is read whole or not at all: never without an extension its crit requires (IDN-47).
+        CriticalHeader.requireUnderstood(decoded)
+        return decoded
     }
 
     /** What java-jwt's refusal is in CoSec's terms: expired, not valid yet (`IDN-29`), or invalid. */
@@ -147,6 +152,7 @@ class JwtTokenVerifier @InternalCoSecApi constructor(
             throw TokenVerificationException(exception.message ?: "The access token is malformed.", exception)
         }
         verifyAccessTokenSignature(decodedAccessToken)
+        CriticalHeader.requireUnderstood(decodedAccessToken)
         Jwts.requireRefreshToken(decodedRefreshToken)
         Jwts.requireSameSession(decodedRefreshToken, decodedAccessToken)
         // The converter issues the pair together: the refresh token's `sub` is the access token's `jti`, and both carry

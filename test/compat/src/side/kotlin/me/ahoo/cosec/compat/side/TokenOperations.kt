@@ -17,6 +17,7 @@ package me.ahoo.cosec.compat.side
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
@@ -27,7 +28,8 @@ import java.util.UUID
 
 /**
  * CoSec's tokens (MIX-2, MIX-3): `token.issue` issues the pair of a named subject, signed with `secret`, as
- * `<access> <refresh>`; `token.verify` verifies a token as a request's access token and describes what it holds.
+ * `<access> <refresh>`; `token.verify` verifies a token as a request's access token and describes what it holds;
+ * `token.refresh` verifies a pair as a refresh does.
  */
 internal object TokenOperations {
     private val ids = IdGenerator { UUID.randomUUID().toString() }
@@ -37,6 +39,11 @@ internal object TokenOperations {
             val pair = JwtTokenConverter(ids, JwtSigning.hmac256(arguments.getValue("secret")))
                 .toToken(subject(arguments.getValue("sample")))
             "${pair.accessToken} ${pair.refreshToken}"
+        },
+        // A pair as a refresh presents it: what the access token says, read as `token.verify` describes it.
+        "token.refresh" to { arguments ->
+            val verifier = JwtTokenVerifier(JwtSigning.hmac256(arguments.getValue("secret")))
+            describe(verifier.refresh(CompositeToken(arguments.getValue("access"), arguments.getValue("refresh"))))
         },
         "token.verify" to { arguments ->
             describe(JwtTokenVerifier(JwtSigning.hmac256(arguments.getValue("secret"))).verify(arguments.getValue("token")))

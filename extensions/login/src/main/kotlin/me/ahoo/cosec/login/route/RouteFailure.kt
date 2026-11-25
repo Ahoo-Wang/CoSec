@@ -23,6 +23,7 @@ import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.TokenExpiredException
+import me.ahoo.cosec.spi.token.TokenNotUnderstoodException
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 
@@ -31,8 +32,9 @@ private val log = KotlinLogging.logger {}
 /**
  * What a failure of a login route answers (`IDN-23`): a refusal of the pair is `401` with the type that names why;
  * a revocation read or a session store that cannot answer is `503` (`IDN-14`, `IDN-19`: nothing issued, nothing
- * spent); anything else is an error, `500`, as the pipeline answers an unmodelled one, so a bug never looks like an
- * outage. A `503` never ends a client's session. A `500` after a refresh has moved the session (the token converter
+ * spent), and so is a token whose `crit` names what this version does not understand (`IDN-47`); anything else is an
+ * error, `500`, as the pipeline answers an unmodelled one, so a bug never looks like an outage. A `503` never ends a
+ * client's session. A `500` after a refresh has moved the session (the token converter
  * failed) leaves the client with the generation before: a retry within the rotation leeway gets the current pair, and
  * the first one after it is read as reuse and ends the session (DR1-G-3; issuing before the move is 8.1's). Nothing of the exception reaches the body, and the
  * log line names its class and where it was thrown, never its message, which may hold a token.
@@ -42,8 +44,13 @@ internal object RouteFailure {
         val type = typeOf(failure)
         when (type) {
             ProblemType.UNAVAILABLE -> log.warn {
-                "The $route route could not reach the session store or the revocations (request $requestId): " +
-                    failure.javaClass.name + (failure.cause?.let { ", caused by ${it.javaClass.name}" } ?: "") + "."
+                if (failure is TokenNotUnderstoodException) {
+                    "The $route route was given a token whose crit header names what this version does not " +
+                        "understand (request $requestId): a later version issued it; upgrade this instance."
+                } else {
+                    "The $route route could not reach the session store or the revocations (request $requestId): " +
+                        failure.javaClass.name + (failure.cause?.let { ", caused by ${it.javaClass.name}" } ?: "") + "."
+                }
             }
             ProblemType.INTERNAL_ERROR -> log.error {
                 "The $route route failed with an error (request $requestId): ${failure.javaClass.name} at " +
@@ -59,6 +66,8 @@ internal object RouteFailure {
         is TokenRevokedException -> ProblemType.TOKEN_REVOKED
         is TokenVerificationException -> ProblemType.TOKEN_INVALID
         is RevocationUnavailableException, is SessionStoreUnavailableException -> ProblemType.UNAVAILABLE
+        // A later issuer's token this instance must not read without what its crit names: upgrade, not sign in (IDN-47).
+        is TokenNotUnderstoodException -> ProblemType.UNAVAILABLE
         else -> ProblemType.INTERNAL_ERROR
     }
 }
