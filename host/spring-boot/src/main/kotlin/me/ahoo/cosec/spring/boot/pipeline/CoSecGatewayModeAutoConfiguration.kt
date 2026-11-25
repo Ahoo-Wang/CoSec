@@ -36,11 +36,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.boot.web.server.autoconfigure.ServerProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 import org.springframework.context.annotation.Primary
-import org.springframework.core.env.ConfigurableEnvironment
 import org.springframework.core.env.Environment
 
 private val log = KotlinLogging.logger {}
@@ -88,17 +88,6 @@ internal class CoSecGatewayModeAutoConfiguration {
         }
     }
 
-    /**
-     * `IDN-43`: the web server's request-header limit, at startup: derived from `cosec.pipeline.identity.max-size`
-     * when the operator did not set it ([IdentityHeaderLimit]), at INFO; an operator's value too small for an
-     * identity header the gate accepts, with both numbers, at WARN. The operator's value stands: it is their choice.
-     */
-    @Bean
-    fun cosecIdentityHeaderLimitCheck(environment: ConfigurableEnvironment): StartupTask = StartupTask.OnCreation {
-        val (warn, line) = IdentityHeaderLimit.check(environment) ?: return@OnCreation
-        if (warn) log.warn { line } else log.info { line }
-    }
-
     /** `STA-6`: no hidden-method filter in a service behind a gateway; after every singleton, for the beans of the host. */
     @Bean
     fun cosecGatewayModeHiddenMethodCheck(environment: Environment, beans: ListableBeanFactory): StartupTask =
@@ -128,6 +117,47 @@ internal class CoSecGatewayModeAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun cosecIdentityRefusals(): IdentityRefusals = IdentityRefusals()
+
+    /**
+     * `IDN-43`: the web server's request-header limit of a host that reads the identity, where a web server reads it
+     * ([ServerProperties] on the classpath): derived from `cosec.pipeline.identity.max-size` on the bound properties
+     * when the operator did not set it ([IdentityHeaderLimit]), and stated at startup as it is in effect.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = [IdentityHeaderLimitConfiguration.SERVER_PROPERTIES])
+    @InternalCoSecApi
+    class IdentityHeaderLimitConfiguration {
+        /**
+         * The limit in effect once every singleton exists, the web server's included, and where it came from: derived,
+         * at INFO, only when it was applied and is still in effect; the operator's at INFO, or at WARN with both numbers
+         * when it is too small for an identity header the gate accepts; anything else named as not derived. The
+         * operator's value stands: it is their choice.
+         */
+        @Bean
+        fun cosecIdentityHeaderLimitCheck(
+            environment: Environment,
+            limit: IdentityHeaderLimit,
+            server: ObjectProvider<ServerProperties>,
+        ): StartupTask = StartupTask.AfterSingletons {
+            val effect = server.ifAvailable?.maxHttpRequestHeaderSize
+            val (warn, line) = IdentityHeaderLimit.line(environment, effect, limit.applied) ?: return@AfterSingletons
+            if (warn) log.warn { line } else log.info { line }
+        }
+
+        @InternalCoSecApi
+        companion object {
+            const val SERVER_PROPERTIES = "org.springframework.boot.web.server.autoconfigure.ServerProperties"
+
+            /**
+             * Static, so Spring creates it with the post-processors, before any configuration or bean: it changes the
+             * server's properties once they are bound, from the environment the application runs with.
+             */
+            @JvmStatic
+            @Bean
+            fun cosecIdentityHeaderLimit(environment: Environment): IdentityHeaderLimit =
+                IdentityHeaderLimit(environment)
+        }
+    }
 
     /**
      * `cosec.identity.refused`, with `cosec-micrometer` and a `MeterRegistry`: without them the count is still kept and
