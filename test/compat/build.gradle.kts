@@ -78,6 +78,8 @@ tasks.named<Test>("test") {
             previous.from(sourceSets["previous"].runtimeClasspath)
         }
     )
+    // The repository, for the cases that read what no version exchanges (KafkaCompatTest).
+    systemProperty("cosec.compat.root", rootDir.absolutePath)
     // What the previous side is, for the cases that hold only from a release on (Baseline).
     systemProperty("cosec.compat.previous.version", libs.versions.cosec.previous.get())
     // Netty's native transports load a JNI library once per JVM: each side runs on NIO.

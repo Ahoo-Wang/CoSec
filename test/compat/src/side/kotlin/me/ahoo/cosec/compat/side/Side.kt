@@ -28,7 +28,8 @@ import java.util.function.BiFunction
 class Side : BiFunction<String, Map<String, String>, String> {
     private val operations: Map<String, (Map<String, String>) -> String> =
         IdentityOperations.ALL + TokenOperations.ALL + DocumentOperations.ALL + SessionOperations.ALL +
-            CredentialOperations.ALL + CounterOperations.ALL + RecordOperations.ALL
+            CredentialOperations.ALL + CounterOperations.ALL + RecordOperations.ALL + ControlStoreOperations.ALL +
+            ControlApiOperations.ALL + EdgeOperations.ALL + LocalStateOperations.ALL
 
     override fun apply(operation: String, arguments: Map<String, String>): String {
         if (operation == "where") return where(arguments.getValue("class"))
