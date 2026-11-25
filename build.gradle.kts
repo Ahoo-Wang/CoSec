@@ -42,6 +42,7 @@ val codeCoverageReportProject = project(":code-coverage-report")
 val testOnlyProjects = setOf(
     project(":conformance"),
     project(":architecture"),
+    project(":compat"),
     project(":e2e"),
     project(":client-host"),
     project(":system-test"),
