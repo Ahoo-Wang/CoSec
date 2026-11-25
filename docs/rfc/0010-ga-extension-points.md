@@ -67,7 +67,7 @@
 |---|---|---|
 | C1 | `Pipeline` 对 sealed `Obligation` 用穷尽的 `when`（不带 `else`）分派，不跳过任何种类：新增一种义务时，处理路径不更新就编译不过；模型比管道新（版本错配）时请求以 500 失败，绝不放行 | 规则 `OBL-3`（构建级），`ObligationDispatchTest` |
 | C2 | `cosec.control.http.base-path` 默认是 `/cosec/control`，路由固定在 `{base-path}/v1/...`，覆盖 `base-path` 不丢掉版本 | 控制面的路由测试 |
-| C3 | `Identity.Method` 接受任何非空值（约定 `jwt`、`api-key`、`service`；后两者是工作负载的凭据，`IDN-34`）：外部 IdP 落地后，网关发出新的方法名时，8.0 的下游不会把它当作格式错误 | `IdentityCodec` 的测试 |
+| C3 | `Identity.Method` 接受任何非空值（约定 `jwt`、`api-key`、`service`；后两者是工作负载的凭据，`IDN-34`；方法名只是标签，人还是工作负载由封闭的 `Identity.Credential.kind` 决定，`IDN-44`，RFC 0014 R3）：外部 IdP 落地后，网关发出新的方法名时，8.0 的下游不会把它当作格式错误 | `IdentityCodec` 的测试 |
 | C4 | 公共声明逐个归类，衡量标准是**文档写到的才算 API**（见下）。可能增长的记录不是 `data class`：决策值（`Decision` 的三种情形、`Cause` 除 `NotLoaded` 之外的各种情形、`Obligation.RateLimit`、引擎的 `ViewVersion`）与其他会增长的记录都是普通的 final 类，`equals`、`hashCode`、`toString` 写出，没有 `copy` 与 `componentN`，以后加字段不破坏调用方。仍是 `data class` 的公开类型各带不会增长的理由 | `PublicApiStabilityTest`（`REVIEWED_VALUES`），各模块的 ABI 转储 |
 | C5 | `InstanceStatus` 带上实例能读的文档格式级别（8.0 为 `1`，`InstanceStatus.FORMAT_LEVEL`），状态的编解码要求它。发布门槛等 8.1 第一次给文档加字段时再加，那时是纯新增：格式描述符标出每个字段从哪一级开始，控制面算出文档需要的级别；有活着的实例（按 RFC 0007 §6.5 的存活规则）报的级别更低，就拒绝发布 | 状态编解码的测试 |
 
