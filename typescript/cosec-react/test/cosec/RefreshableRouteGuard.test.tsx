@@ -418,9 +418,10 @@ describe('RefreshableRouteGuard', () => {
       // Create a real token manager with expired token that needs refresh
       tokenStorage.signIn(expiredCompositeToken);
 
-      // Mock the fetcher to simulate successful refresh
+      // Mock the fetcher to simulate successful refresh: the refresher sends the
+      // request it had judged trusted, through `request`, following no redirect.
       const fetchSpy = vi
-        .spyOn(fetcher, 'post')
+        .spyOn(fetcher, 'request')
         .mockResolvedValue(validCompositeToken);
 
       const { getByText } = render(
@@ -439,8 +440,10 @@ describe('RefreshableRouteGuard', () => {
 
       await waitFor(() => {
         expect(fetchSpy).toHaveBeenCalledWith(
-          'http://localhost:3000/auth/refresh',
           expect.objectContaining({
+            url: 'http://localhost:3000/auth/refresh',
+            method: 'POST',
+            redirect: 'error',
             body: expiredCompositeToken,
           }),
           expect.any(Object),

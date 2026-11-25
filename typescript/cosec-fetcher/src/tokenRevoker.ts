@@ -11,9 +11,10 @@
  * limitations under the License.
  */
 
-import type { Fetcher } from '@ahoo-wang/fetcher';
+import { ResultExtractors, type Fetcher } from '@ahoo-wang/fetcher';
 import { pairOf } from './compositeToken.js';
 import { sessionRequestAttributes } from './sessionRequest.js';
+import { sendSessionRequest } from './sessionTrust.js';
 import {
   DEFAULT_REFRESH_TIMEOUT,
   type CompositeToken,
@@ -65,13 +66,18 @@ export class CoSecTokenRevoker implements TokenRevoker {
 
   /** Posts `token` to the logout route; resolves on `204`. */
   async revoke(token: CompositeToken): Promise<void> {
-    await this.options.fetcher.post(
+    // Sent only where the Fetcher's trust accepts it, never through a redirect.
+    await sendSessionRequest<Response>(
+      this.options.fetcher,
       this.options.endpoint,
       {
         body: pairOf(token),
         timeout: this.options.timeout ?? DEFAULT_REFRESH_TIMEOUT,
       },
-      { attributes: sessionRequestAttributes(() => false) },
+      {
+        resultExtractor: ResultExtractors.Response,
+        attributes: sessionRequestAttributes(() => false),
+      },
     );
   }
 }

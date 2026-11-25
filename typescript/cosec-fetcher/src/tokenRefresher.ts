@@ -16,6 +16,7 @@ import { ResultExtractors } from '@ahoo-wang/fetcher';
 import { NOTIFICATION_GUARD_REFRESHER } from './refreshProtocol.js';
 import { pairOf } from './compositeToken.js';
 import { sessionRequestAttributes } from './sessionRequest.js';
+import { sendSessionRequest } from './sessionTrust.js';
 
 /**
  * Interface representing an access token used for authentication.
@@ -196,15 +197,14 @@ export class CoSecTokenRefresher implements TokenRefresher {
    * in refresh requests to avoid infinite loops caused by recursive token refresh attempts.
    * @param shouldNotifyUnauthorized Optional manager guard, evaluated when a refresh error reaches the unauthorized interceptor
    */
-  refresh(
+  async refresh(
     token: CompositeToken,
     shouldNotifyUnauthorized?: () => boolean,
   ): Promise<CompositeToken> {
-    // Send a POST request to the configured endpoint with the token as body
-    // and extract the response as JSON to return a new CompositeToken
-
-    const attributes = sessionRequestAttributes(shouldNotifyUnauthorized);
-    return this.options.fetcher.post<CompositeToken>(
+    // A POST of the pair to the configured endpoint, answered as JSON with the
+    // new pair: sent only where the Fetcher's trust accepts it, never through a redirect.
+    return sendSessionRequest<CompositeToken>(
+      this.options.fetcher,
       this.options.endpoint,
       {
         body: pairOf(token),
@@ -212,7 +212,7 @@ export class CoSecTokenRefresher implements TokenRefresher {
       },
       {
         resultExtractor: ResultExtractors.Json,
-        attributes,
+        attributes: sessionRequestAttributes(shouldNotifyUnauthorized),
       },
     );
   }

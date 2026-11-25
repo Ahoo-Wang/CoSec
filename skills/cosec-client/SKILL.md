@@ -105,9 +105,15 @@ What each part does:
   from the token; any other absolute URL is sent bare, and its `401` starts no refresh and ends no session. To trust
   one more origin:
   `isTrusted: (url, exchange) => sameOriginTrust(url, exchange) || new URL(url).origin === 'https://files.example.com'`.
+- **The token pair goes to trusted endpoints only.** A refresh, a logout or a tenant switch whose endpoint, resolved
+  against the `Fetcher`'s `baseURL`, the client does not trust is refused before anything is sent (a `FetcherError`
+  saying so): never build a switch endpoint from input that can name another origin. A refresher or revoker on a
+  `Fetcher` of its own trusts its `baseURL`; on the configured `Fetcher`, an endpoint on another origin needs that origin
+  in `isTrusted`, which is asked about the `POST` that is sent. A refresh, a switch or a logout follows no redirect: a
+  route that answers one fails the request (the session is kept), since a `307` or `308` would re-send the pair.
 - **Refresh and logout on the bare `Fetcher`**, as above. On the configured one they work too (they mark their own
-  request so it never refreshes itself and never carries a space), but an endpoint on another origin then goes
-  without the device and request ids unless `isTrusted` names it.
+  request so it never refreshes itself and never carries a space), but an endpoint on another origin is then refused
+  unless `isTrusted` names it.
 - `{tenantId}` and `{ownerId}` in a URL template are filled from the access token's `tenantId` and `sub`
   (`ResourceAttributionRequestInterceptor`) when the request does not give them.
 - `CoSec-Device-Id` is generated once and kept (`DeviceIdStorage`, `localStorage`); `CoSec-Request-Id` is new for each

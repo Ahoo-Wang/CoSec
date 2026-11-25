@@ -210,7 +210,15 @@ A parameter sent twice with different values, or a blank one beside a non-blank 
 link, a download URL or a callback that points elsewhere gets none of the four, and its `401` is no reason to refresh or
 to end the session: it says nothing about this application's session. A tenant or owner read from the token does not go
 into the URL of such an origin either. `@ahoo-wang/cosec-fetcher` does this by default (`isTrusted`, which defaults to
-`sameOriginTrust`); an application that must send them to another origin names it in its own predicate.
+`sameOriginTrust`); an application that must send them to another origin names it in its own predicate. The token pair
+itself goes nowhere else: a refresh, a logout or a tenant switch to an endpoint the client does not trust, resolved
+against the `Fetcher`'s `baseURL`, is refused before anything is sent, whatever the endpoint names, so a switch whose
+endpoint is built from the target never hands the pair to another origin. The predicate is asked about the request as
+it is sent, a `POST` with its headers and attributes, so one that trusts an origin for reads only does not let the pair
+through. None of the three follows a redirect: a `307` or `308` would send the body, the pair in it, wherever it
+points, so a redirect fails the request as one without an answer, and the session is kept (CoSec's routes never
+redirect). A refresher or revoker on a `Fetcher` of its own trusts that `Fetcher`'s `baseURL`, the auth service it is
+made for.
 
 ## The app comes from the token
 

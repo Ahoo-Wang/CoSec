@@ -123,7 +123,7 @@ describe('the refresh endpoint on another origin than the baseURL', () => {
     );
   });
 
-  it('loses all four headers on the configured Fetcher, and still renews the session', async () => {
+  it('is refused on the configured Fetcher: nothing sent, the pair never leaves, the session kept', async () => {
     const { api, tokenStorage } = client(
       configured =>
         new CoSecTokenRefresher({
@@ -131,16 +131,15 @@ describe('the refresh endpoint on another origin than the baseURL', () => {
           endpoint: 'https://auth.example.net/refresh',
         }),
     );
-    await api.get('/users');
+    // The pair goes only where a credentialed request may (review A-1 of beta.9): the refresh is refused before it is
+    // sent, the manager keeps the session (a refresh it could not make), and the business request fails with it.
+    await expect(api.get('/users')).rejects.toThrow();
 
-    const [refresh] = refreshes();
-    expect(refresh.url).toBe('https://auth.example.net/refresh');
-    // Authorization (the expired access token), CoSec-Device-Id, CoSec-Request-Id and CoSec-Space-Id: none.
-    for (const name of CREDENTIAL_HEADERS) {
-      expect(refresh.headers.has(name), name).toBe(false);
-    }
-    expect(JSON.parse(refresh.body ?? '{}')).toEqual(expired);
-    expect(tokenStorage.get()?.token).toEqual(renewed);
+    expect(refreshes()).toHaveLength(0);
+    expect(sent.some(({ body }) => body?.includes(expired.refreshToken))).toBe(
+      false,
+    );
+    expect(tokenStorage.get()?.token).toEqual(expired);
   });
 
   it('keeps them on the configured Fetcher when the endpoint is on the baseURL', async () => {
