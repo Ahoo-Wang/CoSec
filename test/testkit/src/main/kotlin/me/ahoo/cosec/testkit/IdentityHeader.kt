@@ -54,7 +54,6 @@ import java.time.Instant
  * Every form reads what it wrote back as a service does before returning it, so it never hands out a header a
  * service would refuse as malformed.
  */
-@ExperimentalCoSecApi
 object IdentityHeader {
     /** The header's name, `CoSec-Identity`. */
     const val NAME: String = IdentityCodec.HEADER

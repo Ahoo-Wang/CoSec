@@ -22,7 +22,10 @@ import com.tngtech.archunit.core.domain.JavaType
 import java.lang.reflect.Executable
 import java.lang.reflect.Method
 import kotlin.reflect.KVisibility
+import kotlin.reflect.jvm.javaGetter
+import kotlin.reflect.jvm.javaSetter
 import kotlin.reflect.jvm.kotlinFunction
+import kotlin.reflect.jvm.kotlinProperty
 
 /**
  * The public signatures of a project's main classes, as a consumer compiles against them. Kotlin `internal` compiles to
@@ -164,9 +167,43 @@ object PublicSignatures {
         return visibility == null || visibility == KVisibility.PUBLIC || visibility == KVisibility.PROTECTED
     }
 
-    private fun signature(member: JavaMember): String = when (member) {
-        is JavaCodeUnit -> runCatching { (member.reflect() as Executable).toGenericString() }.getOrNull()
-            ?: (member.fullName + member.rawReturnType.name)
-        else -> member.fullName + (member as? JavaField)?.rawType?.name
+    /**
+     * [member]'s signature as the JVM sees it, followed by the Kotlin types it declares when Kotlin knows them: a value
+     * class (`ChangeId`) compiles to the type it wraps and a mangled name, so only the Kotlin view names it.
+     */
+    private fun signature(member: JavaMember): String {
+        val jvm = when (member) {
+            is JavaCodeUnit -> runCatching { (member.reflect() as Executable).toGenericString() }.getOrNull()
+                ?: (member.fullName + member.rawReturnType.name)
+            else -> member.fullName + (member as? JavaField)?.rawType?.name
+        }
+        return kotlinTypes(member)?.let { "$jvm / $it" } ?: jvm
     }
+
+    /** The Kotlin parameter and return types of [member], or of the property it is an accessor or field of; else null. */
+    private fun kotlinTypes(member: JavaMember): String? = runCatching {
+        val reflected = when (member) {
+            is JavaCodeUnit -> member.reflect()
+            is JavaField -> member.reflect()
+            else -> null
+        }
+        when (reflected) {
+            is Method -> reflected.kotlinFunction?.let { function ->
+                function.parameters.joinToString(", ", "(", "): ") { it.type.toString() } + function.returnType
+            } ?: accessed(reflected)
+            is java.lang.reflect.Constructor<*> -> reflected.kotlinFunction?.parameters?.joinToString(", ", "(", ")") {
+                it.type.toString()
+            }
+            is java.lang.reflect.Field -> reflected.kotlinProperty?.returnType?.toString()
+            else -> null
+        }
+    }.getOrNull()
+
+    /** The type of the property [method] reads or writes, or null when it is no property's accessor. */
+    private fun accessed(method: Method): String? = method.declaringClass.kotlin.members
+        .filterIsInstance<kotlin.reflect.KProperty<*>>()
+        .firstOrNull { property ->
+            property.javaGetter == method ||
+                (property as? kotlin.reflect.KMutableProperty<*>)?.javaSetter == method
+        }?.returnType?.toString()
 }

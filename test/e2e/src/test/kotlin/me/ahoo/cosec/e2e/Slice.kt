@@ -11,14 +11,13 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.e2e
 
 import io.micrometer.core.instrument.MeterRegistry
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.MembershipLoader

@@ -11,13 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class, InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.spring.boot.pipeline
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.micrometer.core.instrument.MeterRegistry
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.micrometer.CoSecMeters
 import me.ahoo.cosec.runtime.identity.IdentityGate

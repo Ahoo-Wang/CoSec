@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class, InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.architecture
 
@@ -23,7 +23,6 @@ import com.tngtech.archunit.junit.AnalyzeClasses
 import com.tngtech.archunit.junit.ArchTest
 import com.tngtech.archunit.lang.ArchRule
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.runtime.http.Problem

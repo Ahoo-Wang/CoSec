@@ -11,11 +11,10 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class, InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.control.api
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /** A decision on the current heads, and on a change's candidate when one was asked for (RFC 0007 §10.3). */

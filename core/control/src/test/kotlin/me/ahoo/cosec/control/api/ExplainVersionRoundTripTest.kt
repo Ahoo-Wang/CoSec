@@ -11,12 +11,11 @@
  * limitations under the License.
  */
 
-@file:OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class)
 
 package me.ahoo.cosec.control.api
 
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

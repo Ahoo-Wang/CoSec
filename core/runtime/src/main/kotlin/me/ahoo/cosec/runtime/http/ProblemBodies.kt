@@ -11,12 +11,9 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class)
-
 package me.ahoo.cosec.runtime.http
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicLong

@@ -14,7 +14,6 @@
 package me.ahoo.cosec.runtime.http
 
 import me.ahoo.cosec.annotations.CoSecSpi
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * The body of the response that refuses a request (`PIP-34`): a host framework that answers its own errors as problems
@@ -37,12 +36,10 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
  * ([Clients](https://cosec.ahoo.me/integration/clients)).
  */
 @CoSecSpi
-@ExperimentalCoSecApi
 fun interface ProblemRenderer {
     /** The body of the response that refuses a request with [problem], written as it is under CoSec's status and headers. */
     fun render(problem: Problem): ByteArray
 
-    @ExperimentalCoSecApi
     companion object {
         /** CoSec's own body, [ProblemEncoder]'s bytes: what every refusal is answered with unless a host renders its own. */
         val DEFAULT: ProblemRenderer = ProblemRenderer(ProblemEncoder::encode)

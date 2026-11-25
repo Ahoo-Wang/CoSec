@@ -14,7 +14,6 @@
 package me.ahoo.cosec.runtime.http
 
 import io.mockk.mockk
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
@@ -48,7 +47,7 @@ import java.time.Duration
  * the test builds, one per path a pipeline reaches (a permit with and without a rate limit, each problem type), not
  * those a host adds on its own.
  */
-@OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@OptIn(InternalCoSecApi::class)
 class ClientContractTest {
     private val files = ContractFiles()
 
