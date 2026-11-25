@@ -31,6 +31,7 @@ class Side : BiFunction<String, Map<String, String>, String> {
             CredentialOperations.ALL + CounterOperations.ALL + RecordOperations.ALL
 
     override fun apply(operation: String, arguments: Map<String, String>): String {
+        if (operation == "where") return where(arguments.getValue("class"))
         val run = operations[operation] ?: return "unknown:$operation"
         // Libraries look classes up through the thread's context loader (CoCache, Lettuce, Spring): this version's own.
         val thread = Thread.currentThread()
@@ -44,4 +45,8 @@ class Side : BiFunction<String, Map<String, String>, String> {
             thread.contextClassLoader = caller
         }
     }
+
+    /** Where this version's copy of [className] was loaded from: its jar or classes directory. */
+    private fun where(className: String): String =
+        Class.forName(className, false, Side::class.java.classLoader).protectionDomain.codeSource.location.toString()
 }

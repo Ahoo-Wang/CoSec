@@ -146,8 +146,11 @@ The rules behind the picture:
   format, which `conformance` runs too, so the suite and the applications' tests evaluate scenarios one way.
 - **`cosec-migrate`** converts 7.x data into 8.0 documents and publishes them; no application depends on it.
   **`cosec-gateway-server`** is a ready-to-run gateway built from the starter; it is never published. **`conformance`**,
-  **`architecture`**, **`e2e`**, **`client-host`**, **`system-test`** and **`system-behind`** are test-only modules and
-  are never published either.
+  **`architecture`**, **`compat`**, **`e2e`**, **`client-host`**, **`system-test`** and **`system-behind`** are
+  test-only modules and are never published either.
+  **`compat`** (directory `test/compat/`) is the cross-version fixture (RFC 0014 T): the previous release, as published
+  (`cosec-previous` in `gradle/libs.versions.toml`), runs beside this build in a class loader of its own, and the two
+  read what the other wrote, rewrite it and share counters on one Redis (the `MIX-*` rules).
   **`client-host`** (directory `test/client-host/`) is a real CoSec 8 application, the starter over WebFlux with CoCache
   in memory, that the TypeScript client's tests run against (`pnpm test:host` in `typescript/` starts it).
   **`system-test`** (directory `test/system-test/`) is the system test: the gateway image built from the commit, the
