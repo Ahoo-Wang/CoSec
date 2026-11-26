@@ -607,7 +607,9 @@ or a request that bypassed the gateway:
   in effect: `derived from`, the headers really are over it; `below ... as the operator set it`, raise it or unset it;
   `not derived`, something other than CoSec set or created `ServerProperties` first: set the property explicitly
   (IDN-43). In 8.0.0-beta.9 a host whose own environment post-processor set the mode late kept 8 KB while the line
-  said `derived`.
+  said `derived`. A check that reads `server.max-http-request-header-size` from the `Environment` finds null when the
+  limit is derived, and one that falls back to Spring Boot's default reports 8192 while the server applies 16 KB: read
+  the bound `ServerProperties.maxHttpRequestHeaderSize`, or the startup line.
 - 503 `unavailable`: a member the header's `crit` names that the service does not know (IDN-41): a later CoSec
   version wrote it and this service is older; counted as `cosec.identity.refused{problem=unavailable}`, never a store
   outage. Upgrade the service.

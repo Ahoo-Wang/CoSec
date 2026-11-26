@@ -97,6 +97,12 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 **堆的各份额在一张表里**（`HeapBudget`，`STA-12`）：上面五个上限，加上快照文档的四分之一（各族的上限由它推出，`SNP-24`），合计占堆的 32/64，即一半，给网关的其余部分和 ZGC 留出空间。堆越小得到的越少，而且可见：512 MiB 的堆得到 64 MiB 的吊销表（每表 129,055 条）、32 MiB 的令牌缓存（约 4,070 个大令牌）、8 MiB 的决策监听器队列（四个监听器时每个 2,048 个事件），以及约 3,600 个典型租户的文档。启动日志行写明每一项得到多少，以及它读到的堆：`heap <n> MiB (Runtime.maxMemory())`。没有 `-Xmx` 的容器按 JVM 的默认只得到内存限制的四分之一，所以那里的上限偏小来自堆偏小：给 JVM 明确的 `-Xmx`（[内存](./deployment.md#memory)）。
 
+**请求头上限写在 Web 服务器的属性上，不在环境里。** 在读取 `CoSec-Identity` 的宿主上，推导出的上限写到绑定后的
+`ServerProperties`（`maxHttpRequestHeaderSize`）上：每种服务器的定制器都从这里读取，启动日志报告的也是它（`IDN-43`）。它从不进入任何属性源：
+`environment.getProperty("server.max-http-request-header-size")` 仍是 null，从那里读取并回退到 Spring Boot 默认值的代码会报告 8 KB，而服务器实际用的是 16 KB。
+要读取生效值的代码，读绑定后的 `ServerProperties`。它不做成属性，是因为 CoSec 自己的环境后处理器会先于宿主自己的运行：宿主的后处理器较晚才设置
+`cosec.pipeline.mode` 时，上限会停在 8 KB，第一个用 8.0.0-beta.9 的应用就遇到了这种情况。绑定后的属性在环境确定之后才读取。
+
 曾经设置过其中某一项的 key 会让启动失败（作为 CoSec 不读取的 key），并说明它已不再是配置项，以及由什么取代（[未知配置项](#unknown-properties)）。其中包括 8.0 预览版的四个快照上限：`cosec.authorization.snapshot.max-apps`、`max-tenants`、`max-absent-apps` 和 `max-absent-tenants`，现在由文档的那四分之一推出（[从预览版升级](./upgrading-previews.md)）。
 
 ## 功能开关 {#feature-switches}

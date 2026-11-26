@@ -125,6 +125,15 @@ tables (129,055 entries each), a 32 MiB token cache (about 4,070 large tokens), 
 without `-Xmx` gets a quarter of its memory limit by the JVM's default, so a small bound there comes from a small
 heap: give the JVM an explicit `-Xmx` ([Memory](./deployment.md#memory)).
 
+**The request-header limit lives on the web server's properties, not in the environment.** On a host that reads
+`CoSec-Identity`, the derived limit is written to the bound `ServerProperties` (`maxHttpRequestHeaderSize`), the value
+every server's customizer reads and the one the startup line reports (`IDN-43`). It is never added to a property
+source: `environment.getProperty("server.max-http-request-header-size")` stays null, and code that falls back to
+Spring Boot's default from there reports 8 KB while the server applies 16 KB. Code that needs the limit in effect
+reads the bound `ServerProperties`. It is not a property because an environment post-processor of CoSec's would run
+before the host's own: a host whose post-processor sets `cosec.pipeline.mode` later would keep 8 KB, as the first
+application on 8.0.0-beta.9 did. The bound properties are read once the environment is final.
+
 A key that once set one of these fails startup with the keys CoSec does not read, and says that it is no longer a
 property and what replaced it ([Unknown properties](#unknown-properties)). Among them are the four snapshot bounds of
 the 8.0 previews: `cosec.authorization.snapshot.max-apps`, `max-tenants`, `max-absent-apps` and `max-absent-tenants`,
