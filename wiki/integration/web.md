@@ -823,6 +823,14 @@ The time checks allow `cosec.authentication.revocation.skew` (5 seconds) for the
 limits replaying a captured header inside the network: revocation is checked at the gateway only. The response
 carries the gateway's `CoSec-Request-Id`.
 
+**The web server's request-header limit.** A header larger than the server's request-header limit is refused by the
+server before CoSec reads it: `431` on Reactor Netty and Jetty, `400` without CoSec's problem body on Tomcat. On a host
+that reads the identity, the starter derives that limit when you do not set `server.max-http-request-header-size`:
+`cosec.pipeline.identity.max-size` and 8 KB for the other headers, 16 KB at the defaults (`IDN-43`). The value in effect
+is `ServerProperties.maxHttpRequestHeaderSize`, which the startup line reports; the environment does not hold it, so
+`environment.getProperty("server.max-http-request-header-size")` is null and a fallback to Spring Boot's 8 KB is wrong.
+Read the bound `ServerProperties` instead ([why it is not a property](../operations/configuration.md#computed-not-configured)).
+
 The [security context](#accessing-the-security-context) of a request that proceeds holds:
 
 | Member | Content |

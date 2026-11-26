@@ -219,7 +219,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # The fetcher leg: the development catalog pointed at the newest 8.x older than minimumReleaseAge, installed.
+      # The fetcher leg: the development catalog pointed at the newest 8.x, which only this leg exempts from
+      # minimumReleaseAge, at its exact version (scripts/fetcher-line.mjs), installed.
       - name: Install fetcher ${{ matrix.fetcher }}
         if: matrix.fetcher == '8'
         run: node scripts/fetcher-line.mjs "${{ matrix.fetcher }}" && pnpm install --no-frozen-lockfile
