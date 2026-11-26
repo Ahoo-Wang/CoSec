@@ -200,11 +200,20 @@ function publish(directory, dryRun) {
       fail(error.message);
     }
     if (published) {
-      console.log(`${name}@${manifest.version} is already on npm`);
-      if (!dryRun) {
+      // Between a release and the next release PR the workspace carries the published version, so every rehearsal
+      // meets this. There is nothing to publish, and npm's dry run cannot stand in: npm 11 refuses one for the version
+      // that is the package's `latest` on the registry, whatever `--tag` says, and lets any other published version
+      // through (8.0.0-rc.2 passed while it was published; 8.0.0, once `latest`, was refused, npm 11.21.2). The checks
+      // of the tarball above have run either way.
+      if (dryRun) {
+        console.log(
+          `${name}@${manifest.version} is already on npm: the rehearsal has nothing to publish`,
+        );
+      } else {
+        console.log(`${name}@${manifest.version} is already on npm`);
         printDistTags(name);
-        continue;
       }
+      continue;
     }
     const args = ['publish', tarball, '--tag', tag, '--access', 'public'];
     if (dryRun) args.push('--dry-run');

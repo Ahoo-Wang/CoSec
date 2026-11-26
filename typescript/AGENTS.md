@@ -159,7 +159,9 @@ lapses: the maintainer creates it again just before the first release. `reposito
 
 Every pull request rehearses it: the `typescript` job of `ci.yml` packs both packages, checks the tarballs and runs
 `npm publish --dry-run` on them with the dist-tag and in the order a release would use (`scripts/release.mjs`), so the
-first real publish is not the first time the command runs.
+first real publish is not the first time the command runs. Between a release and the next release PR the workspace
+carries the published version: the rehearsal still checks the tarballs, and skips the dry run of a version already on
+npm, which npm refuses for the version that is `latest`.
 
 ## Supply chain
 
