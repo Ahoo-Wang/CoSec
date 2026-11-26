@@ -73,7 +73,7 @@ class CoSecProperties(
                     "Remove the trailing ':' (${prefix.trimEnd(':')}): the keys are the same."
                 ':' in prefix ->
                     "A ':' inside it names keys under another prefix: move them to one without it " +
-                        "(https://cosec.ahoo.me/operations/upgrading-previews)."
+                        "(https://cosec.ahoo.me/operations/upgrading#one-key-prefix)."
                 else -> "Write it with letters, digits, '_', '.' and '-'."
             }
             throw IllegalArgumentException(
