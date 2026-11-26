@@ -22,7 +22,7 @@ placeholder and a deprecation notice, not the client. Install the tag of the CoS
 CoSec release, at the version of CoSec.
 
 Peer dependencies: `react` (19) and `@ahoo-wang/cosec-fetcher`; the fetcher
-packages are the client's (`cosec-fetcher`'s peers), and nothing else comes
+packages are the client's (`cosec-fetcher`'s peers: 6.1.x or 8.x), and nothing else comes
 with it. In particular it does not bring `@ahoo-wang/fetcher-react` or
 `@ahoo-wang/fetcher-cosec`, the package `cosec-fetcher` replaces. The app must have exactly one copy of `@ahoo-wang/cosec-fetcher`: the hooks and
 the client share the `TokenStorage` instance.

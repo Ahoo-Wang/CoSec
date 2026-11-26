@@ -20,10 +20,13 @@ minimumReleaseAge: 1440
 # versions the workspace develops against: Renovate widens them and never narrows one.
 catalogs:
   peers:
-    # core's readProblemDetails, which the problem reading needs, is in 6.1.0.
-    '@ahoo-wang/fetcher': ^6.1.1
-    '@ahoo-wang/fetcher-eventbus': ^6.1.1
-    '@ahoo-wang/fetcher-storage': ^6.1.1
+    # core's readProblemDetails, which the problem reading needs, is in 6.1.0. Fetcher 8 is 6.1 without its CoSec
+    # package: both majors are accepted, and CI runs the same tests on each (scripts/fetcher-line.mjs). `^8.0.0-rc.1`,
+    # not `^8.0.0`: a range takes a pre-release only of the version it names, so this one takes fetcher 8's candidates,
+    # which the packages were tested on, and every 8.x release, but no pre-release of a later 8.x.
+    '@ahoo-wang/fetcher': ^6.1.1 || ^8.0.0-rc.1
+    '@ahoo-wang/fetcher-eventbus': ^6.1.1 || ^8.0.0-rc.1
+    '@ahoo-wang/fetcher-storage': ^6.1.1 || ^8.0.0-rc.1
     react: ^19.3.1
 
 # One version per external dependency across the workspace. Packages reference these with `catalog:`; the packages of

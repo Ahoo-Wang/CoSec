@@ -21,7 +21,10 @@ placeholder that is marked deprecated, so an install without a tag gets the
 placeholder and a deprecation notice, not the client. Install the tag of the CoSec release you run: `@beta` for `8.0.0-beta.n` (as above), `@rc` for a release candidate, no tag once 8.0 is released; or an exact version, which stays right through all of them. A tag does not move past its line: once release candidates are out, `@beta` is still the last beta, which does not match an RC server. It is published with each
 CoSec release, at the version of CoSec.
 
-Peer dependencies: `fetcher`, `fetcher-eventbus`, and `fetcher-storage`.
+Peer dependencies: `fetcher`, `fetcher-eventbus`, and `fetcher-storage`, of 6.1.x
+(6.1.1 or later) or 8.x. Fetcher 8 is 6.1 without its CoSec package, and the client
+is tested on both: an application whose server runs CoSec 8 may stay on fetcher 6.1
+or move to fetcher 8 ([moving to fetcher 8](https://fetcher.ahoo.me/guides/integrations/cosec)).
 
 Requires Node `^22.12.0 || ^24.0.0 || >=26.0.0`, the Node versions nanoid 6 supports, from the first 22 release where `require()` of an ES module works: nanoid is ES modules only, and the CommonJS entry (`require`) loads it that way.
 

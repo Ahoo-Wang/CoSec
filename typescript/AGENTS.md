@@ -47,6 +47,17 @@ pnpm test
 - CoSec's packages depend on fetcher's, never the other way. Every `@ahoo-wang/fetcher*` package comes from npm, through
   the catalog, as a peer dependency of the published packages. Nothing here depends on `@ahoo-wang/fetcher-cosec`, the
   name these packages replace.
+- The fetcher packages' peer range takes two majors, 6.1.x and 8.x (`^6.1.1 || ^8.0.0-rc.1` in `catalogs.peers`): fetcher 8
+  is 6.1 without its CoSec package. The workspace develops on the lockfile's fetcher 6; CI runs every step of both
+  TypeScript jobs once more on the newest fetcher 8 (`scripts/fetcher-line.mjs`, which reads the range), and
+  `TypeScriptWorkspaceTest` holds the range and the legs.
+- `minimumReleaseAge` has one exemption: on the fetcher 8 legs, and there only, the three fetcher packages at the exact
+  versions the script picks (`minimumReleaseAgeExclude`, written into the leg's checkout, with
+  `minimumReleaseAgeStrict`: a younger dependency they bring still fails the install, named). They are the
+  maintainer's own packages, published by fetcher's release workflow from reviewed commits with provenance, and the
+  legs hold no secret and no write permission: the attack the guard is for, a poisoned third-party package installed at
+  once, hardly applies, and holding them to the day would make CoSec wait a day after each fetcher release to test on
+  it. The committed workspace sets no exemption, and the fetcher 6 legs install the lockfile as it is.
 - Packages of this workspace depend on each other as peers (`workspace:~`, which becomes `~x.y.z` on publish).
 
 ## Versions
