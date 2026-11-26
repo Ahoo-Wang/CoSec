@@ -1,6 +1,6 @@
 ---
 title: "Upgrading Between 8.0 Previews"
-description: "What changed from each 8.0 preview (alpha and beta) to the next, newest first, for a deployment that already runs one."
+description: "What changed from each 8.0 preview (alpha, beta and release candidate) to the next, newest first, for a deployment that already runs one."
 ---
 
 # Upgrading Between 8.0 Previews {#between-8-0-previews}
@@ -15,21 +15,36 @@ section above it:
 
 | You run | Read |
 |---|---|
-| `8.0.0-beta.9` | [From beta.9](#from-8-0-0-beta-9) |
-| `8.0.0-beta.8` | [From beta.8](#from-8-0-0-beta-8), then the one above |
-| `8.0.0-beta.7` | [From beta.7](#from-8-0-0-beta-7), then the two above |
-| `8.0.0-beta.6` | [From beta.6](#from-8-0-0-beta-6), then the three above |
-| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5), then the four above |
-| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the five above |
-| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the six above |
-| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the seven above |
-| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the eight above |
-| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the nine above |
+| `8.0.0-rc.1` | [From rc.1](#from-8-0-0-rc-1) |
+| `8.0.0-beta.9` | [From beta.9](#from-8-0-0-beta-9), then the one above |
+| `8.0.0-beta.8` | [From beta.8](#from-8-0-0-beta-8), then the two above |
+| `8.0.0-beta.7` | [From beta.7](#from-8-0-0-beta-7), then the three above |
+| `8.0.0-beta.6` | [From beta.6](#from-8-0-0-beta-6), then the four above |
+| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5), then the five above |
+| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the six above |
+| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the seven above |
+| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the eight above |
+| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the nine above |
+| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the ten above |
 | `8.0.0-alpha.3`, `alpha.2`, `alpha.1` | [From alpha.3](#from-8-0-0-alpha-3), [alpha.2](#from-8-0-0-alpha-2) or [alpha.1](#from-8-0-0-alpha-1), then every section above it |
 
 Which preview of the library may run behind which preview of the gateway image: a preview whose readers and writers of
 one header or record must be upgraded in an order says so in its section, under **Upgrade in this order**
 ([from beta.8](#from-8-0-0-beta-8), [from beta.7](#from-8-0-0-beta-7), [from beta.5](#from-8-0-0-beta-5)).
+
+## From 8.0.0-rc.1 {#from-8-0-0-rc-1}
+
+Nothing to change in code or configuration, and no order to upgrade in: no main source of a JVM module changed since
+rc.1. Two things did:
+
+- **The npm packages' peer dependencies accept fetcher 8 beside fetcher 6.1.** `@ahoo-wang/cosec-fetcher` and
+  `@ahoo-wang/cosec-react` take `@ahoo-wang/fetcher`, `@ahoo-wang/fetcher-eventbus` and `@ahoo-wang/fetcher-storage`
+  at `^6.1.1 || ^8.0.0-rc.1`, and CI tests them on both. An application whose server runs CoSec 8 may stay on fetcher
+  6.1.x or move to fetcher 8 ([Building a client](../integration/clients.md#coming-from-ahoo-wang-fetcher-cosec)).
+  rc.1's packages accept only fetcher 6.1.x.
+- **CoSec 8's images publish no `latest`.** Nothing changes for a deployment on rc.1, which as a pre-release never had
+  one. From 8.0.0 on, `latest` stays the newest 7.x release, so 8.0 never arrives through it: pin a version
+  ([Deploying the gateway server](./deployment.md#the-image)).
 
 ## From 8.0.0-beta.9 {#from-8-0-0-beta-9}
 

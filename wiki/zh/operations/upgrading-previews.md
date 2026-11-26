@@ -1,6 +1,6 @@
 ---
 title: "8.0 预览版之间的升级"
-description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变化，新的在前，面向已在运行预览版的部署。"
+description: "每个 8.0 预览版（alpha、beta 与候选发布版）到下一个之间的变化，新的在前，面向已在运行预览版的部署。"
 ---
 
 # 8.0 预览版之间的升级 {#between-8-0-previews}
@@ -13,19 +13,31 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 | 你运行的版本 | 阅读 |
 |---|---|
-| `8.0.0-beta.9` | [从 beta.9 升级](#from-8-0-0-beta-9) |
-| `8.0.0-beta.8` | [从 beta.8 升级](#from-8-0-0-beta-8)，然后是上面那一节 |
-| `8.0.0-beta.7` | [从 beta.7 升级](#from-8-0-0-beta-7)，然后是上面两节 |
-| `8.0.0-beta.6` | [从 beta.6 升级](#from-8-0-0-beta-6)，然后是上面三节 |
-| `8.0.0-beta.5` | [从 beta.5 升级](#from-8-0-0-beta-5)，然后是上面四节 |
-| `8.0.0-beta.4` | [从 beta.4 升级](#from-8-0-0-beta-4)，然后是上面五节 |
-| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3)，然后是上面六节 |
-| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面七节 |
-| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面八节 |
-| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面九节 |
+| `8.0.0-rc.1` | [从 rc.1 升级](#from-8-0-0-rc-1) |
+| `8.0.0-beta.9` | [从 beta.9 升级](#from-8-0-0-beta-9)，然后是上面那一节 |
+| `8.0.0-beta.8` | [从 beta.8 升级](#from-8-0-0-beta-8)，然后是上面两节 |
+| `8.0.0-beta.7` | [从 beta.7 升级](#from-8-0-0-beta-7)，然后是上面三节 |
+| `8.0.0-beta.6` | [从 beta.6 升级](#from-8-0-0-beta-6)，然后是上面四节 |
+| `8.0.0-beta.5` | [从 beta.5 升级](#from-8-0-0-beta-5)，然后是上面五节 |
+| `8.0.0-beta.4` | [从 beta.4 升级](#from-8-0-0-beta-4)，然后是上面六节 |
+| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3)，然后是上面七节 |
+| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面八节 |
+| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面九节 |
+| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面十节 |
 | `8.0.0-alpha.3`、`alpha.2`、`alpha.1` | [从 alpha.3](#from-8-0-0-alpha-3)、[alpha.2](#from-8-0-0-alpha-2) 或 [alpha.1](#from-8-0-0-alpha-1) 升级，然后是它上面的每一节 |
 
 库的哪个预览版可以运行在网关镜像的哪个预览版之后：同一个头或记录的读方与写方必须按顺序升级的预览版，在它的一节里写明，见 **按这个顺序升级**（[从 beta.8](#from-8-0-0-beta-8)、[从 beta.7](#from-8-0-0-beta-7)、[从 beta.5](#from-8-0-0-beta-5)）。
+
+## 从 8.0.0-rc.1 升级 {#from-8-0-0-rc-1}
+
+代码与配置都不用改，也没有升级顺序：自 rc.1 以来，JVM 模块的主源码没有变化。变化只有两处：
+
+- **npm 包的对等依赖在 fetcher 6.1 之外也接受 fetcher 8。** `@ahoo-wang/cosec-fetcher` 与 `@ahoo-wang/cosec-react` 接受
+  `^6.1.1 || ^8.0.0-rc.1` 的 `@ahoo-wang/fetcher`、`@ahoo-wang/fetcher-eventbus` 与 `@ahoo-wang/fetcher-storage`，CI 在两者上都测试。
+  服务端运行 CoSec 8 的应用可以继续用 fetcher 6.1.x，也可以换到 fetcher 8（[构建客户端](../integration/clients.md#coming-from-ahoo-wang-fetcher-cosec)）。
+  rc.1 的包只接受 fetcher 6.1.x。
+- **CoSec 8 的镜像不发布 `latest`。** 运行 rc.1 的部署看不到变化：它作为预发布版本本来就没有 `latest`。从 8.0.0 起，`latest` 仍是最新的 7.x
+  发布版，8.0 不会经由它到来：请固定版本（[部署网关服务](./deployment.md#the-image)）。
 
 ## 从 8.0.0-beta.9 升级 {#from-8-0-0-beta-9}
 
