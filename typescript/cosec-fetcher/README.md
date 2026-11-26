@@ -13,13 +13,13 @@ versioned and released with CoSec. A CoSec 7 server needs `@ahoo-wang/fetcher-co
 
 ```bash
 pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus \
-  @ahoo-wang/fetcher-storage @ahoo-wang/cosec-fetcher@beta
+  @ahoo-wang/fetcher-storage @ahoo-wang/cosec-fetcher
 ```
 
-Until CoSec 8.0 is released, the `latest` tag of this package points at a `0.0.0`
-placeholder that is marked deprecated, so an install without a tag gets the
-placeholder and a deprecation notice, not the client. Install the tag of the CoSec release you run: `@beta` for `8.0.0-beta.n` (as above), `@rc` for a release candidate, no tag once 8.0 is released; or an exact version, which stays right through all of them. A tag does not move past its line: once release candidates are out, `@beta` is still the last beta, which does not match an RC server. It is published with each
-CoSec release, at the version of CoSec.
+It is published with each CoSec release, at the version of CoSec, and tested against
+the contract of that version: pin the version your server runs when the two must not
+drift apart (`@ahoo-wang/cosec-fetcher@8.0.0`). The `beta` and `rc` tags name the last
+pre-releases of 8.0 and do not move; never use them in production.
 
 Peer dependencies: `fetcher`, `fetcher-eventbus`, and `fetcher-storage`, of 6.1.x
 (6.1.1 or later) or 8.x. Fetcher 8 is 6.1 without its CoSec package, and the client

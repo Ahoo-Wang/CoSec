@@ -30,16 +30,15 @@ log, embed or commit a real token.
 
 ```bash
 pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus @ahoo-wang/fetcher-storage \
-  @ahoo-wang/cosec-fetcher@beta
-pnpm add @ahoo-wang/cosec-react@beta   # React applications, with react 19
+  @ahoo-wang/cosec-fetcher
+pnpm add @ahoo-wang/cosec-react   # React applications, with react 19
 ```
 
-- **The tag is the server's release line.** `@beta` for `8.0.0-beta.n`, `@rc` for a release candidate, no tag once
-  8.0 is released; or the exact version the server runs, which is right through all of them. A tag stays on its line:
-  once release candidates are out, `@beta` still installs the last beta.
-- **No tag before GA installs nothing usable.** Until 8.0 is released, `latest` of both packages is `0.0.0`, a
-  placeholder marked deprecated ("Placeholder. Install the beta: ..."), with no entry point: the install warns and the
-  import does not resolve.
+- **The version is the server's.** Without a tag, `latest` is the newest 8.x release. The client is tested against the
+  `contract/` of its own version: pin the version the server runs when the two must not drift apart. The `beta` and
+  `rc` tags name the last pre-releases of 8.0 and do not move: never in production.
+- **`0.0.0` is a placeholder.** It is marked deprecated ("Placeholder. ..."), with no entry point: an install that ends
+  up on it warns and the import does not resolve. Install a version of 8.x.
 - **Peer dependencies.** `cosec-fetcher` needs `@ahoo-wang/fetcher`, `@ahoo-wang/fetcher-eventbus` and
   `@ahoo-wang/fetcher-storage` (`^6.1.1 || ^8.0.0-rc.1`: 6.1.x or 8.x; fetcher 8 is 6.1 without its CoSec package, and
   both are tested, so a CoSec 8 application may stay on fetcher 6.1 or move to 8, https://fetcher.ahoo.me/guides/integrations/cosec); `cosec-react` needs `react`

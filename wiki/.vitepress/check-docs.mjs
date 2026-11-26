@@ -182,10 +182,20 @@ for (const link of enLinks) {
   if (!llms.includes(`https://cosec.ahoo.me${link.split('#')[0]})`)) problems.push(`llms.txt: no link to the page ${link} of the sidebar`)
 }
 const listed = new Set([...enLinks, ...zhLinks].map((l) => l.split('#')[0]))
+// Pages kept out of the sidebar on purpose, each with why: a placeholder at an address that released notes and released
+// binaries link, which points elsewhere and holds nothing of its own.
+const UNLISTED = new Map([
+  ['/operations/upgrading-previews', 'the 8.0 previews notes moved to the v8.0.0-rc.2 tag; beta.9, rc.1, rc.2 and two startup messages link here'],
+  ['/zh/operations/upgrading-previews', 'the Chinese twin of the placeholder above'],
+])
 for (const page of pages) {
   if (page.endsWith('index.md')) continue
   const link = `/${rel(page).replace(/\.md$/, '')}`
-  if (!listed.has(link)) problems.push(`${rel(page)}: not in the sidebar`)
+  if (!listed.has(link) && !UNLISTED.has(link)) problems.push(`${rel(page)}: not in the sidebar`)
+}
+for (const link of UNLISTED.keys()) {
+  if (listed.has(link)) problems.push(`${link}: in UNLISTED but in the sidebar too`)
+  if (!pages.some((page) => `/${rel(page).replace(/\.md$/, '')}` === link)) problems.push(`${link}: in UNLISTED, but no such page`)
 }
 
 console.log(`${pages.length} pages, ${checked} internal links checked`)

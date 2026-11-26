@@ -21,7 +21,7 @@ application: it is published only as an image, never as a library.
 
 **Tags.** A branch push is tagged with the branch name (`main`, `7.x`; a `/` in the name becomes `-`), a pull request
 with `pr-<number>`, and the nightly build refreshes `main`: these tags move with every build, so never run one in
-production. A version tag `v8.0.0-rc.2` publishes `8.0.0-rc.2`, which names one release. A pre-release has no
+production. A version tag `v8.0.0` publishes `8.0.0`, which names one release. A pre-release has no
 other tag; a stable release also moves `<major>.<minor>` (`8.0`) to its newest patch version. CoSec 8 publishes no
 `latest`: `ahoowang/cosec-gateway:latest` is still the newest 7.x release, written by the 7.x branch, because a major
 version must never arrive through a floating tag. A 7.x gateway pulled again as `latest` would otherwise come back as
@@ -395,7 +395,7 @@ author and the approver of a change ([What the control plane trusts](./topologie
   turns them off), and a change advances by compare-and-set, so a second replica is designed for; the system test does not yet exercise one. Run two for a node
   drain, not for load, with a disruption budget. Upgrade by stopping the host and starting the new image, never by a
   rolling update: across a change of the stored format an old and a new replica must not run together
-  ([Upgrading between previews](./upgrading-previews.md#from-8-0-0-beta-4)).
+  (["From 8.0.0-beta.4" in the preview notes](https://github.com/Ahoo-Wang/CoSec/blob/v8.0.0-rc.2/wiki/operations/upgrading-previews.md)).
 - **Memory.** The host holds the compiled documents of every tenant it decides for in two snapshot sources, its
   pipeline's and the control plane's own, and the documents `simulate`, `explain` and `analyze` compile in one cache;
   the three share the documents' quarter of the heap, a third each (`SNP-24`, DR1-F-5). The
