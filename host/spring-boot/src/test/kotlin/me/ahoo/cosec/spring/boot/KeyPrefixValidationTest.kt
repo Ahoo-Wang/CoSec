@@ -54,6 +54,7 @@ class KeyPrefixValidationTest {
             .contains("cosec.key-prefix [cosec:]").contains("':'").contains("Remove the trailing ':' (cosec)")
         assertThrows<IllegalArgumentException> { CoSecProperties(keyPrefix = "cosec:prod") }.message.assert()
             .contains("':'").contains("move them to one without it")
+            .contains("https://cosec.ahoo.me/operations/upgrading#one-key-prefix")
         assertThrows<IllegalArgumentException> {
             CoSecProperties(
                 keyPrefix = ""

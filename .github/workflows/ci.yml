@@ -264,7 +264,8 @@ jobs:
         run: node scripts/package-check.mjs --tarballs "$RUNNER_TEMP/tarballs"
 
       # What the release does, short of publishing (package-deploy.yml, job npm-publish): the Node and npm it needs, and
-      # `npm publish --dry-run` of the packed tarballs, in the order and with the dist-tag a release would use.
+      # `npm publish --dry-run` of the packed tarballs, in the order and with the dist-tag a release would use; a version
+      # already on npm, as between a release and the next release PR, has its tarball checked and no dry run.
       - name: Rehearse the publish
         if: matrix.node-version == '24.22.2' && matrix.fetcher == '6'
         run: |
