@@ -189,7 +189,8 @@ jobs:
         # built packages under 22.12.0 (the package check, which arrives with the first package).
         node-version: [ '22.23.4', '24.22.2' ]
         # The packages accept fetcher 6 and 8 (catalogs.peers): the lockfile's fetcher 6 on both Nodes, and the same
-        # steps once more on fetcher 8, the newest 8.x old enough to install (scripts/fetcher-line.mjs).
+        # steps once more on the newest fetcher 8, which this leg alone exempts from minimumReleaseAge, those three
+        # packages only (scripts/fetcher-line.mjs says why).
         fetcher: [ '6' ]
         include:
           - node-version: '24.22.2'
@@ -220,7 +221,7 @@ jobs:
 
       # The fetcher leg: the development catalog pointed at the newest 8.x older than minimumReleaseAge, installed.
       - name: Install fetcher ${{ matrix.fetcher }}
-        if: matrix.fetcher != '6'
+        if: matrix.fetcher == '8'
         run: node scripts/fetcher-line.mjs "${{ matrix.fetcher }}" && pnpm install --no-frozen-lockfile
 
       - name: Show the fetcher packages installed
@@ -341,7 +342,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install fetcher ${{ matrix.fetcher }}
-        if: matrix.fetcher != '6'
+        if: matrix.fetcher == '8'
         run: node scripts/fetcher-line.mjs "${{ matrix.fetcher }}" && pnpm install --no-frozen-lockfile
 
       - name: Show the fetcher packages installed

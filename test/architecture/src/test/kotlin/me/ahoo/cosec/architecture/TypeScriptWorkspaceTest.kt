@@ -171,6 +171,38 @@ class TypeScriptWorkspaceTest {
     }
 
     /**
+     * `minimumReleaseAge` has one exemption, and it is this narrow: the three fetcher packages, at the exact versions
+     * `scripts/fetcher-line.mjs` picks, on the fetcher 8 legs only, written into the leg's own checkout with the age
+     * kept strict, so a younger dependency they bring still fails the install. They are the maintainer's own packages,
+     * published by fetcher's release workflow from reviewed commits with provenance, and the legs hold no secret and no
+     * write permission: the attack the guard is for, a poisoned third-party package installed at once, hardly applies,
+     * while the day would make CoSec wait after each fetcher release before testing on it. The committed workspace sets
+     * no exemption, and nothing else runs the script.
+     */
+    @Test
+    fun `only the fetcher 8 legs exempt the three fetcher packages from the release age`() {
+        val yaml = Projects.root.resolve("typescript/pnpm-workspace.yaml").readText()
+        yaml.lines().assert().contains("minimumReleaseAge: 1440")
+        ("minimumReleaseAgeExclude" in yaml).assert().describedAs("the committed workspace exempts nothing").isFalse()
+        val script = Projects.root.resolve("typescript/scripts/fetcher-line.mjs").readText()
+        Regex("""export const FETCHER = \[([^]]*)]""").find(script)!!.groupValues[1]
+            .split(',').map { it.trim().trim('\'') }.filter { it.isNotEmpty() }
+            .assert().describedAs("the packages the script exempts")
+            .containsExactly("@ahoo-wang/fetcher", "@ahoo-wang/fetcher-eventbus", "@ahoo-wang/fetcher-storage")
+        val workflows = Projects.root.resolve(".github/workflows")
+        Files.list(workflows).use { files ->
+            files.toList().filter { "fetcher-line.mjs" in it.readText() }.map { it.fileName.toString() }
+        }.assert().describedAs("the workflows that run the script").containsExactly("ci.yml")
+        val ci = workflows.resolve("ci.yml").readText()
+        val runs = ci.lines().withIndex().filter { "node scripts/fetcher-line.mjs" in it.value }
+        runs.size.assert().describedAs("the steps that run the script").isEqualTo(2)
+        for ((index, _) in runs) {
+            ci.lines()[index - 1].trim().assert().describedAs("the condition of the step that exempts")
+                .isEqualTo("if: matrix.fetcher == '8'")
+        }
+    }
+
+    /**
      * One lint command for every package, over everything it holds, its tests included: a package whose ESLint config
      * left its tests out let two unused bindings reach the code scanner first (code scanning alerts 126 and 127).
      */

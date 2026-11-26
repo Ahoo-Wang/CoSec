@@ -11,17 +11,26 @@
  * limitations under the License.
  */
 
-// What fetcher-line.mjs decides for the CI leg of another fetcher major: which range, which version, and the one line
-// of pnpm-workspace.yaml it changes.
+// What fetcher-line.mjs decides for the fetcher 8 legs of CI: which range, which version, the one line of the
+// development catalog it changes, and the exemption from minimumReleaseAge, the three fetcher packages only.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { describe, it } from 'node:test';
-import { catalog, newestOldEnough, pin, rangeOf } from './fetcher-line.mjs';
+import { fileURLToPath } from 'node:url';
+import {
+  FETCHER,
+  catalog,
+  compareVersions,
+  exempt,
+  pin,
+  rangeOf,
+} from './fetcher-line.mjs';
 
-const yaml = readFileSync(
-  new URL('../pnpm-workspace.yaml', import.meta.url),
-  'utf8',
-);
+// The committed workspace, not the file on disk: on a fetcher 8 leg the script has already rewritten that one.
+const yaml = execFileSync('git', ['show', 'HEAD:./pnpm-workspace.yaml'], {
+  cwd: fileURLToPath(new URL('..', import.meta.url)),
+  encoding: 'utf8',
+});
 
 describe('fetcher-line', () => {
   it('reads both catalogs of the workspace, and the peer range accepts fetcher 6 and 8', () => {
@@ -43,26 +52,44 @@ describe('fetcher-line', () => {
     );
   });
 
-  it('picks the newest version older than the minimum release age, never a younger one', () => {
-    const time = {
-      '8.0.0-rc.1': '2026-11-25T23:40:05.739Z',
-      '8.0.0-rc.2': '2026-11-27T10:00:00.000Z',
-    };
-    const versions = ['8.0.0-rc.1', '8.0.0-rc.2'];
-    const day = 1440;
-    assert.equal(
-      newestOldEnough(versions, time, day, Date.parse('2026-11-26T12:00:00Z')),
-      null,
-    );
-    assert.equal(
-      newestOldEnough(versions, time, day, Date.parse('2026-11-27T00:00:00Z')),
+  it('picks the newest version in the range, in semantic versioning order', () => {
+    const listed = [
       '8.0.0-rc.1',
-    );
-    assert.equal(
-      newestOldEnough(versions, time, day, Date.parse('2026-11-28T12:00:00Z')),
+      '8.0.0',
+      '8.0.0-rc.10',
       '8.0.0-rc.2',
-    );
-    assert.equal(newestOldEnough([], time, day, Date.now()), null);
+      '8.1.0',
+    ];
+    assert.deepEqual([...listed].sort(compareVersions), [
+      '8.0.0-rc.1',
+      '8.0.0-rc.2',
+      '8.0.0-rc.10',
+      '8.0.0',
+      '8.1.0',
+    ]);
+    assert.equal(compareVersions('8.0.0-rc.1', '8.0.0-rc.1'), 0);
+  });
+
+  it('exempts only the three fetcher packages, at their exact versions, and keeps the age strict for the rest', () => {
+    assert.deepEqual(FETCHER, [
+      '@ahoo-wang/fetcher',
+      '@ahoo-wang/fetcher-eventbus',
+      '@ahoo-wang/fetcher-storage',
+    ]);
+    assert.doesNotMatch(yaml, /minimumReleaseAge(Exclude|Strict)/);
+    const pins = Object.fromEntries(FETCHER.map(name => [name, '8.0.0-rc.1']));
+    const exempted = exempt(yaml, pins);
+    const before = yaml.split('\n');
+    const added = exempted.split('\n').filter(line => !before.includes(line));
+    assert.deepEqual(added, [
+      'minimumReleaseAgeStrict: true',
+      'minimumReleaseAgeExclude:',
+      "  - '@ahoo-wang/fetcher@8.0.0-rc.1'",
+      "  - '@ahoo-wang/fetcher-eventbus@8.0.0-rc.1'",
+      "  - '@ahoo-wang/fetcher-storage@8.0.0-rc.1'",
+    ]);
+    assert.match(exempted, /^minimumReleaseAge: 1440$/m);
+    assert.throws(() => exempt(exempted, pins), /already sets the age policy/);
   });
 
   it('changes the development catalog line of one package, and nothing else', () => {

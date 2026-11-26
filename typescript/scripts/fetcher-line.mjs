@@ -13,22 +13,28 @@
 
 // The packages accept two majors of fetcher (`catalogs.peers` in pnpm-workspace.yaml), and CI runs the same tests on
 // each. The workspace develops against the lockfile's fetcher; this points the development catalog at another major
-// for one CI leg:
+// for one CI leg, the fetcher 8 legs of the `typescript` and `typescript-host` jobs:
 //
 //   node scripts/fetcher-line.mjs <major>
 //
-// For each fetcher package of the peer catalog it takes the part of the published peer range for <major>, asks npm for
-// the versions in it, and pins the catalog entry to the newest one that is older than the workspace's
-// `minimumReleaseAge`: the guard holds here as for every install, so a version published less than a day ago is
-// never chosen, and a major with no version old enough yet fails the leg, saying so. Then `pnpm install` installs it.
-// Nothing is committed: the leg runs on its own checkout.
+// For each of the three fetcher packages it takes the part of the published peer range for <major>, asks npm for the
+// versions in it, and pins the catalog entry to the newest one. Then `pnpm install` installs it.
+//
+// Those three versions, and nothing else, are exempt from `minimumReleaseAge` on this leg: the script lists each by its
+// exact version in `minimumReleaseAgeExclude`, on the leg's own checkout, and states `minimumReleaseAgeStrict`, so a
+// dependency they bring that is younger than a day fails the install, naming it. Why these three may skip the day:
+// they are the maintainer's own packages, published by fetcher's release workflow from reviewed commits with provenance;
+// the two legs hold no secret and no write permission; so the attack the guard is for, a third-party package poisoned
+// and installed at once, hardly applies here. Holding them to the day would make CoSec wait a day after each fetcher
+// release before it could test on it. The committed workspace keeps the guard for every install and every package, and
+// the fetcher 6 legs install the lockfile as it is. Nothing is committed: the leg runs on its own checkout.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const workspace = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const FETCHER = [
+export const FETCHER = [
   '@ahoo-wang/fetcher',
   '@ahoo-wang/fetcher-eventbus',
   '@ahoo-wang/fetcher-storage',
@@ -70,18 +76,48 @@ export function rangeOf(peer, major) {
   return part;
 }
 
+/** Semantic versioning's order of two versions (`1.2.3` or `1.2.3-pre.n`), negative when [a] comes first. */
+export function compareVersions(a, b) {
+  const [mainA, preA] = a.split(/-(.*)/s);
+  const [mainB, preB] = b.split(/-(.*)/s);
+  const numbers = main => main.split('.').map(Number);
+  const [x, y] = [numbers(mainA), numbers(mainB)];
+  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] - y[i];
+  if (preA === undefined || preB === undefined)
+    return (preA === undefined) - (preB === undefined);
+  const [p, q] = [preA.split('.'), preB.split('.')];
+  for (let i = 0; i < Math.max(p.length, q.length); i++) {
+    if (p[i] === undefined || q[i] === undefined)
+      return (p[i] !== undefined) - (q[i] !== undefined);
+    const [m, n] = [/^\d+$/.test(p[i]), /^\d+$/.test(q[i])];
+    if (m && n && Number(p[i]) !== Number(q[i]))
+      return Number(p[i]) - Number(q[i]);
+    if (m !== n) return m ? -1 : 1;
+    if (!m && p[i] !== q[i]) return p[i] < q[i] ? -1 : 1;
+  }
+  return 0;
+}
+
 /**
- * The newest of [versions] (oldest first, as npm lists them) that was published at least [minutes] before [now],
- * from [time] (npm's `time` of the package: version to its publish date); null when there is none.
+ * pnpm-workspace.yaml with [pins] (name to exact version) exempt from `minimumReleaseAge`, and nothing else: the age stays,
+ * strict, so any other package younger than it fails the install.
  */
-export function newestOldEnough(versions, time, minutes, now) {
-  const limit = now - minutes * 60_000;
-  return (
-    [...versions]
-      .reverse()
-      .find(version => time[version] && Date.parse(time[version]) <= limit) ??
-    null
+export function exempt(yaml, pins) {
+  const lines = yaml.split('\n');
+  const at = lines.findIndex(line => /^minimumReleaseAge:\s*\d+/.test(line));
+  if (at < 0) throw new Error('pnpm-workspace.yaml sets no minimumReleaseAge');
+  if (lines.some(line => /^minimumReleaseAge(Strict|Exclude):/.test(line)))
+    throw new Error('pnpm-workspace.yaml already sets the age policy');
+  lines.splice(
+    at + 1,
+    0,
+    'minimumReleaseAgeStrict: true',
+    'minimumReleaseAgeExclude:',
+    ...Object.entries(pins).map(
+      ([name, version]) => `  - '${name}@${version}'`,
+    ),
   );
+  return lines.join('\n');
 }
 
 /** pnpm-workspace.yaml with the development catalog's entry for [name] set to [version], nothing else changed. */
@@ -114,30 +150,24 @@ function main() {
   const file = join(workspace, 'pnpm-workspace.yaml');
   let yaml = readFileSync(file, 'utf8');
   const peers = catalog(yaml, 'peers');
-  const minutes = Number(/^minimumReleaseAge:\s*(\d+)/m.exec(yaml)?.[1] ?? 0);
+  const pins = {};
   for (const name of FETCHER) {
     const range = rangeOf(peers[name], major);
     const found = npmJson([`${name}@${range}`, 'version']);
     const versions =
       found === null ? [] : Array.isArray(found) ? found : [found];
-    const time = npmJson([name, 'time']) ?? {};
-    const version = newestOldEnough(versions, time, minutes, Date.now());
-    if (version === null) {
-      const newest = versions.at(-1);
-      console.error(
-        `::error::no version of ${name} in ${range} is older than minimumReleaseAge (${minutes} minutes) yet` +
-          (newest
-            ? `: the newest, ${newest}, was published at ${time[newest]}`
-            : ': npm lists none'),
-      );
+    const version = versions.sort(compareVersions).at(-1);
+    if (!version) {
+      console.error(`::error::npm lists no version of ${name} in ${range}`);
       process.exit(1);
     }
     console.log(
-      `${name}: ${version} (the newest of ${range} older than ${minutes} minutes)`,
+      `${name}: ${version} (the newest of ${range}; exempt from minimumReleaseAge on this leg)`,
     );
     yaml = pin(yaml, name, version);
+    pins[name] = version;
   }
-  writeFileSync(file, yaml);
+  writeFileSync(file, exempt(yaml, pins));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();
