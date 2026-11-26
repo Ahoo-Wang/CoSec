@@ -4,7 +4,8 @@ CoSec is a multi-tenant authorization framework: Kotlin 2.x on Java 21, Spring B
 Reactor only at the edges and in the host), built with Gradle (Kotlin DSL). This file is
 for agents and contributors **changing** CoSec. To **use** CoSec, see `skills/` and https://cosec.ahoo.me.
 Branching, reviews and releases: `CONTRIBUTING.md`.
-`main` is the 8.0 line; `7.x` and `release/6.1.x` take only backported security (and, on `7.x`, critical) fixes, which
+`main` is the 8.0 line, released as 8.0.0 on 2026-11-26: semantic versioning and the mixed-version promise apply from
+it. `7.x` and `release/6.1.x` take only backported security (and, on `7.x`, critical, until 2027-05-26) fixes, which
 land on `main` first.
 
 CoSec makes security decisions. A plausible change that lets one request through by mistake is worse than
@@ -375,7 +376,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | Who may write a document without a person (the trust root, the role class `cosec:manage-roles`, anything later) | `CTL-79` and its bounds tests (`RoleClassBoundsTest`): prove the bound by tests before the path admits anything; `wiki/policies/role-permissions.md`, `wiki/policies/testing.md`, `wiki/guide/security-model.md`; ask first |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |
 | A normative rule (an RFC "must / must not / always", RFC 0008 §3.2) | `test/conformance/src/test/resources/rules/<FAMILY>/<ID>.json`, one rule per file, and its scenarios: a positive and a negative one for each rule that is not `pending` (`verifyRuleCoverage`) |
-| Breaking change (public API, `cosec.*` property, authorization semantics) | `wiki/operations/upgrading.md`: what breaks and how to migrate from 7.x; a change between two 8.0 previews goes in `wiki/operations/upgrading-previews.md`, under the preview it comes after |
+| Breaking change (public API, `cosec.*` property, authorization semantics) | `wiki/operations/upgrading.md`: what breaks and how to migrate from 7.x; a change between two 8.x releases goes in the release notes and, when an upgrader must act on it, in `wiki/operations/upgrading.md`; `wiki/operations/upgrading-previews.md` is a placeholder that keeps its address and takes nothing new |
 
 Docs: link to files, never line numbers; verify claims against code, not other docs. Mermaid labels use
 `<br>` (not `<br/>`); sequence diagrams use `autonumber`. The full writing rules (page types, where each fact
