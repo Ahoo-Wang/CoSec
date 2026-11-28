@@ -74,7 +74,12 @@ class SubjectRevocationJwtTest {
 
     // No skew: these tests place revocations to the millisecond of the tokens' `iat`.
     private val revocation = TokenRevocation(tokenStore, Duration.ZERO)
-    private val authenticator = TokenAuthenticator(verifier, tokenStore, revocationSkew = Duration.ZERO)
+    private val authenticator = TokenAuthenticator(
+        verifier,
+        tokenStore,
+        revocationSkew = Duration.ZERO,
+        acceptUnavailableRevocations = false,
+    )
     private val families = TokenFamilies(InMemoryTokenFamilyStore())
     private val refresh = RefreshTokenAuthentication(verifier, revocation, families, MembershipRefresh.CLAIMS)
     private val revoker = StoreTokenRevoker(verifier, tokenStore, revocation, families, Duration.ofDays(7))

@@ -98,7 +98,7 @@ class ControlServiceTest {
         fun events(): List<String> = runBlocking {
             fixture.listeners.awaitDelivered()
             fixture.events.map {
-                "${it.kind} ${it.change.value} ${it.document} ${it.operator} ${it.base} ${it.candidate} ${it.note}"
+                "${it.kind} ${it.change} ${it.document} ${it.operator} ${it.base} ${it.candidate} ${it.note}"
             }
                 .sorted()
         }
@@ -330,7 +330,7 @@ class ControlServiceTest {
         origin.peer.assert().isNull()
         origin.asserted.assert().isFalse()
         side.fixture.listeners.awaitDelivered()
-        side.fixture.events.single { it.change.value == id }.origin!!.via!!.method.assert()
+        side.fixture.events.single { it.change == id }.origin!!.via!!.method.assert()
             .isEqualTo(ChangeOrigin.IN_PROCESS)
         // A service caller's identity was stated, and believed: asserted, and in process.
         val service = side.service.propose(ControlCaller.service("plato"), proposal("by-service", 1))

@@ -1,0 +1,17 @@
+# Rule: IDN-43
+# Mutant: the startup line says the limit is derived whenever the operator set none, whether or not the starter applied it and whatever is in effect
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.IdentityHeaderLimitTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
+index 5c75fb6cf..6fa16b953 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
+@@ -144,7 +144,7 @@ internal class IdentityHeaderLimit(private val environment: Environment) : BeanP
+             val raise = " The server refuses a request whose identity header is near $R_KEY: set $SERVER_LIMIT_KEY " +
+                 "to at least ${derived.toBytes()} bytes."
+             val text = when {
+-                operator == null && applied != null && effect == applied ->
++                operator == null ->
+                     "$SERVER_LIMIT_KEY is ${effect.toBytes()} bytes, derived from $room (IDN-43)."
+                 operator != null && below ->
+                     "$SERVER_LIMIT_KEY is ${effect.toBytes()} bytes, below $room (${derived.toBytes()} bytes), as the " +

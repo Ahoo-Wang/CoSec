@@ -11,13 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.webmvc
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletRequestWrapper
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.runtime.http.Outcome

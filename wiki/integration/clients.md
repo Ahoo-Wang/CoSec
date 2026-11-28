@@ -270,15 +270,16 @@ it expects a `401` is looking at a refusal without CORS headers.
 The client of a CoSec 8 application is `@ahoo-wang/cosec-fetcher`, and its React hooks are `@ahoo-wang/cosec-react`.
 They replace `@ahoo-wang/fetcher-cosec` and the CoSec hooks of `@ahoo-wang/fetcher-react`, are released with CoSec at its
 version, and speak the contract of this page. The old package speaks the contract of CoSec 7 and does not work against an 8.0
-server. Install them with their peer dependencies (the fetcher packages):
+server. Install them with their peer dependencies, the fetcher packages, of 6.1.x (6.1.1 or later) or 8.x: fetcher 8 is
+6.1 without its CoSec package, and CI tests the client on both, so an application whose server runs CoSec 8 may stay
+on fetcher 6.1 or move to fetcher 8 ([fetcher's page on the move](https://fetcher.ahoo.me/guides/integrations/cosec)):
 
 ```bash
 pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus @ahoo-wang/fetcher-storage \
-  @ahoo-wang/cosec-fetcher@beta @ahoo-wang/cosec-react@beta
+  @ahoo-wang/cosec-fetcher @ahoo-wang/cosec-react
 ```
 
-Until 8.0 is released, the `latest` tag of both packages points at a `0.0.0` placeholder marked deprecated, so an install
-without a tag gets the placeholder and a deprecation notice, not the client. Install the tag of the CoSec release you run: `@beta` for `8.0.0-beta.n` (as above), `@rc` for a release candidate, no tag once 8.0 is released; or an exact version, which stays right through all of them. A tag does not move past its line: once release candidates are out, `@beta` is still the last beta, which does not match an RC server. Change the package name in `package.json` and in every import, and the
+Without a tag you get the latest 8.x release. A client is tested against the contract of its own version, so pin the version of the CoSec release your server runs when the two must not drift apart (`@ahoo-wang/cosec-fetcher@8.0.0`). The `beta` and `rc` tags name the last pre-releases of 8.0 and do not move; never use them in production. Change the package name in `package.json` and in every import, and the
 hooks' imports from `@ahoo-wang/fetcher-react` to `@ahoo-wang/cosec-react`. What behaves differently:
 
 | What the old package did | What `cosec-fetcher` does |

@@ -47,6 +47,17 @@ pnpm test
 - CoSec's packages depend on fetcher's, never the other way. Every `@ahoo-wang/fetcher*` package comes from npm, through
   the catalog, as a peer dependency of the published packages. Nothing here depends on `@ahoo-wang/fetcher-cosec`, the
   name these packages replace.
+- The fetcher packages' peer range takes two majors, 6.1.x and 8.x (`^6.1.1 || ^8.0.0-rc.1` in `catalogs.peers`): fetcher 8
+  is 6.1 without its CoSec package. The workspace develops on the lockfile's fetcher 6; CI runs every step of both
+  TypeScript jobs once more on the newest fetcher 8 (`scripts/fetcher-line.mjs`, which reads the range), and
+  `TypeScriptWorkspaceTest` holds the range and the legs.
+- `minimumReleaseAge` has one exemption: on the fetcher 8 legs, and there only, the three fetcher packages at the exact
+  versions the script picks (`minimumReleaseAgeExclude`, written into the leg's checkout, with
+  `minimumReleaseAgeStrict`: a younger dependency they bring still fails the install, named). They are the
+  maintainer's own packages, published by fetcher's release workflow from reviewed commits with provenance, and the
+  legs hold no secret and no write permission: the attack the guard is for, a poisoned third-party package installed at
+  once, hardly applies, and holding them to the day would make CoSec wait a day after each fetcher release to test on
+  it. The committed workspace sets no exemption, and the fetcher 6 legs install the lockfile as it is.
 - Packages of this workspace depend on each other as peers (`workspace:~`, which becomes `~x.y.z` on publish).
 
 ## Versions
@@ -129,8 +140,9 @@ Publishing the GitHub release `vX.Y.Z` publishes the packages to npm, from the `
 3. Frozen install, build, tests; `pnpm pack` writes the tarballs (`workspace:` and `catalog:` become versions; the
    publish refuses a package.json that still has one), `scripts/package-check.mjs --tarballs` checks them, and **those
    tarballs** are published: `@ahoo-wang/cosec-fetcher`, then `@ahoo-wang/cosec-react`.
-4. The dist-tag follows the version: `-alpha.n` is `alpha`, `-beta.n` is `beta`, `-RCn` is `rc`, none is `latest`. A
-   pre-release never gets `latest`, and a pre-release this table does not know fails. Install one with
+4. The dist-tag follows the version: `-alpha.n` is `alpha`, `-beta.n` is `beta`, `-rc.n` is `rc`, none is `latest`. A
+   pre-release never gets `latest`, and a pre-release this table does not know fails, an uppercase one (`-RC1`) among them:
+   semver orders it below every lowercase one, so `8.0.0-RC1` would come before `8.0.0-beta.9`. Install one with
    `pnpm add @ahoo-wang/cosec-fetcher@beta`.
 5. A version already on npm is skipped with a message, so re-running the job after a partial failure goes on with the
    next package. "Already on npm" needs positive evidence: `npm view <name>@<version> version` printing exactly that
@@ -147,7 +159,9 @@ lapses: the maintainer creates it again just before the first release. `reposito
 
 Every pull request rehearses it: the `typescript` job of `ci.yml` packs both packages, checks the tarballs and runs
 `npm publish --dry-run` on them with the dist-tag and in the order a release would use (`scripts/release.mjs`), so the
-first real publish is not the first time the command runs.
+first real publish is not the first time the command runs. Between a release and the next release PR the workspace
+carries the published version: the rehearsal still checks the tarballs, and skips the dry run of a version already on
+npm, which npm refuses for the version that is `latest`.
 
 ## Supply chain
 

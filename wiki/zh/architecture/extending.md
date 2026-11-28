@@ -34,12 +34,12 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `BlacklistSource` | `cosec-runtime`，`runtime.attribute` | 说明哪些主体、地址和设备被拦截。 | 一个 bean，包装进 `BlacklistAttributeProvider` |
 | `DecisionListener` | `cosec-runtime`，`runtime.event` | 观察每一个决策：审计、告警、分析。 | 所有 bean |
 | `BridgeContextContributor` | `cosec-runtime`，`runtime.event` | 把线程本地上下文（日志、追踪）带进 Pipeline。 | 所有 bean |
-| `ProblemRenderer` | `cosec-runtime`，`runtime.http` | 用你的框架自己的 problem 目录写出拒绝的响应体（[Problem 渲染器](#problem-renderer)）。实验性。 | 一个 bean，替换 CoSec 自己的响应体；两个则启动失败 |
+| `ProblemRenderer` | `cosec-runtime`，`runtime.http` | 用你的框架自己的 problem 目录写出拒绝的响应体（[Problem 渲染器](#problem-renderer)）。 | 一个 bean，替换 CoSec 自己的响应体；两个则启动失败 |
+| `Headers`、`Cookies` | `cosec-runtime`，`runtime.http` | 从你自己的传输层把请求的头和 cookie 交给管道（[管道在适配器之外](#pipeline-outside-the-adapters)）。 | 无：放进你交给 `Pipeline.evaluate` 的 `HttpFacts` |
 | `ChangeListener` | `cosec-control`，`control.audit` | 观察或把关控制面变更。 | 所有 bean，使用 `cosec-control` 时 |
-| `ControlStore` | `cosec-control`，`control.store` | 把控制面的记录（修订、变更请求、暂存槽）保存在 `CoCacheControlStore` 以外的地方。控制面本身只在有 `cosec-cocache` 时启动，已发布的文档保存在它的 Redis 存储里：这个端口不改变这一点。实验性的，连同它的记录和影子窗口端口。 | 一个 bean，使用 `cosec-control` 和 `cosec-cocache` 时 |
 | 路由映射 | `cosec-document`，`document.route` | 让请求得到作用于类型化资源的 `service:verb` 动作。 | `cosec.authorization.routes.location` |
 
-包名都在 `me.ahoo.cosec` 之下。签名只需要模型和契约的端口放在 `cosec-spi`，连同它们的值类型和内存实现（`InMemorySnapshotDocumentStore`、`InMemoryMembershipProvider`、`InMemoryApiKeyStore`）；它只依赖 `cosec-model`、`cosec-api`、`cosec-annotations` 和 kotlinx-coroutines，所以实现其中一个端口不需要 CoSec 的其他东西。影子窗口端口（`CandidateStore`、`ShadowReportSink`、`ShadowReportReader`，在 `spi.shadow` 中）也在其中：它们的候选与报告都是普通的值。签名带有某一层自身类型的端口留在那一层：`DecisionListener` 接收 runtime 的 `DecisionEvent`，`ControlStore` 和 `ChangeListener` 接收控制面的记录与事件。
+包名都在 `me.ahoo.cosec` 之下。签名只需要模型和契约的端口放在 `cosec-spi`，连同它们的值类型和内存实现（`InMemorySnapshotDocumentStore`、`InMemoryMembershipProvider`、`InMemoryApiKeyStore`）；它只依赖 `cosec-model`、`cosec-api`、`cosec-annotations` 和 kotlinx-coroutines，所以实现其中一个端口不需要 CoSec 的其他东西。签名带有某一层自身类型的端口留在那一层：`DecisionListener` 接收 runtime 的 `DecisionEvent`，`ChangeListener` 接收控制面的事件。控制面的存储在 8.0 中不是扩展点：`ControlStore` 及其记录，以及 `spi.shadow` 的影子窗口端口（`CandidateStore`、`ShadowReportSink`、`ShadowReportReader` 及其值）都是 `@InternalCoSecApi`，starter 装配唯一的实现：Redis 上的 `CoCacheControlStore` 和 `CoCacheShadowReports`（[控制面存储](#control-store)）。
 
 这些接口都带有 `@CoSecSpi`：修改其中一个（而不是实现它），会破坏每个实现了它的应用（[稳定性等级](#stability-levels)）。
 
@@ -73,7 +73,7 @@ connection.onClose { outcome.close() } // 完成、失败和取消都一样
 
 关闭被拒绝的 `Outcome` 不做任何事，关闭两次也无害。从不关闭它的传输，会让请求在其上下文被持有期间一直处于进行中。CoSec 的 Web 适配器自己结束它们绑定的请求：使用它们的应用不需要关闭任何东西。
 
-这个上下文只属于该请求，与 Web 适配器绑定的那个一样。`Pipeline.evaluate`、`Outcome`、`HttpFacts` 和 `RequestSecurity` 是 `@ExperimentalCoSecApi`（[稳定性等级](#stability-levels)）。在这样的端口上运行管道，就是服务验证它在该端口收到的令牌的方式，而不是手工调用 `TokenVerifier`，后者会跳过吊销检查（[在管道之外验证令牌](../integration/authentication.md#verifying-a-token-outside-the-pipeline)）。
+这个上下文只属于该请求，与 Web 适配器绑定的那个一样。`Pipeline.evaluate`、`Outcome`、`HttpFacts`、`Headers`、`Cookies`、`ProblemEncoder` 和 `RequestSecurity` 是稳定的；不使用 Spring 构建 `Pipeline` 是实验性的（[稳定性等级](#stability-levels)）。在这样的端口上运行管道，就是服务验证它在该端口收到的令牌的方式，而不是手工调用 `TokenVerifier`，后者会跳过吊销检查（[在管道之外验证令牌](../integration/authentication.md#verifying-a-token-outside-the-pipeline)）。
 
 ## 稳定性等级 {#stability-levels}
 
@@ -83,8 +83,10 @@ connection.onClose { outcome.close() } // 完成、失败和取消都一样
 |---|---|---|
 | 无 | 稳定。从 8.0 GA 起，删除或修改它是破坏性变更，只在主版本中发生。 | 直接使用。 |
 | `@CoSecSpi` | 应用要实现、而不只是调用的接口：上面的扩展点。与其余部分同样稳定；次版本新增的成员带默认实现，已有的实现照常编译。 | 实现它。 |
-| `@ExperimentalCoSecApi` | 公开，但可能在次版本中改变或移除，发布说明会写明。目前包括：`cosec-testkit` 的公共 API（`PolicyTestKit`、`PipelineFixture`、`AttributeRequests`、`EngineOutcome` 及其异常）；不使用 Spring 组装管道（`Pipeline.builder`、`PipelineBuilder` 及其设置 `PipelineSettings`、`SnapshotSettings` 和 `IdentityForwardingSettings`、`Pipeline.behindGateway` 与 `GatewayIdentitySettings`、`Pipeline.evaluate` 和 `awaitDocuments`、`RequestGate`、`HttpFacts`、`Headers`、`Cookies`、`Outcome`、`Problem`、`ProblemEncoder`、`ProblemRenderer`、`RequestSecurity`）；评估轨迹（`DecisionEvent.evaluationTrace`、`me.ahoo.cosec.engine.trace`）；以及控制面的存储和影子窗口端口及其记录（[控制面存储](#control-store)）。 | 用 `@OptIn(ExperimentalCoSecApi::class)` 选择加入，否则编译器给出警告。 |
-| `@InternalCoSecApi` | 公开只是为了让 CoSec 自己的模块互相调用。没有任何承诺：任何版本都可能改变。 | 不要使用。它要求 error 级别的 opt-in，只有 CoSec 自己的源码这样做。 |
+| `@ExperimentalCoSecApi` | 公开，但可能在次版本中改变或移除，发布说明会写明。8.0 中包括：不使用 Spring 构建管道（`Pipeline.builder`、`PipelineBuilder` 及其设置 `PipelineSettings`、`SnapshotSettings` 和 `IdentityForwardingSettings`，带 `GatewayIdentitySettings` 的 `Pipeline.behindGateway`，以及 `awaitDocuments`）；`SnapshotDocumentStore`（[快照文档存储](#snapshot-document-stores)）；测试工具的策略与管道测试（`PolicyTestKit` 及其场景格式、`PipelineFixture`、`AttributeRequests`、`EngineOutcome`、`RequestFacts` 及其异常）；`cosec-control-sdk`（`ControlService`、`ControlClient`、`ControlCaller`、`ControlRefusedException` 及其值）和 `HttpControlService`（`cosec-control-http`）；求值轨迹（`me.ahoo.cosec.engine.trace`、`DecisionEvent.evaluationTrace`）。 | 用 `@OptIn(ExperimentalCoSecApi::class)` opt in，否则编译器会警告。 |
+| `@InternalCoSecApi` | 公开只是为了让 CoSec 自己的模块互相调用。没有任何承诺：任何版本都可能改变。其中包括：控制面的存储（`ControlStore` 及其记录、除 `ChangeEvent` 携带的值以外的 `control.change.*`、`CoCacheControlStore`），`spi.shadow` 的影子窗口端口与值及 `CoCacheShadowReports`，以及社交登录的提供方（`JustAuthProvider`）。 | 不要使用。它要求 error 级别的 opt-in，只有 CoSec 自己的源码这样做。 |
+
+不带标记即为稳定，应用最常用的有：适配器契约（要调用的 `RequestGate`、`HttpFacts`、`Headers`、`Cookies`、`Outcome`、`Problem`、`ProblemEncoder`、`ProblemRenderer`、`RequestSecurity`、`Pipeline.evaluate`）；测试工具的请求上下文（`PermittedRequest`、测试工具的 `IdentityHeader`，以及 WebFlux 和 Web MVC 的 `CoSecTestBindings`），所以测试读取调用方的处理器不需要 opt-in；`document.identity.IdentityHeader`，它写出服务或服务端口读取的 `CoSec-Identity` 头；以及变更事件（`ChangeListener`、`ChangeEvent` 及其携带的值）。
 
 这些承诺由构建守住。每个发布的库模块把自己的公共 ABI 存在一个转储文件里，即模块目录下的 `api/<project>.api`
 （`cosec-spi` 的是 `core/spi/api/spi.api`）；`check` 运行 Kotlin Gradle 插件的 `checkKotlinAbi`，编译出的模块与转储不一致时失败。
@@ -116,6 +118,10 @@ PR 都是破坏性变更，标题要带 `!`
 | `Cause` | 决策为 Indeterminate 的新原因，例如一个会失败的新端口；`DecisionListener` 从决策事件中读到它 |
 | `ChangeEvent.Kind` | 新的变更事件种类 |
 | `OutcomeSummary.Reason` | 答复结果的新原因，例如新一种义务的拒绝 |
+| `DecisionEvent.Kind` | 请求结束的新方式，例如一个能在决策之前拒绝的新阶段 |
+| `StatementRef`、`BindingRef` | 新一种做出决策的规则，或策略作用于请求的新方式 |
+| `AuditDecision`、`AuditReasonCode`、`AuditEventKind`、`AuditVia` | 随写出它们的集合增长：`AuditDecision` 来自 `OutcomeSummary.Reason`，`AuditReasonCode` 来自它、`AuthnResult.RejectReason` 和 `Cause`，`AuditEventKind` 来自 `DecisionEvent.Kind`，`AuditVia` 来自 `BindingRef`。`AuditEventSink`、日志读取方或 Kafka 消费者要接受它不认识的值 |
+| `Escalation.Reason` | 变更需要第二个人的新原因；旧版本的读方把不认识的原因读作 `UNKNOWN` |
 
 这里没有列出的集合在 8.0 GA 之后不会增加成员。公共 `data class` 只会是不会增长的值，即形状固定的记录（`PublicApiStabilityTest` 读取已评审的清单）；可能增长的记录是普通类，新增字段时增加一个构造器。决策值（`Decision`、`Cause`、`Obligation`、`ViewVersion`）因此是普通类：没有 `copy`，也不能解构。
 
@@ -152,7 +158,7 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 
 认证器只能看到 Pipeline 读作凭证的内容：令牌（`Authorization` 请求头；开启 `cosec.pipeline.allow-query-token` 时其次是同名查询参数；开启 `cosec.pipeline.allow-cookie-token` 时再次是 Cookie）和 API key 请求头（`cosec.pipeline.api-key-header`）。
 
-starter 的默认实现是 `CompositeAuthenticator`：带 API key 的请求只由 API key 认证器判断（开启 `cosec.api-key.enabled` 时），其他请求由 JWT 的 `TokenAuthenticator` 判断。**你的 `Authenticator` bean 会替换掉这一切，连同每一项 `cosec.authentication.revocation.*` 设置**：starter 把这些设置交给它自己构建的 `TokenAuthenticator`，而你构建的 `TokenAuthenticator` 取构造函数的默认值（偏差 5 秒、`fail-closed: false`），不管运维设置了什么。要接受另一种令牌格式并保留内置认证，自己构建内置认证器，像 starter 那样取每一项设置，并委托给它们：
+starter 的默认实现是 `CompositeAuthenticator`：带 API key 的请求只由 API key 认证器判断（开启 `cosec.api-key.enabled` 时），其他请求由 JWT 的 `TokenAuthenticator` 判断。**你的 `Authenticator` bean 会替换掉这一切，连同每一项 `cosec.authentication.revocation.*` 设置**：starter 把这些设置交给它自己构建的 `TokenAuthenticator`，你构建的 `TokenAuthenticator` 要说明读不到吊销时是否接受令牌，即 `acceptUnavailableRevocations`，这是没有默认值的必填参数（`PIP-7`）；偏差取构造函数的 5 秒，除非你传入运维设置的值。要接受另一种令牌格式并保留内置认证，自己构建内置认证器，像 starter 那样取每一项设置，并委托给它们：
 
 ```kotlin
 @Bean
@@ -169,8 +175,8 @@ fun cosecAuthenticator(
         TokenAuthenticator(
             verifier.getIfAvailable { JwtTokenVerifier(signing, skew) },
             (tokenStore as CoCacheTokenStore).reader,   // 若你有自己的 RevocationReader bean，用它
+            acceptUnavailableRevocations = !failClosed,  // 必填：true 表示读不到吊销时接受令牌
             revocationSkew = skew,
-            acceptUnavailableRevocations = !failClosed,  // true 表示读不到吊销时接受令牌
             unchecked = unchecked,
         ),
         ApiKeyAuthenticator(keys),
@@ -186,7 +192,7 @@ fun cosecAuthenticator(
 }
 ```
 
-运维设置了 `cosec.authentication.revocation.fail-closed: true`，只要这个写法漏掉读取它的那一行，就重新敞开了，而且没有任何日志：这三项设置要保留，否则吊销方面的加固就丢了（[这个例外](../guide/security-model.md#the-two-documented-exceptions)）。
+这个写法读取运维的 `cosec.authentication.revocation.fail-closed`，所以你构建的认证器与 starter 的判断一致：写死 `true` 会让运维选择拒绝的部署在吊销存储故障时接受令牌，而且没有任何日志。这三项设置要保留，否则吊销方面的加固就丢了（[这个例外](../guide/security-model.md#the-two-documented-exceptions)）。
 
 自定义的 `TokenVerifier` 返回 `VerifiedToken`（`me.ahoo.cosec.spi.token`），一个由它校验过的声明构成的不可变值：`id`、`principal`、`tenant`、`app`（令牌的 `aud`）、`kind`、`roles`、`policies`、`attributes`、时间和成员关系标记。`kind` 是必需的，没有默认值（`IDN-46`）：令牌属于谁，由你的校验器从令牌的声明读出，比如 client credentials 令牌是工作负载的。`TokenAuthenticator` 由它造出的凭证就是这个种类，所以工作负载的令牌从不审批变更、从不是信任根；令牌没有说明时，声明 `WORKLOAD`，能做的更少的那种。CoSec 自己的校验器读 `cosec.kind`：`person` 是人的，没有这个声明或是任何其他值的令牌是工作负载的，从不拒绝。它的构造函数对任何令牌都不允许的声明（以 `(` 开头的 id、空白主体、空租户、落单代理项、不可能的应用）抛出 `TokenVerificationException`，所以无论哪个校验器读取，`verify` 都会拒绝。
 
@@ -258,7 +264,7 @@ class DirectoryAttributeProvider(private val directory: DirectoryClient) : Attri
 **测试提供者。** `AttributeRequests`（`cosec-testkit`，`@ExperimentalCoSecApi`）构造提供者被询问时收到的请求。只有管道能构造解析后的作用域，所以测试工具用管道自己的解析器来解析它，依据主体的角色、请求选择的空间和宿主的应用：
 
 ```kotlin
-@OptIn(ExperimentalCoSecApi::class)
+@OptIn(ExperimentalCoSecApi::class) // AttributeRequests 是实验性的，与测试工具中除请求上下文以外的部分一样
 class DirectoryAttributeProviderTest {
     private val provider = DirectoryAttributeProvider(FakeDirectory(mapOf("acme/alice" to "finance")))
     private val alice = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("reader"))
@@ -427,29 +433,11 @@ fun problemRenderer(): ProblemRenderer {
 
 有 `cosec-kafka` 和 `KafkaOperations` bean 时，starter 在 `cosec.control.audit.kafka.*` 下注册 `KafkaChangeListener`（[可观测性](../operations/observability.md#control-plane-change-log)）。
 
+`ChangeListener`、`ChangeEvent` 及其携带的值（`MovedHead`、`RevisionRef`、`Escalation`、`ChangeOrigin`）是稳定的：都是普通类，以后加字段是新的构造函数，不会破坏 `copy` 或解构。`ChangeEvent.change` 是控制 API 答复的变更 id（`GET /changes/{id}`，SDK 的 `Change.id`）。`ChangeEvent.Kind` 和 `Escalation.Reason` 会增长（[会增长的集合](#sets-that-grow)）。
+
 ## 控制面存储 {#control-store}
 
-使用 `cosec-control` 时，控制面把修订、变更请求、暂存槽、候选和租约保存在 `ControlStore` 中；starter 提供的是 Redis 上的 `CoCacheControlStore`。存储、它的记录（`ChangeRequest`、`RevisionIndex`、`StageSlot` 等）和影子窗口端口（位于 `cosec-spi`；`CandidateStore`、`ShadowReportSink`、`ShadowReportReader` 及其报告）是 `@ExperimentalCoSecApi`：控制面的契约是它的 HTTP API，这些随它变化，可能在次版本中改变。`ChangeListener` 和它收到的 `ChangeEvent` 是稳定的。存储无法应答时抛出 `ControlStoreException`：控制 API 返回 `503`，维护任务本轮什么都不做（`CTL-52`）。读到的值无法解码时抛出 `SnapshotFormatException`，即 `500`。两种情况都绝不回答"不存在"。除了按 key 读写这些记录，存储还要回答维护任务需要访问什么：
-
-- `documents()`：它为之建立了修订索引的每个文档。可以多列，不能少列。
-- `endedChanges(document, endedBefore, limit)` 和 `removeChange(document, id, expected)`：一个文档中在某时刻之前结束的变更，最早的在前；以及删除一条已结束变更的记录（`CTL-83`）。终态变更的 `putChange` 在写入之前，以它的 `updatedAt` 把它登记进去，所以落败的写入只会多留一条，不会少一条；按某条登记行事的一方先读它的记录。`removeChange` 只在记录仍是 `expected` 时删除它，并移除该变更的每条登记；`expected` 为 `null` 时只在没有记录时生效，于是记录已不在的登记被移除。控制面在结束变更的那次写入上，让每个文档至多保留 `max-count` 个已结束的变更；回收任务删除超过 `min-age` 且发布的修订已不再保留的那些。
-- `openChanges(document)` 和 `changes(state, after, limit, documents)`：一个文档中未结束的变更，以及处于某个状态的一页变更，每个都是此刻读取的（`CTL-54`）。每个已写入且未结束的变更都在其中；记录无法解码的变更是 `ListedChange.Unreadable`，从不省略，维护任务本轮跳过它的文档或它的窗口。`openChangesKept()` 说明这些列表是否可信；在可信之前维护任务不回收任何东西，`keepOpenChanges()` 让新存储的列表可信。
-- `eachOpenChange(document, after, visit)`：`openChanges(document)` 所列的变更，按 id 的顺序、从 `after` 之后起，逐条交给 `visit`，直到 `visit` 答 `false`（DR2-E-4）。每条给出它的 `id`、它的记录存储的字节数 `size`，以及解码它的 `read`（结果为终态或已不在时为 `null`）。控制面在解码之前按 `size` 把这一条记进调用的工作预算，只持有迄今最重的那一条，小记录什么都不占，每条只留下它要用的，所以一个文档的未结束变更从不同时全部解码。默认实现整表读 `openChanges`，不知道大小：它传 `null`，每条记录就按记录上限计（默认 18 MB，即 72 MB 的工作量），每次提案都要占预算的一大块。覆盖它以给出大小、逐条读，`CoCacheControlStore` 就是这样做的。委托给另一个存储（`ControlStore by inner`）并覆盖了 `openChanges` 的存储，也要覆盖它，否则由被委托的存储回答。
-- `acquireLease(name, holder, duration)` 和 `releaseLease(name, holder)`：每项任务同一时间只有一个实例。只有 `holder` 仍持有租约时，释放才会删除它，检查与删除是一步原子操作（CoCache 的 `deleteIfMatch`）：期间过期并被另一个实例取得的租约仍归对方。
-- `withdrawCandidate(key, window)`：只在文档的候选仍是 `window` 的候选时删除它，一步原子操作（`CTL-26`）。变更在结束之后撤回候选，此时另一个变更可能已暂存了自己的候选。
-- `stagedCandidate(key)` 和 `putCandidate(key, expected, candidate)`：带摘要的候选，以及只在候选仍是读到的那份时才落地的写入（`null`：仅当没有候选时），变了就返回 `false`。暂存先读候选，确认自己仍占着文档的暂存槽，再在读到的候选之上写入；期间被抢占的变更，它迟到的写入会被拒绝，因此不会替换拿到槽的变更的候选（`CTL-6`）。结果未知的写入通过回读解决，绝不重复写。
-- `ShadowReportReader.readings(window)`：每个能读取的实例报告，以及 `ShadowReadings.unreadable` 中报告已列出却无法读取（缺失、无法解码或属于另一个实例）的实例。控制面把它们当作缺失的证据：窗口等待它们，到最长时长时以证据不足关闭并点名它们（`CTL-56`）。存储无法应答时仍对整个调用抛出：窗口随后像任何读取失败一样等待。默认实现读取 `reports(window)`，它对无法读取的报告抛出，所以没有覆盖 `readings` 的读取器会让这样的窗口在最长时长之后仍保持打开。
-- `ShadowReportSink.write(ResidentDocuments)` 和 `ShadowReportReader.residents(instances)`：每个实例持有的文档及各自的
-  修订，作为一条独立记录存放在它的状态旁边，状态因此保持很小（`CTL-74`、`CTL-75`）。按实例存放，生命期为
-  `ShadowReportReader.RESIDENT_TTL`（精确，没有抖动：实例会在一半生命期时重写）。`residents` 应答所问实例中能读取的记录，并在
-  `ResidentReadings.unreadable` 中列出记录缺失或无法解码的实例，`propagation` 把它们计为 `unknown`；存放在另一个实例键下的
-  记录，以及无法应答的存储，都会抛出。两者都是抽象方法：没有默认实现，因为回答“什么都不持有”的默认实现会让
-  `installed == holding` 声称没有实例落后。
-- `ShadowReportReader.statusReadings()`：能读取的最近状态，以及 `StatusReadings.unreadable` 中状态已列出却无法解码的实例。控制面把它们当作存活且不确认任何窗口，所以没有窗口会因它们而通过，同时读取其他每个状态，`propagation` 照常应答（`CTL-73`）。存放在另一个实例键下的状态，以及无法应答的存储，都对整个调用抛出。默认实现读取 `statuses()`：没有覆盖它的读取器分不清无法解码的状态和没有状态，所以在 `statuses()` 失败的地方让读取失败，每个窗口和 `propagation` 都要等到该状态能读取或过期。
-- `referrers` 和 `putReferrers`：每个引用方文档带上它最后一次登记该引用的修订，所以一个修订迟到的删除不会推翻更晚的修订重新登记的引用（`CTL-25`）。
-- `RevisionIndex.reclaiming`：回收已从索引中移出、尚未确认删除的记录；存储与索引的其余部分一起保存它。
-
-与数据面的存储一样，失败的读取会抛出异常：从不回答“不存在”。
+使用 `cosec-control` 时，控制面把修订、变更请求、暂存槽、候选、租约和影子窗口的报告保存在 Redis 中（`CoCacheControlStore`、`CoCacheShadowReports`，由 starter 装配）。这一存储在 8.0 中是 CoSec 自己的，不是扩展点：`ControlStore`、它的记录和 `spi.shadow` 的影子窗口端口都是 `@InternalCoSecApi`。应用通过控制面的 HTTP API、`cosec-control-sdk` 和变更事件读取控制面（[变更监听器](#change-listeners)）。存储必须保证的事项写在 `ControlStore` 的 KDoc 中（`core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlStore.kt`），由守护它的 `CTL` 规则检验。
 
 ## 路由映射 {#route-maps}
 

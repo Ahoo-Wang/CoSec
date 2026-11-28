@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.webmvc
 
@@ -24,7 +24,6 @@ import jakarta.servlet.ServletResponse
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.event.BridgeContextContributor

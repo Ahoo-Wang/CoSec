@@ -47,18 +47,20 @@ writes its implementations of CoSec's ports in Kotlin. Durations, instants and c
 | `BlacklistSource` | `cosec-runtime`, `runtime.attribute` | Say which principals, addresses and devices are blocked. | one bean, wrapped in `BlacklistAttributeProvider` |
 | `DecisionListener` | `cosec-runtime`, `runtime.event` | Observe every decision: audit, alerting, analytics. | every bean |
 | `BridgeContextContributor` | `cosec-runtime`, `runtime.event` | Carry a thread-local context (logging, tracing) into the pipeline. | every bean |
-| `ProblemRenderer` | `cosec-runtime`, `runtime.http` | Write the body of a refusal in your framework's own problem catalog ([Problem renderer](#problem-renderer)). Experimental. | one bean, replacing CoSec's own body; two fail startup |
+| `ProblemRenderer` | `cosec-runtime`, `runtime.http` | Write the body of a refusal in your framework's own problem catalog ([Problem renderer](#problem-renderer)). | one bean, replacing CoSec's own body; two fail startup |
+| `Headers`, `Cookies` | `cosec-runtime`, `runtime.http` | Give the pipeline a request's headers and cookies from a transport of your own ([Pipeline outside the adapters](#pipeline-outside-the-adapters)). | none: pass them in the `HttpFacts` you give `Pipeline.evaluate` |
 | `ChangeListener` | `cosec-control`, `control.audit` | Observe or gate control-plane changes. | every bean, with `cosec-control` |
-| `ControlStore` | `cosec-control`, `control.store` | Keep the control plane's records (revisions, change requests, staging slots) somewhere other than in `CoCacheControlStore`. The control plane itself starts only with `cosec-cocache`, whose Redis stores keep the published documents: this port does not change that. Experimental, with its records and the shadow window ports. | one bean, with `cosec-control` and `cosec-cocache` |
 | Route maps | `cosec-document`, `document.route` | Give requests `service:verb` actions on typed resources. | `cosec.authorization.routes.location` |
 
 Packages are under `me.ahoo.cosec`. The ports whose signatures need only the model and the contracts live in
 `cosec-spi`, with their value types and in-memory implementations (`InMemorySnapshotDocumentStore`,
 `InMemoryMembershipProvider`, `InMemoryApiKeyStore`); it depends on `cosec-model`, `cosec-api`, `cosec-annotations`
-and kotlinx-coroutines only, so an implementation of one of them needs nothing else from CoSec. The shadow window ports
-(`CandidateStore`, `ShadowReportSink`, `ShadowReportReader`, in `spi.shadow`) are among them: their candidates and
-reports are plain values. A port whose signature carries a layer's own types stays with that layer: `DecisionListener`
-takes the runtime's `DecisionEvent`, and `ControlStore` and `ChangeListener` the control plane's records and events.
+and kotlinx-coroutines only, so an implementation of one of them needs nothing else from CoSec. A port whose signature
+carries a layer's own types stays with that layer: `DecisionListener` takes the runtime's `DecisionEvent`, and
+`ChangeListener` the control plane's events. The control plane's storage is not an extension point in 8.0: `ControlStore`
+with its records, and the shadow window ports of `spi.shadow` (`CandidateStore`, `ShadowReportSink`,
+`ShadowReportReader` and their values), are `@InternalCoSecApi`, and the starter wires the one implementation,
+`CoCacheControlStore` and `CoCacheShadowReports` on Redis ([Control store](#control-store)).
 
 Each of these interfaces carries `@CoSecSpi`: changing one, rather than implementing it, breaks every application that
 implements it ([Stability levels](#stability-levels)).
@@ -107,8 +109,9 @@ Closing a refused `Outcome` does nothing, and closing twice is harmless. A trans
 request in progress for as long as its context is held. CoSec's web adapters end the requests they bind themselves: an
 application that uses them never closes anything.
 
-The context is for that request only, like the one a web adapter binds. `Pipeline.evaluate`, `Outcome`, `HttpFacts`
-and `RequestSecurity` are `@ExperimentalCoSecApi` ([Stability levels](#stability-levels)). Running the pipeline on such
+The context is for that request only, like the one a web adapter binds. `Pipeline.evaluate`, `Outcome`, `HttpFacts`,
+`Headers`, `Cookies`, `ProblemEncoder` and `RequestSecurity` are stable; building the `Pipeline` without Spring is
+experimental ([Stability levels](#stability-levels)). Running the pipeline on such
 a port is how a service verifies a token it receives there, rather than calling `TokenVerifier` by hand, which skips
 the revocation check ([Verifying a token outside the pipeline](../integration/authentication.md#verifying-a-token-outside-the-pipeline)).
 
@@ -121,8 +124,15 @@ Every public declaration of a published module is in one of four levels. The mar
 |---|---|---|
 | none | Stable. From 8.0 GA on, removing or changing it is a breaking change, made only in a major release. | Use it. |
 | `@CoSecSpi` | An interface applications implement, not only call: the extension points above. Stable like the rest, and a member added in a minor release comes with a default body, so an implementation keeps compiling. | Implement it. |
-| `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. Today: the public API of `cosec-testkit` (`PolicyTestKit`, `PipelineFixture`, `AttributeRequests`, `EngineOutcome` and their exceptions); assembling a pipeline without Spring (`Pipeline.builder`, `PipelineBuilder` and its settings `PipelineSettings`, `SnapshotSettings` and `IdentityForwardingSettings`, `Pipeline.behindGateway` with `GatewayIdentitySettings`, `Pipeline.evaluate` and `awaitDocuments`, `RequestGate`, `HttpFacts`, `Headers`, `Cookies`, `Outcome`, `Problem`, `ProblemEncoder`, `ProblemRenderer`, `RequestSecurity`); the evaluation trace (`DecisionEvent.evaluationTrace`, `me.ahoo.cosec.engine.trace`); and the control plane's store and shadow window ports with their records ([Control store](#control-store)). | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
-| `@InternalCoSecApi` | Public only so that CoSec's own modules can call each other. No promise: it may change in any release. | Never use it. Opting in is required at error level, and only CoSec's own sources do. |
+| `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. In 8.0: building a pipeline without Spring (`Pipeline.builder`, `PipelineBuilder` and its settings `PipelineSettings`, `SnapshotSettings` and `IdentityForwardingSettings`, `Pipeline.behindGateway` with `GatewayIdentitySettings`, and `awaitDocuments`); `SnapshotDocumentStore` ([Snapshot document stores](#snapshot-document-stores)); the kit's policy and pipeline tests (`PolicyTestKit` and its scenario format, `PipelineFixture`, `AttributeRequests`, `EngineOutcome`, `RequestFacts` and their exceptions); `cosec-control-sdk` (`ControlService`, `ControlClient`, `ControlCaller`, `ControlRefusedException` and its values) and `HttpControlService` (`cosec-control-http`); the evaluation trace (`me.ahoo.cosec.engine.trace`, `DecisionEvent.evaluationTrace`). | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
+| `@InternalCoSecApi` | Public only so that CoSec's own modules can call each other. No promise: it may change in any release. Among them: the control plane's storage (`ControlStore` and its records, `control.change.*` but the values a `ChangeEvent` carries, `CoCacheControlStore`), the shadow window ports and values of `spi.shadow` with `CoCacheShadowReports`, and the social login's providers (`JustAuthProvider`). | Never use it. Opting in is required at error level, and only CoSec's own sources do. |
+
+Stable without a marker, among what an application uses most: the adapter contract (`RequestGate` to call, `HttpFacts`,
+`Headers`, `Cookies`, `Outcome`, `Problem`, `ProblemEncoder`, `ProblemRenderer`, `RequestSecurity`, `Pipeline.evaluate`);
+the kit's request contexts (`PermittedRequest`, the kit's `IdentityHeader`, and `CoSecTestBindings` for WebFlux and Web
+MVC), so a test of a handler that reads the caller needs no opt-in; `document.identity.IdentityHeader`, which writes the
+`CoSec-Identity` header a service or a service port reads; and change events (`ChangeListener`, `ChangeEvent` and the
+values it carries).
 
 The build keeps these promises. Every published library module stores its public ABI in a dump file,
 `api/<project>.api` in its directory (`core/spi/api/spi.api` for `cosec-spi`), and `check` runs the Kotlin Gradle
@@ -160,6 +170,10 @@ one has an `else`, and a listener or store never relies on the set being complet
 | `Cause` | a new reason a decision is Indeterminate, such as a new port that can fail; a `DecisionListener` reads it from a decision event |
 | `ChangeEvent.Kind` | a new kind of change event |
 | `OutcomeSummary.Reason` | a new reason an outcome was answered, such as the refusal of a new kind of obligation |
+| `DecisionEvent.Kind` | a new kind of request end, such as a new stage that can refuse before a decision |
+| `StatementRef`, `BindingRef` | a new kind of rule that decides, or a new way a policy comes to apply to a request |
+| `AuditDecision`, `AuditReasonCode`, `AuditEventKind`, `AuditVia` | with the sets they are written from: `AuditDecision` from `OutcomeSummary.Reason`, `AuditReasonCode` from it, `AuthnResult.RejectReason` and `Cause`, `AuditEventKind` from `DecisionEvent.Kind`, `AuditVia` from `BindingRef`. An `AuditEventSink`, a log reader or a Kafka consumer accepts a value it does not know |
+| `Escalation.Reason` | a new reason a change needs a second person; a reader of an older release reads one it does not know as `UNKNOWN` |
 
 A set not listed here does not gain a member after 8.0 GA. A public `data class` is only ever a value that cannot
 grow, a record with a fixed shape (`PublicApiStabilityTest` reads the reviewed list); a record that can grow is a plain
@@ -257,9 +271,10 @@ and the API key header
 The starter's default is a `CompositeAuthenticator`: a request with an API key is judged by the API key authenticator
 alone (when `cosec.api-key.enabled`), any other request by the JWT `TokenAuthenticator`. **Your `Authenticator` bean
 replaces all of it, and with it every `cosec.authentication.revocation.*` setting**: the starter hands those to the
-`TokenAuthenticator` it builds, and a `TokenAuthenticator` you build has the constructor's defaults, a skew of 5 seconds
-and `fail-closed: false`, whatever the operator set. To accept another token format and keep the built-in ones, build
-them yourself, take each setting from where the starter does, and delegate:
+`TokenAuthenticator` it builds. A `TokenAuthenticator` you build states whether it accepts a token while its revocations
+cannot be read, `acceptUnavailableRevocations`, a required parameter with no default (`PIP-7`), and takes the
+constructor's skew of 5 seconds unless you pass the operator's. To accept another token format and keep the built-in
+ones, build them yourself, take each setting from where the starter does, and delegate:
 
 ```kotlin
 @Bean
@@ -276,8 +291,8 @@ fun cosecAuthenticator(
         TokenAuthenticator(
             verifier.getIfAvailable { JwtTokenVerifier(signing, skew) },
             (tokenStore as CoCacheTokenStore).reader,   // a RevocationReader bean of your own, if you have one
+            acceptUnavailableRevocations = !failClosed,  // required: true accepts a token while revocations cannot be read
             revocationSkew = skew,
-            acceptUnavailableRevocations = !failClosed,  // true accepts a token while revocations cannot be read
             unchecked = unchecked,
         ),
         ApiKeyAuthenticator(keys),
@@ -293,8 +308,9 @@ fun cosecAuthenticator(
 }
 ```
 
-An operator who set `cosec.authentication.revocation.fail-closed: true` is open again the moment the recipe forgets
-the line that reads it, and nothing logs it: keep the three settings, or the revocation hardening is lost
+The recipe reads the operator's `cosec.authentication.revocation.fail-closed`, so the authenticator you build decides as
+the starter's would: a constant `true` would accept tokens during a revocation-store outage on a deployment whose
+operator chose to refuse them, and nothing would log it. Keep the three settings, or the revocation hardening is lost
 ([the exception](../guide/security-model.md#the-two-documented-exceptions)).
 
 A `TokenVerifier` of your own returns a `VerifiedToken` (`me.ahoo.cosec.spi.token`), an immutable value built from the
@@ -429,7 +445,7 @@ is asked with. Only the pipeline constructs a resolved scope, so the kit resolve
 from the principal's roles, the space the request selects and the host's app:
 
 ```kotlin
-@OptIn(ExperimentalCoSecApi::class)
+@OptIn(ExperimentalCoSecApi::class) // AttributeRequests is experimental, like the rest of the kit but its request contexts
 class DirectoryAttributeProviderTest {
     private val provider = DirectoryAttributeProvider(FakeDirectory(mapOf("acme/alice" to "finance")))
     private val alice = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("reader"))
@@ -677,77 +693,19 @@ content.
 With `cosec-kafka` and a `KafkaOperations` bean, the starter registers `KafkaChangeListener` under
 `cosec.control.audit.kafka.*` ([Observability](../operations/observability.md#control-plane-change-log)).
 
+`ChangeListener`, `ChangeEvent` and the values it carries (`MovedHead`, `RevisionRef`, `Escalation`, `ChangeOrigin`)
+are stable: plain classes, so a field added later is a new constructor, never a broken `copy` or destructuring.
+`ChangeEvent.change` is the change's id as the control API answers it (`GET /changes/{id}`, the SDK's `Change.id`).
+`ChangeEvent.Kind` and `Escalation.Reason` grow ([Sets that grow](#sets-that-grow)).
+
 ## Control store
 
-With `cosec-control`, the control plane keeps revisions, change requests, staging slots, candidates and leases in a
-`ControlStore`; the starter's is `CoCacheControlStore` on Redis. The store, its records (`ChangeRequest`, `RevisionIndex`,
-`StageSlot`, ...) and the shadow window ports (`CandidateStore`, `ShadowReportSink`, `ShadowReportReader` and their
-reports, in `cosec-spi`) are `@ExperimentalCoSecApi`: the control plane's contract is its HTTP API, and these change with it, so they
-may change in a minor release. `ChangeListener` and the `ChangeEvent` it receives are stable. A store that cannot
-answer throws `ControlStoreException`: the control API answers `503` and a maintenance pass does nothing that pass
-(`CTL-52`). A value it read that does not decode throws `SnapshotFormatException`, a `500`. It never answers
-"absent" for either. Besides reading and writing those records by key, a store answers what the maintenance passes
-visit:
-
-- `documents()`: every document it has indexed revisions for. It may name more than exist, never fewer.
-- `openChanges(document)` and `changes(state, after, limit, documents)`: the changes of one document that are not
-  terminal, and a page of the changes in one state, each read now (`CTL-54`). Every written change that is not
-  terminal is among them; a change whose record does not decode is `ListedChange.Unreadable`, never left out, and
-  maintenance skips its document or its window that pass. `openChangesKept()` says whether these lists can be
-  trusted; maintenance reclaims nothing until they can, and `keepOpenChanges()` makes a new store's lists trusted.
-- `eachOpenChange(document, after, visit)`: what `openChanges(document)` lists, handed to `visit` one at a time in the
-  order of their ids, past `after`, until `visit` answers `false` (DR2-E-4). Each comes as its `id`, the `size` its
-  record is stored with, and `read`, which decodes it (`null` when it turned out terminal or gone). The control plane
-  weighs each record by its size in the call's work budget before it decodes it, holds the heaviest so far and nothing
-  for a small one, and keeps of each only what it needs, so a document's open changes are never all decoded at once.
-  The default reads `openChanges` whole and knows no size: it passes `null`, and each record is then weighed as one at
-  the record cap (18 MB at the defaults, 72 MB of work), which holds a large share of the budget for every proposal.
-  Override it to pass the size, and to read one record at a time, as `CoCacheControlStore` does. A store that delegates
-  to another (`ControlStore by inner`) and overrides `openChanges` overrides this too, or the delegate answers it.
-- `endedChanges(document, endedBefore, limit)` and `removeChange(document, id, expected)`: the changes of a document
-  that ended before a time, the oldest first, and the removal of one ended change's record (`CTL-83`). A `putChange` of
-  a terminal change lists it under its `updatedAt` before it writes it, so a write that lost leaves an extra entry,
-  never a missing one; whoever acts on an entry reads its record first. `removeChange` removes the record only while
-  it is `expected` and takes every entry of the change out; with `expected` `null`, only where there is no record, so
-  an entry whose record is gone leaves. The control plane keeps at most `max-count` ended changes a document, on the
-  write that ends one, and reclamation removes those past `min-age` that published no revision still retained.
-- `acquireLease(name, holder, duration)` and `releaseLease(name, holder)`: one instance at a time per task. A release
-  removes the lease only while `holder` still has it, checked and removed in one atomic step (CoCache's
-  `deleteIfMatch`): a lease that expired and another instance took meanwhile stays theirs.
-- `withdrawCandidate(key, window)`: removes a document's candidate only while it is still the one of `window`, in one
-  atomic step (`CTL-26`). A change withdraws its candidate once it is terminal, when another may already have staged
-  its own.
-- `stagedCandidate(key)` and `putCandidate(key, expected, candidate)`: the candidate with the digest a write must name,
-  and a write that lands only over the candidate that was read (`null`: only if there is none), `false` when it
-  changed. A stage reads, checks it still holds the document's staging slot, and writes over what it read; a change
-  preempted meanwhile finds its late write refused, and so never replaces the candidate of the change that took the
-  slot (`CTL-6`). A write whose outcome is unknown is resolved by reading back, never by writing again.
-- `ShadowReportReader.readings(window)`: every instance's report that reads, and in `ShadowReadings.unreadable` the
-  instances whose report is listed and cannot be read (missing, not decoding, or another instance's). The control
-  plane takes those as missing evidence: the window waits for them and closes insufficient at its longest, naming them
-  (`CTL-56`). A store that does not answer is still thrown, for the whole call: the window then waits as for any read
-  that failed. The default reads `reports(window)`, which throws for an unreadable report, so a reader that does not
-  override `readings` keeps such a window open past its longest.
-- `ShadowReportSink.write(ResidentDocuments)` and `ShadowReportReader.residents(instances)`: the documents each
-  instance holds, with the revision of each, as a record of its own beside its status, which stays small (`CTL-74`,
-  `CTL-75`). Store it per instance with a life of `ShadowReportReader.RESIDENT_TTL` (exactly, no jitter: an instance
-  writes it again at half that life). `residents` answers the records of the instances asked that read, and in
-  `ResidentReadings.unreadable` those whose record is missing or does not decode, which `propagation` counts as
-  `unknown`; a record under another instance's key, and a store that does not answer, are thrown. Both are abstract:
-  there is no default, since one that answered "holds nothing" would make `installed == holding` claim that no
-  instance is behind.
-- `ShadowReportReader.statusReadings()`: the recent statuses that read, and in `StatusReadings.unreadable` the
-  instances whose listed status does not decode. The control plane takes those as live and acknowledging no window, so
-  no window passes on them, while it reads every other status and `propagation` answers (`CTL-73`). A status under
-  another instance's key, and a store that does not answer, are thrown for the whole call. The default reads
-  `statuses()`: a reader that does not override it cannot tell a status that does not decode from none, so it fails
-  the read where `statuses()` does, and every window and `propagation` wait until that status reads or expires.
-- `referrers` and `putReferrers`: each referring document with the revision of it that last indexed the reference, so
-  that a revision's late removal never takes back what a later revision indexed again (`CTL-25`).
-- `RevisionIndex.reclaiming`: the records reclamation took out of the index and has not yet seen deleted; a store
-  keeps it with the index, as it keeps the rest of it.
-
-Like the data plane's stores, a read that fails throws: it never answers "absent".
+With `cosec-control`, the control plane keeps revisions, change requests, staging slots, candidates, leases and the
+shadow window's reports in Redis (`CoCacheControlStore`, `CoCacheShadowReports`, which the starter wires). That storage
+is CoSec's own in 8.0, not an extension point: `ControlStore`, its records and the shadow window ports of `spi.shadow`
+are `@InternalCoSecApi`. Applications read the control plane through its HTTP API, `cosec-control-sdk` and change
+events ([Change listeners](#change-listeners)). What a store must guarantee is in the KDoc of `ControlStore`
+(`core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlStore.kt`) and in the `CTL` rules that guard it.
 
 ## Route maps
 

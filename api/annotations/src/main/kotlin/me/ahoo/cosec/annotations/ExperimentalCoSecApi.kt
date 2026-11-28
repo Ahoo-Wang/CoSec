@@ -16,7 +16,7 @@ package me.ahoo.cosec.annotations
 /**
  * Public and in the ABI dump, but not yet stable: it may change or go away in a minor release, which the release notes
  * say, without counting as a breaking change. Using it is a warning until the caller opts in with
- * `@OptIn(ExperimentalCoSecApi::class)` (RFC 0011 D4).
+ * `` (RFC 0011 D4).
  */
 @RequiresOptIn(
     message = "Experimental CoSec API: it may change or go away in a minor release.",

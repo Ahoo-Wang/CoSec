@@ -15,8 +15,6 @@
 
 package me.ahoo.cosec.control.store
 
-import me.ahoo.cosec.annotations.CoSecSpi
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
@@ -33,9 +31,10 @@ import java.time.Instant
 
 /**
  * Where the control plane keeps the documents it publishes and what it needs to publish them safely (RFC 0007 §5.2):
- * the heads the data plane reads, the revision records they are built from, the revision index of each document, the
- * back-reference index of cross-document references, the change requests, each document's staging slot and the candidate it stages. `CoCacheControlStore` in `cosec-cocache` is the Redis
- * implementation; [InMemoryControlStore] is for tests and single-instance development.
+ * the heads, their revision records and index, the back-reference index, the change requests, each document's staging
+ * slot and its candidate. Not an extension point in 8.0 (`@InternalCoSecApi`): the starter wires `CoCacheControlStore`
+ * (Redis), [InMemoryControlStore] is for tests, and the contract is the control API, `cosec-control-sdk` and the change
+ * events, while this store and its records change with the control plane in any release.
  *
  * Every write is conditional on the digest it was based on: nothing is overwritten that the caller has not read. Reads
  * go to the store of record, never to a local copy, since a decision of the control plane must not rest on a copy that
@@ -46,8 +45,7 @@ import java.time.Instant
  */
 // stays: one method per store operation of ControlStore
 @Suppress("TooManyFunctions")
-@CoSecSpi
-@ExperimentalCoSecApi
+@InternalCoSecApi
 interface ControlStore : CandidateStore {
     /** The digest this store computes for [document]: the same for the head and for its revision record. */
     fun digestOf(document: SnapshotDocument): SnapshotDigest
@@ -262,21 +260,23 @@ interface ControlStore : CandidateStore {
 }
 
 /** A stored document and the store's digest of it. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class StoredDocument(val document: SnapshotDocument, val digest: SnapshotDigest) {
     override fun toString(): String = "StoredDocument(revision=${document.revision}, digest=$digest)"
 }
 
 /** A value with the digest it is stored under, for a conditional replace. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class Versioned<T>(val value: T, val digest: SnapshotDigest)
 
 /** The outcome of [ControlStore.putHead]. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 sealed interface HeadWrite {
+    @InternalCoSecApi
     class Written(val digest: SnapshotDigest) : HeadWrite
 
     /** The head was not [expected][ControlStore.putHead]; [current] is what the store holds, `null` for nothing. */
+    @InternalCoSecApi
     class Conflict(val current: SnapshotDigest?) : HeadWrite
 }
 
@@ -289,8 +289,9 @@ sealed interface HeadWrite {
  * complete one incomplete again when [ControlStore.documents] lists an app document with a head it misses. The grant
  * analysis trusts only a complete list whose every entry reads as an app id.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 data class AppList(val entries: Set<String>, val complete: Boolean) {
+    @InternalCoSecApi
     companion object {
         val EMPTY: AppList = AppList(emptySet(), complete = false)
     }
@@ -302,7 +303,7 @@ data class AppList(val entries: Set<String>, val complete: Boolean) {
  * record, so whoever writes the entry of a digest writes the same [parent]; a list of entries is the head's chain when
  * each entry's [parent] is the digest of the one below it ([Revisions.history]).
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 data class RevisionEntry(
     val revision: Long,
     val digest: SnapshotDigest,
@@ -316,7 +317,7 @@ data class RevisionEntry(
 )
 
 /** A revision record written for a publish whose head write has not been confirmed (RFC 0007 §5.4 step 2). */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 data class PendingRecord(val digest: SnapshotDigest, val since: Instant)
 
 /**
@@ -332,7 +333,7 @@ data class PendingRecord(val digest: SnapshotDigest, val since: Instant)
  *   writes them here in the same step, then deletes them, then drops the ones it deleted, so a deletion that fails is
  *   tried again by the next pass, and no listed revision ever misses its record.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 data class RevisionIndex(
     val entries: List<RevisionEntry> = emptyList(),
     val pending: List<PendingRecord> = emptyList(),
@@ -354,23 +355,26 @@ data class RevisionIndex(
 
     val latest: RevisionEntry? get() = entries.lastOrNull()
 
+    @InternalCoSecApi
     companion object {
         val EMPTY: RevisionIndex = RevisionIndex()
     }
 }
 
 /** A change an open-change listing names: as read now, or one whose stored record does not read. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 sealed interface ListedChange {
     val id: ChangeId
     val document: SnapshotKey
 
+    @InternalCoSecApi
     class Readable(val change: ChangeRequest) : ListedChange {
         override val id: ChangeId get() = change.id
         override val document: SnapshotKey get() = change.key
     }
 
     /** Listed, and its record does not read: shown as such, never left out (`CTL-53`). */
+    @InternalCoSecApi
     class Unreadable(override val id: ChangeId, override val document: SnapshotKey) : ListedChange
 }
 
@@ -382,11 +386,11 @@ sealed interface ListedChange {
 typealias OpenChangeVisitor = suspend (id: String, size: Long?, read: suspend () -> ListedChange?) -> Boolean
 
 /** One page of [ControlStore.changes]: its changes, and the cursor of the next page, `null` after the last. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class ChangePage(val changes: List<ListedChange>, val next: String?)
 
 /** A change [ControlStore.endedChanges] lists: its [id], and [endedAt], the `updatedAt` of its terminal write. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class EndedChange(val id: ChangeId, val endedAt: Instant) {
     override fun equals(other: Any?): Boolean = other is EndedChange && other.id == id && other.endedAt == endedAt
 

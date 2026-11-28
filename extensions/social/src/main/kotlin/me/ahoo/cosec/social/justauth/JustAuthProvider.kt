@@ -58,8 +58,12 @@ import java.util.concurrent.atomic.AtomicLong
  * [SocialStateStore] suspends, so it is called outside the blocking section: the callback's state is taken first, and
  * only then does the login block.
  *
+ * Not part of the API (`@InternalCoSecApi`): the starter builds one per configured registration, and nothing outside
+ * CoSec can use it (P-9); an application signs in through `SocialAuthentication`.
+ *
  * @author ahoo wang
  */
+@InternalCoSecApi
 class JustAuthProvider @InternalCoSecApi constructor(
     override val name: String,
     private val authRequest: AuthRequest,

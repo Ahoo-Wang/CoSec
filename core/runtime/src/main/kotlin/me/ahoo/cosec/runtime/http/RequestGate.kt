@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.runtime.http
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
@@ -24,7 +23,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  * Not a `fun interface`, which a lambda could implement without the opt-in.
  */
 @SubclassOptInRequired(InternalCoSecApi::class)
-@ExperimentalCoSecApi
 interface RequestGate {
     suspend fun evaluate(facts: HttpFacts): Outcome
 }

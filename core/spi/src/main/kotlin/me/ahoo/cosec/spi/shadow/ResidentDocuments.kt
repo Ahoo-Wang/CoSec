@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.spi.shadow
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
 
@@ -23,7 +23,7 @@ import java.time.Instant
  * the [InstanceStatus]: written when what it holds changed since the last write that succeeded, and refreshed before
  * its life ends, never on every report interval.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class ResidentDocuments(val instance: String, val at: Instant, val documents: Map<SnapshotKey, Long>) {
     private fun fields(): List<Any?> = listOf(instance, at, documents)
 

@@ -11,11 +11,10 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.login.route
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.http.ProblemType

@@ -59,11 +59,12 @@ export function distTag(version) {
     }
     return 'latest';
   }
-  if (/^alpha\./i.test(prerelease)) return 'alpha';
-  if (/^beta\./i.test(prerelease)) return 'beta';
-  if (/^rc/i.test(prerelease)) return 'rc';
+  // Lowercase only: semver orders pre-release identifiers in ASCII, so `RC1` would sort below `beta.9`.
+  if (/^alpha\.\d+$/.test(prerelease)) return 'alpha';
+  if (/^beta\.\d+$/.test(prerelease)) return 'beta';
+  if (/^rc\.\d+$/.test(prerelease)) return 'rc';
   throw new Error(
-    `${version}: no dist-tag is defined for pre-release "${prerelease}"`,
+    `${version}: no dist-tag is defined for pre-release "${prerelease}" (lowercase alpha.n, beta.n or rc.n)`,
   );
 }
 
@@ -199,11 +200,20 @@ function publish(directory, dryRun) {
       fail(error.message);
     }
     if (published) {
-      console.log(`${name}@${manifest.version} is already on npm`);
-      if (!dryRun) {
+      // Between a release and the next release PR the workspace carries the published version, so every rehearsal
+      // meets this. There is nothing to publish, and npm's dry run cannot stand in: npm 11 refuses one for the version
+      // that is the package's `latest` on the registry, whatever `--tag` says, and lets any other published version
+      // through (8.0.0-rc.2 passed while it was published; 8.0.0, once `latest`, was refused, npm 11.21.2). The checks
+      // of the tarball above have run either way.
+      if (dryRun) {
+        console.log(
+          `${name}@${manifest.version} is already on npm: the rehearsal has nothing to publish`,
+        );
+      } else {
+        console.log(`${name}@${manifest.version} is already on npm`);
         printDistTags(name);
-        continue;
       }
+      continue;
     }
     const args = ['publish', tarball, '--tag', tag, '--access', 'public'];
     if (dryRun) args.push('--dry-run');

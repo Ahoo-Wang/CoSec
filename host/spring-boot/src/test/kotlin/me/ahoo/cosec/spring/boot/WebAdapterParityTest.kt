@@ -252,6 +252,7 @@ class WebAdapterParityTest {
             override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
         },
         RevocationReader.NONE,
+        acceptUnavailableRevocations = false,
     )
 
     private val authenticator = Authenticator { credentials ->

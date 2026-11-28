@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.control.store
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * The store could not answer (R2C-6, `CTL-52`): it was not reached, did not answer in time, refused the command, or a
@@ -22,5 +22,5 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
  * does nothing on that pass. A value the store answered with that does not decode is not this: it is a
  * [me.ahoo.cosec.spi.snapshot.SnapshotFormatException], a 500.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class ControlStoreException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)

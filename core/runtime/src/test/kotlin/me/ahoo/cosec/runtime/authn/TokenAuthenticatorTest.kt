@@ -92,6 +92,7 @@ class TokenAuthenticatorTest {
         Verifier(mapOf("t" to principal)),
         revocations,
         revocationSkew = skew,
+        acceptUnavailableRevocations = false,
     ).authenticate(Credentials(token, null))
 
     private suspend fun failure(block: suspend () -> Unit): IllegalStateException = try {
@@ -108,7 +109,11 @@ class TokenAuthenticatorTest {
     @Test
     fun withoutATokenTheRequestIsAnonymous() = runTest {
         val verifier = Verifier(emptyMap())
-        TokenAuthenticator(verifier, RevocationReader.NONE).authenticate(Credentials(null, "api-key"))
+        TokenAuthenticator(
+            verifier,
+            RevocationReader.NONE,
+            acceptUnavailableRevocations = false,
+        ).authenticate(Credentials(null, "api-key"))
             .assert().isSameAs(AuthnResult.Anonymous)
         verifier.seen.assert().isEmpty()
     }
@@ -205,7 +210,11 @@ class TokenAuthenticatorTest {
      */
     @Test
     fun onlyCoSecsOwnVerifierMayUseBreakGlass() = runTest {
-        val own = TokenAuthenticator(OwnVerifier(mapOf("t" to { token() })), RevocationReader.NONE)
+        val own = TokenAuthenticator(
+            OwnVerifier(mapOf("t" to { token() })),
+            RevocationReader.NONE,
+            acceptUnavailableRevocations = false,
+        )
             .authenticate(Credentials("t", null))
         own.principal().breakGlass.assert().isTrue()
         own.principal().credential!!.method.assert().isEqualTo(Identity.Method.JWT)
@@ -243,7 +252,12 @@ class TokenAuthenticatorTest {
             )
         }
         assertThrownBy<IllegalArgumentException> {
-            TokenAuthenticator(Verifier(emptyMap()), RevocationReader.NONE, method = "jwt")
+            TokenAuthenticator(
+                Verifier(emptyMap()),
+                RevocationReader.NONE,
+                method = "jwt",
+                acceptUnavailableRevocations = false,
+            )
         }
     }
 
@@ -346,6 +360,7 @@ class TokenAuthenticatorTest {
                 Verifier(emptyMap()),
                 RevocationReader.NONE,
                 revocationSkew = java.time.Duration.ofSeconds(-1),
+                acceptUnavailableRevocations = false,
             )
         }
     }
@@ -375,7 +390,12 @@ class TokenAuthenticatorTest {
                 throw RevocationUnavailableException("down")
         }
         val unchecked = UncheckedRevocations()
-        TokenAuthenticator(Verifier(mapOf("t" to { token() })), unavailable, unchecked = unchecked)
+        TokenAuthenticator(
+            Verifier(mapOf("t" to { token() })),
+            unavailable,
+            unchecked = unchecked,
+            acceptUnavailableRevocations = true,
+        )
             .authenticate(Credentials("t", null)).principal().id.assert().isEqualTo(PrincipalId("alice"))
         // L6: counted, so an operator sees the tokens accepted without a check
         unchecked.count.assert().isEqualTo(1)

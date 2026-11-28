@@ -85,8 +85,8 @@ class PublicApiStabilityTest {
                 "spi.snapshot.SnapshotKey\$App" to value,
                 "spi.snapshot.SnapshotKey\$Tenant" to value,
             ) + listOf(
-                // The control store's records are experimental with the store (R9, D3); MovedHead and RevisionRef are
-                // experimental with the ChangeEvent that carries them (R2C-5).
+                // The control store's records are experimental with the store (R9, D3). The values a ChangeEvent carries
+                // are stable plain classes (MovedHead, RevisionRef, Escalation, ChangeOrigin, Confirmation), but this one.
                 "change.ShadowSummary" to "A closed shadow window's counts by outcome, when it closed, its two " +
                     "verdicts and the instances whose evidence was missing (CTL-56): a new outcome is a new key of " +
                     "the counts, not a new field.",
@@ -95,38 +95,88 @@ class PublicApiStabilityTest {
                     "of its own beside it (RFC 0009 §7), not a field.",
             )
         }.associate { (name, reason) -> "me.ahoo.cosec.$name" to reason }
+
+        /**
+         * Public classes whose signature names an internal type, each with why it may until the reason is gone. An entry
+         * that no longer names one fails the test, so the list only shrinks.
+         */
+        val INTERNAL_EXPOSURES: Map<String, String> = run {
+            val bridge = "An internal base class shared by the reactive adapters: an application names the filter, built " +
+                "for it by the starter or the kit, and calls none of the base's members, which are internal."
+            listOf(
+                "webflux.PipelineWebFilter" to bridge,
+                "gateway.PipelineGatewayFilter" to bridge,
+                "jwt.JwtTokenVerifier" to "Extends CoSecTokenVerifier, the internal mark of CoSec's own verifier, whose " +
+                    "tokens alone may carry break-glass (BRK-8): an application constructs the verifier and calls " +
+                    "verify, a member of the stable TokenVerifier, and can mark no verifier of its own as CoSec's.",
+                "document.PolicyDocumentCompiler" to "Implements SnapshotCompiler, the internal port the snapshot " +
+                    "source compiles through; its constructor and members are internal, so an application only names it.",
+            ).associate { (name, reason) -> "me.ahoo.cosec.$name" to reason }
+        }
+
+        /**
+         * Stable classes whose signature names an experimental type, each with why it may. An entry that no longer
+         * names one fails the test.
+         */
+        val EXPERIMENTAL_EXPOSURES: Map<String, String> = run {
+            val store = "Implements SnapshotDocumentStore, experimental in 8.0 until its shape is settled in 8.1 (group " +
+                "C): the class itself is a value of the store's stable kind, and a host that passes it as the store " +
+                "opts in where it names the interface (Pipeline.builder)."
+            listOf(
+                "spi.snapshot.InMemorySnapshotDocumentStore" to store,
+                "cocache.snapshot.RedisSnapshotDocumentStore" to store,
+            ).associate { (name, reason) -> "me.ahoo.cosec.$name" to reason }
+        }
     }
 
+    /**
+     * No public signature, stable or experimental, names an internal type, its supertypes included: an application never
+     * needs the internal opt-in, to call a type or to implement it. An experimental type is one an application uses
+     * today, with an opt-in it may give; an internal type in its signature is one it cannot (how `ControlStore` and
+     * `ChangeEvent` came to expose `ChangeId`, report P-1, P-2). Only [INTERNAL_EXPOSURES] are excused, each with why.
+     */
     @Test
-    fun `no stable public signature names an internal type`() {
-        val stable = PublicSignatures.classes(::published)
-        stable.map { it.name }.assert().contains("me.ahoo.cosec.runtime.Pipeline")
-        val internal =
-            Regex(internalClasses.joinToString("|", """(?<![\w.$])(?:""", """)(?![\w$])""") { Regex.escape(it) })
-        // A class may extend an internal base class: its users name only the class, and the compiler asks them for no
-        // opt-in. Its own public members are what they call, and those are checked.
-        val violations = PublicSignatures.violations(stable, internal).filterNot { " extends " in it }
-        violations.assert()
-            .describedAs("stable signatures naming @InternalCoSecApi types; mark the member, or promote the type")
+    fun `no public signature names an internal type`() {
+        val public = PublicSignatures.classes(::published)
+        public.map { it.name }.assert().contains("me.ahoo.cosec.runtime.Pipeline")
+        val internal = names(internalClasses)
+        val violations = exposures(public, internal, stableOnly = false)
+        violations.filterKeys { it !in INTERNAL_EXPOSURES }.values.flatten().assert()
+            .describedAs("public signatures naming @InternalCoSecApi types; mark the member, or promote the type")
+            .isEmpty()
+        INTERNAL_EXPOSURES.keys.filterNot { it in violations }.assert()
+            .describedAs("INTERNAL_EXPOSURES entries that name no internal type any more: remove them")
             .isEmpty()
     }
 
     /**
-     * What is stable promises its whole signature for 8.x, so it names nothing that may change in a minor release: a
-     * member that needs an experimental type is experimental itself. The compiler does not say so once a file opts in.
+     * What is stable promises its whole signature for 8.x, so it names nothing that may change in a minor release, its
+     * supertypes included: a member that needs an experimental type is experimental itself, and a stable class does not
+     * implement an experimental interface. The compiler does not say so once a file opts in. Only
+     * [EXPERIMENTAL_EXPOSURES] are excused, each with why.
      */
     @Test
     fun `no stable public signature names an experimental type`() {
         val all = PublicSignatures.classes(::published)
         val experimental = all.filter(::isExperimental).map { it.name }.toSet()
         all.map { it.name }.assert().contains("me.ahoo.cosec.testkit.PipelineFixture")
-        val named = Regex(experimental.joinToString("|", """(?<![\w.$])(?:""", """)(?![\w$])""") { Regex.escape(it) })
-        val violations = PublicSignatures.violations(all.filterNot(::isExperimental), named, stableOnly = true)
-            .filterNot { " extends " in it }
-        violations.assert()
+        val violations = exposures(all.filterNot(::isExperimental), names(experimental), stableOnly = true)
+        violations.filterKeys { it !in EXPERIMENTAL_EXPOSURES }.values.flatten().assert()
             .describedAs("stable signatures naming @ExperimentalCoSecApi types; mark the member, or promote the type")
             .isEmpty()
+        EXPERIMENTAL_EXPOSURES.keys.filterNot { it in violations }.assert()
+            .describedAs("EXPERIMENTAL_EXPOSURES entries that name no experimental type any more: remove them")
+            .isEmpty()
     }
+
+    /** A pattern that matches any of [classes] as a whole type name in a signature. */
+    private fun names(classes: Set<String>): Regex =
+        Regex(classes.joinToString("|", """(?<![\w.$])(?:""", """)(?![\w$])""") { Regex.escape(it) })
+
+    /** The signatures of each of [classes] that name a type [type] matches, supertypes included, by class. */
+    private fun exposures(classes: List<JavaClass>, type: Regex, stableOnly: Boolean): Map<String, List<String>> =
+        classes.associate { it.name to PublicSignatures.violations(listOf(it), type, stableOnly) }
+            .filterValues { it.isNotEmpty() }
 
     @Test
     fun `a public data class of a published module is a reviewed value`() {

@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.compat.side
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.spi.identity.Identity
@@ -21,8 +24,8 @@ import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Instant
 
 /**
- * The kinds of credential (`IDN-44`) each version declares and reads: one copy for both sides, since 8.0.0-beta.9, the
- * previous release, has them too.
+ * The kinds of credential (`IDN-44`) each version declares and reads: one copy for both sides, since every release from
+ * 8.0.0-beta.9 on, the previous one among them, has them too.
  */
 internal object Kinds {
     /** CoSec's own token's credential, a person's. */

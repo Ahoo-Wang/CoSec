@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.migrate
 
@@ -24,7 +24,6 @@ import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.redis.RedisBackend
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.model.PolicyId

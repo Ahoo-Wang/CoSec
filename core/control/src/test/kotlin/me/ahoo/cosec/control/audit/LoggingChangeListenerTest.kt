@@ -41,7 +41,7 @@ class LoggingChangeListenerTest {
         Instant.EPOCH,
         ChangeEvent.Kind.PUBLISHED,
         Actor(TenantId.PLATFORM, PrincipalId("plato")),
-        ChangeId(change),
+        ChangeId(change).value,
         SnapshotKey.Platform,
         RevisionRef(1, "d"),
         null,

@@ -11,12 +11,9 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class)
-
 package me.ahoo.cosec.testkit
 
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.jwt.JwtSigning

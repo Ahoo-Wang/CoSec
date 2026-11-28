@@ -19,7 +19,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.reactor.ReactorContext
 import kotlinx.coroutines.reactor.asCoroutineContext
 import kotlinx.coroutines.withContext
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.runtime.http.RequestGate
@@ -47,7 +46,6 @@ import reactor.util.context.Context
  * Every binder refuses a context the pipeline did not make, so a test never runs as anonymous without saying so; a bound
  * context whose request has ended is denied as any other (`PIP-26`).
  */
-@ExperimentalCoSecApi
 object CoSecTestBindings {
     /** CoSec's filter over [gate], built as the starter builds it: the same class, order, problem writer and request end. */
     @JvmStatic

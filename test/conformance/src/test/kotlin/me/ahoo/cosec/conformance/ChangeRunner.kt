@@ -717,7 +717,7 @@ object ChangeRunner : ScenarioRunner {
         private suspend fun audited(argument: JsonNode): String {
             auditing.awaitDelivered()
             val id = argument.text()
-            return "audited " + audit.events.filter { it.change.value == id }.joinToString(",") { it.kind.name }
+            return "audited " + audit.events.filter { it.change == id }.joinToString(",") { it.kind.name }
         }
 
         /**

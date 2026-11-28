@@ -42,46 +42,47 @@ converts 7.x data to the 8.0 format. [Upgrading](../operations/upgrading.md) lis
 
 ## Where 8.0 stands
 
-The architecture above is merged on `main`, and the 7.x code is gone. The current preview is `8.0.0-beta.9`, the
-contract-complete beta: what a reader and a writer of 8.0 do with what they do not know is settled, before the release
-candidate fixes it for 8.x. A reader of the identity header or of a stored record ignores a member it does not know,
-unless the writer names it as one to understand; every credential says whether it is a person's or a workload's, and
-that kind, not the method's name, decides who may approve or use break-glass; the characters a future pattern syntax
-needs are reserved; every process that reads the store reports its release; and each build is tested against the
-previous release ([Upgrading between previews](../operations/upgrading-previews.md#from-8-0-0-beta-8)). It is built on
-Spring Boot 4.2 and CoCache 8.2. Next is the release candidate. What is still open before it is in
+8.0 is released: [`8.0.0`](https://github.com/Ahoo-Wang/CoSec/releases/tag/v8.0.0). The architecture above is the
+code on `main`, and the 7.x code is gone from it. What an application compiles against is settled: what is stable,
+what stays experimental through 8.0, and what is CoSec's own ([Stability levels](../architecture/extending.md#stability-levels)).
+Each build is tested against the previous release, both on one store and one network. It is built on Spring Boot 4.2
+and CoCache 8.2. What comes next, in 8.1 and later, is in
 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md), which is the page that tracks it;
 this one stays at the level of what you can rely on.
 
 ## Release policy
 
-- **The 8.0 pre-releases (alphas and betas; latest `8.0.0-beta.9`) are previews with no compatibility promise.** Public APIs, `cosec.*` properties, the document
-  and wire formats (`schema: 2`, `CoSec-Identity`) and authorization semantics may change in any later alpha or RC,
-  without a migration path between previews. Try it outside production; do not build on it yet.
-- A release candidate waits for the checks above: two review rounds of the whole system (the RC security review, then
-  a review of each module) with their findings fixed, and ABI validation, which freezes the public API at GA (RFC 0011 D4). Only then does semantic versioning apply to 8.0.
+- **Semantic versioning applies from 8.0.0.** A public API, a `cosec.*` property or an authorization semantic is removed
+  or changed only in a major release; ABI validation holds the public API to its dump (RFC 0011 D4). What is marked
+  `@ExperimentalCoSecApi` may change in a minor release, and the release notes say so.
+- **Two adjacent minor versions run mixed.** From 8.0.0, 8.n and 8.n+1 run side by side in one deployment, whichever is
+  upgraded first, and a rollback of one minor version is supported ([What is promised](../operations/upgrading.md#what-is-promised)).
+- **The 8.0 pre-releases were previews.** The alphas, betas and release candidates of 8.0.0 promised nothing to each
+  other or to 8.0.0: a deployment on one moves to 8.0.0 as the release notes say, not under the promise above.
 - **8.0 is not slower than 7.0.** Performance budgets are set from 7.0 measurements: compiled authorization and
   pipeline throughput at least 100 % of 7.0, with no more allocation (RFC 0008 §3.8). They are first measured on the
   end-to-end slice, and they were met before the switch from 7.x merged.
 
-## For 7.x users today
+## For 7.x users
 
-- `7.x` gets security and critical fixes until 6 months after 8.0 GA; `release/6.1.x` gets security fixes only
+- **Upgrade to 8.0.** [Upgrading](../operations/upgrading.md) starts with a checklist for a 7.x deployment, then gives
+  every change by area; `cosec-migrate` converts the 7.x data. The services, the gateway and the clients move together:
+  the order is on that page.
+- `7.x` gets security and critical fixes until 2027-05-26, 6 months after 8.0.0 (released 2026-11-26); `release/6.1.x` gets security fixes only
   ([`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md)).
-- The latest fix is
-  [7.0.2](https://github.com/Ahoo-Wang/CoSec/releases/tag/v7.0.2): the policy decoder now rejects malformed policies
+- The latest 7.x fix is
+  [7.0.2](https://github.com/Ahoo-Wang/CoSec/releases/tag/v7.0.2): the policy decoder rejects malformed policies
   (unknown fields, scalars where a list belongs, duplicate keys) instead of compiling them to something broader.
-  Read its upgrade note first: policies already stored in Redis may fail requests until you republish them.
+  Until you upgrade, run 7.0.2, and read its upgrade note: policies already stored in Redis may fail requests until you
+  republish them.
 - The latest advisory is
   [GHSA-2293-jx8h-56m8](https://github.com/Ahoo-Wang/CoSec/security/advisories/GHSA-2293-jx8h-56m8), fixed in
   7.0.1 and 6.1.2.
-- What to do now: stay on 7.0.2, the latest 7.0.x, in production. To evaluate 8.0, try the latest pre-release (`8.0.0-beta.9`, Java 21) in a test
-  environment with [Upgrading](../operations/upgrading.md); expect changes before the RC.
 
 ## How to follow
 
 - [RFC index](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/rfc): the design, decisions and open questions.
-- [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md): where the work stands, the
-  gates of the release candidate, and what is left for 8.1 (Chinese).
+- [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md): where the work stands and what
+  is planned for 8.1 (Chinese).
 - [Issues](https://github.com/Ahoo-Wang/CoSec/issues) and
   [pull requests](https://github.com/Ahoo-Wang/CoSec/pulls) on GitHub.

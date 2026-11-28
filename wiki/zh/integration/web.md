@@ -518,6 +518,11 @@ cosec:
 
 这些时间检查为网关的时钟留出 `cosec.authentication.revocation.skew`（5 秒）的偏差。最大时长限制了在网络内部重放截获的请求头：吊销只在网关检查。响应带有网关的 `CoSec-Request-Id`。
 
+**Web 服务器的请求头上限。** 超过服务器请求头上限的请求，在 CoSec 读取之前就被服务器拒绝：Reactor Netty 与 Jetty 返回 `431`，Tomcat 返回不带 CoSec 问题体的 `400`。
+在读取身份的宿主上，你没有设置 `server.max-http-request-header-size` 时，starter 推导出这个上限：`cosec.pipeline.identity.max-size` 加上其余各头的 8 KB，默认时为 16 KB（`IDN-43`）。
+生效值是 `ServerProperties.maxHttpRequestHeaderSize`，启动日志报告的就是它；环境里没有这个值，所以
+`environment.getProperty("server.max-http-request-header-size")` 是 null，回退到 Spring Boot 的 8 KB 是错的。请读取绑定后的 `ServerProperties`（[为什么它不是属性](../operations/configuration.md#computed-not-configured)）。
+
 继续处理的请求的[安全上下文](#accessing-the-security-context)包含：
 
 | 成员 | 内容 |
@@ -534,7 +539,7 @@ CoSec 令牌的会话和签发时间（`auth.session`、`auth.iat`）在这里�
 
 转发的身份在这里就是凭证，它的应用就是它声明的应用：配置了应用的服务会拒绝声明其他应用或未声明应用的身份（`400` `invalid-request`）。
 
-**测试这样的服务**时没有网关在前，或在开发中从本地客户端调用它，都需要网关会发送的那个头。`cosec-testkit` 中的 `IdentityHeader`（实验性）用 CoSec 自己的编码器写出它，并在返回前像服务那样把它读回一遍。输入有误时会抛出异常，并指出是哪个成员有误：
+**测试这样的服务**时没有网关在前，或在开发中从本地客户端调用它，都需要网关会发送的那个头。`cosec-testkit` 中的 `IdentityHeader`（稳定：无需 opt-in）用 CoSec 自己的编码器写出它，并在返回前像服务那样把它读回一遍。输入有误时会抛出异常，并指出是哪个成员有误：
 
 ```kotlin
 // 网关为 CoSec 自己的令牌转发的内容：jti、auth.iat、iat、rid 和会话由 CoSec 填写。

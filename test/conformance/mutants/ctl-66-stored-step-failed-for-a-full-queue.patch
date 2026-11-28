@@ -13,5 +13,5 @@ index 77568cf79..56186f170 100644
 -                queue.lose()
 +                throw ChangeAuditException("no room")
                  log.error {
-                     "Change event ${event.kind} of change ${event.change.value} on ${event.document} was not handed to " +
+                     "Change event ${event.kind} of change ${event.change} on ${event.document} was not handed to " +
                          "REQUIRED change listener [${queue.listener.name}]: its queue stayed full for $requiredTimeout " +

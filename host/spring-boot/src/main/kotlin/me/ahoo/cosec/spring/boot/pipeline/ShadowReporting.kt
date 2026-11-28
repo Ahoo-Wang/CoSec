@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.spring.boot.pipeline
 
@@ -21,7 +21,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.shadow.ShadowReporter
 import me.ahoo.cosec.spring.boot.StartupTask

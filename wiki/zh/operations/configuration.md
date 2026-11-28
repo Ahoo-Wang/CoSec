@@ -61,7 +61,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 已校验令牌缓存容纳的量 | 堆的十六分之一，每个条目按其令牌长度 × 5 字节计重：2 GiB 时 128 MiB：按字节不少于原上限的 16,384 个最大测试令牌，可装约 16,298 个今天最大的令牌（多了 `cosec.kind` 声明）。太小时表现为 `cosec.token.cache.evictions`（`IDN-32`） | 同上 |
 | 部署在 Redis 中最多持有多少个进行中的社交登录 | Redis 报告的内存（`maxmemory`，否则 `total_system_memory`，启动时读一次）的六十四分之一，每个登录按 512 字节计（两把键实测 352 字节）；Redis 两者都不报告时为 100,000，并记 WARN | 相同 |
 | 实例持有多少个主体的成员关系 | 堆的六十四分之一，按每个主体 3,072 字节计（十个角色分布在两个空间、五个附加策略时实测 2,293 字节）：2 GiB 时约 10,900 个。多出的一个会重新加载，从不被拒绝 | 相同 |
-| 读取 `CoSec-Identity` 的宿主（`gateway` 模式，或 `cosec.pipeline.caller=forwarded-identity`）上 Web 服务器的请求头上限（Spring Boot 的 `server.max-http-request-header-size`），你没有设置时 | 宿主读取的最大身份头，加上请求其余各头的 8 KB：默认时为 `16KB`；控制 API 的服务端口用同一个上限（`IDN-43`）。你设置的值保留不变，比它小时启动时以 `WARN` 写出 | [`cosec.pipeline.identity.max-size`](#pipeline) |
+| 读取 `CoSec-Identity` 的宿主（`gateway` 模式，或 `cosec.pipeline.caller=forwarded-identity`）上 Web 服务器的请求头上限（Spring Boot 的 `server.max-http-request-header-size`），你没有设置时 | 宿主读取的最大身份头，加上请求其余各头的 8 KB：默认时为 `16KB`，在应用运行时写到 Web 服务器的属性上，无论是什么设置了模式或调用方（包括你自己的环境后处理器），Reactor Netty、Tomcat 和 Jetty 都一样；控制 API 的服务端口用同一个上限（`IDN-43`）。启动日志写出生效的上限及其来源。你设置的值保留不变，写明是你的，比它小时以 `WARN` 写出 | [`cosec.pipeline.identity.max-size`](#pipeline) |
 | 一个 `BEST_EFFORT` 决策监听器最多可以有多少个待处理的事件 | 堆的六十四分之一，由各 `BEST_EFFORT` 监听器均分，按 `cosec.pipeline.trace-level` 下一个事件的大小计数：不追踪时 1 KB，追踪时（`full`、`exhaustive`）8 KB，因为追踪带着每条候选语句。2 GiB、四个监听器时，每个容纳 8,192 个不追踪的事件或 1,024 个追踪的事件，原来不论级别都是每个 1,024 个。太小时表现为 `cosec.listener.dropped`（`OBS-11`） | 同上，以及监听器数 |
 | 一个实例持有多少租户文档和应用文档 | 每个族已持有的，加上堆的四分之一（减去“不存在”条目那一份）剩下的空间，按其常驻文档的典型重量计数；重量是一个从不低于一个文档实际保留量的估计（`DocumentWeight`）：2 GiB 时约 14,500 个部署页面那种形状的租户（估计 34.6 KB，实际保留 29.5 KB）。每轮重新确认时以及每次淘汰之前重新计算，因此只在常驻内容的重量超过份额时才淘汰文档，从不低于 64 个；控制面与管道同在一个进程时各得三分之一，另外三分之一是控制面的文档缓存（DR1-F-5）；一个很重的文档只从空间里拿走它自己的重量。冷加载突发时一个族可能短暂地持有至多其上限的两倍，且绝不超出上限 4,096 个以上。太小时表现为 `cosec.snapshot.evictions` 上升而 `cosec.snapshot.installed` 停在 `cosec.snapshot.bound`（`SNP-24`） | 堆（`Runtime.maxMemory()`） |
 | 一个实例记住多少个没有文档的租户 id 和应用 id | 文档那四分之一中固定的十六分之一，每个 512 字节：2 GiB 时 65,280 个租户 id 和 256 个应用 id。固定不变，所以没有主人的 id 绝不会缩小文档所得（`SNP-7`） | 同上 |
@@ -97,7 +97,13 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 **堆的各份额在一张表里**（`HeapBudget`，`STA-12`）：上面五个上限，加上快照文档的四分之一（各族的上限由它推出，`SNP-24`），合计占堆的 32/64，即一半，给网关的其余部分和 ZGC 留出空间。堆越小得到的越少，而且可见：512 MiB 的堆得到 64 MiB 的吊销表（每表 129,055 条）、32 MiB 的令牌缓存（约 4,070 个大令牌）、8 MiB 的决策监听器队列（四个监听器时每个 2,048 个事件），以及约 3,600 个典型租户的文档。启动日志行写明每一项得到多少，以及它读到的堆：`heap <n> MiB (Runtime.maxMemory())`。没有 `-Xmx` 的容器按 JVM 的默认只得到内存限制的四分之一，所以那里的上限偏小来自堆偏小：给 JVM 明确的 `-Xmx`（[内存](./deployment.md#memory)）。
 
-曾经设置过其中某一项的 key 会让启动失败（作为 CoSec 不读取的 key），并说明它已不再是配置项，以及由什么取代（[未知配置项](#unknown-properties)）。其中包括 8.0 预览版的四个快照上限：`cosec.authorization.snapshot.max-apps`、`max-tenants`、`max-absent-apps` 和 `max-absent-tenants`，现在由文档的那四分之一推出（[从预览版升级](./upgrading-previews.md)）。
+**请求头上限写在 Web 服务器的属性上，不在环境里。** 在读取 `CoSec-Identity` 的宿主上，推导出的上限写到绑定后的
+`ServerProperties`（`maxHttpRequestHeaderSize`）上：每种服务器的定制器都从这里读取，启动日志报告的也是它（`IDN-43`）。它从不进入任何属性源：
+`environment.getProperty("server.max-http-request-header-size")` 仍是 null，从那里读取并回退到 Spring Boot 默认值的代码会报告 8 KB，而服务器实际用的是 16 KB。
+要读取生效值的代码，读绑定后的 `ServerProperties`。它不做成属性，是因为 CoSec 自己的环境后处理器会先于宿主自己的运行：宿主的后处理器较晚才设置
+`cosec.pipeline.mode` 时，上限会停在 8 KB，第一个用 8.0.0-beta.9 的应用就遇到了这种情况。绑定后的属性在环境确定之后才读取。
+
+曾经设置过其中某一项的 key 会让启动失败（作为 CoSec 不读取的 key），并说明它已不再是配置项，以及由什么取代（[未知配置项](#unknown-properties)）。其中包括 8.0 预览版的四个快照上限：`cosec.authorization.snapshot.max-apps`、`max-tenants`、`max-absent-apps` 和 `max-absent-tenants`，现在由文档的那四分之一推出（[预览版升级说明](https://github.com/Ahoo-Wang/CoSec/blob/v8.0.0-rc.2/wiki/zh/operations/upgrading-previews.md)）。
 
 ## 功能开关 {#feature-switches}
 

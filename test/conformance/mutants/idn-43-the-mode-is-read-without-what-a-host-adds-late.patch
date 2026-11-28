@@ -1,0 +1,20 @@
+# Rule: IDN-43
+# Mutant: the limit is derived only when the mode is in the environment as it was before the host's own post-processors added to it: a mode a later one adds last (addLast) is not seen, as an environment post-processor of CoSec's own ordered before them would not see it
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.IdentityHeaderLimitServerTest --tests me.ahoo.cosec.spring.boot.realserver.ControlServicePortSettingsTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
+index fca305f94..2c0b1f9b2 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
+@@ -76,7 +76,10 @@ internal class IdentityHeaderLimit(private val environment: Environment) : BeanP
+ 
+         /** Whether the host reads `CoSec-Identity`: CoSec on, and `gateway` mode or the forwarded identity. */
+         fun readsIdentity(environment: Environment): Boolean {
+-            val binder = Binder.get(environment)
++            val early = (environment as org.springframework.core.env.ConfigurableEnvironment).propertySources.toList()
++            val binder = Binder(
++                org.springframework.boot.context.properties.source.ConfigurationPropertySources.from(early.dropLast(1))
++            )
+             val enabled = binder.bind(ConditionalOnCoSecEnabled.ENABLED_KEY, Boolean::class.javaObjectType)
+                 .orElse(null) != false
+             val mode = binder.bind(PipelineProperties.MODE_KEY, PipelineProperties.Mode::class.java).orElse(null)

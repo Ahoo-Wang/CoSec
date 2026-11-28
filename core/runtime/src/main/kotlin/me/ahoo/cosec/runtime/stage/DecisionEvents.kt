@@ -11,11 +11,8 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class)
-
 package me.ahoo.cosec.runtime.stage
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.runtime.event.DecisionEvent

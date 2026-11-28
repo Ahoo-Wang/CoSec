@@ -13,8 +13,15 @@
 
 package me.ahoo.cosec.control.audit
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+/**
+ * A revision as an event names it: its number and the digest it is addressed by, or a candidate's digest. Stable with
+ * [ChangeEvent] (RFC 0010 C4): a plain class, so a member it gains in 8.x is a new constructor.
+ */
+class RevisionRef(val revision: Long, val digest: String?) {
+    override fun equals(other: Any?): Boolean =
+        this === other || other is RevisionRef && revision == other.revision && digest == other.digest
 
-/** A revision as an event names it: its number and the digest it is addressed by, or a candidate's digest. */
-@ExperimentalCoSecApi
-data class RevisionRef(val revision: Long, val digest: String?)
+    override fun hashCode(): Int = revision.hashCode() * 31 + (digest?.hashCode() ?: 0)
+
+    override fun toString(): String = "RevisionRef(revision=$revision, digest=$digest)"
+}

@@ -11,12 +11,11 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.spring.boot.control
 
 import kotlinx.coroutines.future.await
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.DocumentConfirmation
 import me.ahoo.cosec.runtime.snapshot.DocumentState

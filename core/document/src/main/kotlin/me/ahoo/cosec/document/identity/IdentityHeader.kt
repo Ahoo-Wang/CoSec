@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.document.identity
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.identity.Identity
 
@@ -28,7 +27,6 @@ import me.ahoo.cosec.spi.identity.Identity
  * gateway and the named services alone can reach, which the receiver's statement says (`STA-7`); the receiver still
  * authorizes and records every call as the principal it names.
  */
-@ExperimentalCoSecApi
 object IdentityHeader {
     /** The header's name. */
     const val NAME: String = IdentityCodec.HEADER

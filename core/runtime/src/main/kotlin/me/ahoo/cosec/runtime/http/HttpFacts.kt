@@ -15,7 +15,7 @@
 
 package me.ahoo.cosec.runtime.http
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.condition.HttpNames
 import me.ahoo.cosec.model.scope.HostScope
@@ -24,7 +24,6 @@ import me.ahoo.cosec.model.scope.HostScope
  * Everything an adapter hands to the pipeline (RFC 0006 §5.3.1). Immutable: the adapter reads it from its host request
  * once, and the pipeline never goes back to the host.
  */
-@ExperimentalCoSecApi
 class HttpFacts(
     val method: String,
     /** The path as received: not decoded, without the context path. [PathNormalizer] checks it. */
@@ -56,7 +55,7 @@ class HttpFacts(
 )
 
 /** Request headers. Names are case-insensitive (RFC 9110 §5.1). */
-@ExperimentalCoSecApi
+@CoSecSpi
 interface Headers {
     /** Every value of [name] in received order; empty when absent. */
     fun values(name: String): List<String>
@@ -101,7 +100,7 @@ interface Headers {
 }
 
 /** Request cookies. Names are case-sensitive (RFC 6265 §5.3). */
-@ExperimentalCoSecApi
+@CoSecSpi
 interface Cookies {
     /** Every value of the cookie [name]; empty when absent. */
     fun values(name: String): List<String>

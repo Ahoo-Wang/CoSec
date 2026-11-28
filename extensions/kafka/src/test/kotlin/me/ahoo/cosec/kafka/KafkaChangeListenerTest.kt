@@ -24,7 +24,6 @@ import me.ahoo.cosec.control.audit.ChangeAuditException
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.audit.RevisionRef
-import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.Confirmation
 import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.ShadowSummary
@@ -53,7 +52,7 @@ class KafkaChangeListenerTest {
         Instant.parse("2026-11-01T00:00:00Z"),
         ChangeEvent.Kind.PUBLISHING,
         Actor(TenantId("acme"), PrincipalId("alice")),
-        ChangeId("c1"),
+        "c1",
         SnapshotKey.Tenant("acme"),
         RevisionRef(3, "d"),
         RevisionRef(4, "e"),

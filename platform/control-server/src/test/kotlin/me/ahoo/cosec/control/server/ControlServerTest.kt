@@ -36,7 +36,6 @@ import java.net.http.HttpResponse
  * will not start without (`STA-9`). A call with an identity header, the 200 and the 403, is `aot-smoke.sh`'s: it runs
  * on the image with a platform document published through `cosec-migrate`, which the in-memory backend cannot do.
  */
-@OptIn(me.ahoo.cosec.annotations.ExperimentalCoSecApi::class)
 class ControlServerTest {
     private val http = HttpClient.newHttpClient()
     private var context: ConfigurableApplicationContext? = null

@@ -185,7 +185,12 @@ class MetricsListenerTest {
 
             override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? = null
         }
-        val authenticator = TokenAuthenticator(verifier, unreadable, unchecked = unchecked)
+        val authenticator = TokenAuthenticator(
+            verifier,
+            unreadable,
+            unchecked = unchecked,
+            acceptUnavailableRevocations = true,
+        )
         repeat(3) { authenticator.authenticate(Credentials("t", null)) }
 
         registry.get(CoSecMeters.UNCHECKED_REVOCATIONS).functionCounter().count().assert().isEqualTo(3.0)

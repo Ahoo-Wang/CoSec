@@ -98,7 +98,7 @@ class LostHeadsTest {
         val event = withTimeout(EVENT_DELIVERED.toMillis()) { told.await() }
 
         event.kind.assert().isEqualTo(ChangeEvent.Kind.HEAD_LOST)
-        event.change.value.assert().isEqualTo("lost")
+        event.change.assert().isEqualTo("lost")
         event.document.assert().isEqualTo(ACME)
         event.base!!.revision.assert().isEqualTo(2L)
         event.candidate!!.revision.assert().isEqualTo(3L)
@@ -126,7 +126,7 @@ class LostHeadsTest {
             val event = withTimeout(EVENT_DELIVERED.toMillis()) { told.await() }
 
             event.kind.assert().isEqualTo(ChangeEvent.Kind.HEAD_LOST)
-            event.change.value.assert().isEqualTo("lost")
+            event.change.assert().isEqualTo("lost")
             event.candidate!!.digest.assert().isEqualTo(lost.digest.toString())
             event.base!!.revision.assert().isEqualTo(3L)
             store.index(ACME)!!.value.entries.none { it.digest == lost.digest }.assert().isTrue()

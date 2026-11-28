@@ -70,7 +70,6 @@ const sidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Deployment', link: '/operations/deployment' },
       { text: 'Storage and Caching', link: '/operations/storage' },
       { text: 'Upgrading', link: '/operations/upgrading' },
-      { text: 'Upgrading Between 8.0 Previews', link: '/operations/upgrading-previews' },
       { text: 'Observability', link: '/operations/observability' },
       { text: 'Troubleshooting', link: '/operations/troubleshooting' },
     ],

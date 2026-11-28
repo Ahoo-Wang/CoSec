@@ -83,6 +83,16 @@ class TypeScriptWorkspaceTest {
             .assert().isEqualTo(json(Projects.root.resolve("wiki/package.json"))["packageManager"].asString())
     }
 
+    /**
+     * The build's version is what npm publishes too, and semver orders pre-release identifiers in ASCII: an uppercase
+     * `8.0.0-RC1` sorts below `8.0.0-beta.9`, so every client on the beta would see the candidate as a downgrade. A
+     * pre-release is spelled `alpha.n`, `beta.n` or `rc.n`, in lowercase (CONTRIBUTING.md §7).
+     */
+    @Test
+    fun `the version of the build is a release or a lowercase alpha, beta or rc pre-release`() {
+        version().assert().matches("""\d+\.\d+\.\d+(-(alpha|beta|rc)\.\d+)?""")
+    }
+
     @Test
     fun `every package is a published cosec package, in its own directory, at the version of the build`() {
         for (directory in packages()) {
@@ -131,6 +141,64 @@ class TypeScriptWorkspaceTest {
             uses.filterNot { Regex("""[\w./-]+@[0-9a-f]{40}""").matches(it) }
                 .assert().describedAs("actions of the $name job not pinned by commit").isEmpty()
             job.contains("secrets.").assert().describedAs("no secrets in the $name job").isFalse()
+        }
+    }
+
+    /**
+     * The packages accept fetcher 6 and fetcher 8 (`catalogs.peers`): an application on CoSec 8 stays on fetcher 6.1 or
+     * moves to 8. What is accepted is tested: both CI jobs run their steps on the lockfile's fetcher 6 and once more on
+     * fetcher 8, which `scripts/fetcher-line.mjs` resolves from the peer range, so a new fetcher 8 needs no edit here.
+     */
+    @Test
+    fun `the peers accept fetcher 6 and 8, and CI runs the same steps on each`() {
+        val yaml = workspace.resolve("pnpm-workspace.yaml").readText()
+        val peers = yaml.substringAfter("\n  peers:\n").substringBefore("\n\n")
+        for (name in listOf("@ahoo-wang/fetcher", "@ahoo-wang/fetcher-eventbus", "@ahoo-wang/fetcher-storage")) {
+            peers.lines().single { "'$name':" in it }.substringAfter(": ").trim()
+                .assert().describedAs("the peer range of $name").isEqualTo("^6.1.1 || ^8.0.0-rc.1")
+        }
+        val ci = Projects.root.resolve(".github/workflows/ci.yml").readText()
+        val install = """run: node scripts/fetcher-line.mjs "${'$'}{{ matrix.fetcher }}" && pnpm install --no-frozen-lockfile"""
+        for (name in listOf("typescript", "typescript-host")) {
+            val job = ci.substringAfter("\n  $name:\n").substringBefore("\n  # ")
+            Regex("""fetcher: (\[[^]]*'8'[^]]*]|'8')""").containsMatchIn(job)
+                .assert().describedAs("$name has a fetcher 8 leg").isTrue()
+            job.contains(install)
+                .assert().describedAs("$name installs the leg's fetcher").isTrue()
+            job.contains("run: pnpm -r ls --depth 0 @ahoo-wang/fetcher")
+                .assert().describedAs("$name shows the fetcher it installed").isTrue()
+        }
+    }
+
+    /**
+     * `minimumReleaseAge` has one exemption, and it is this narrow: the three fetcher packages, at the exact versions
+     * `scripts/fetcher-line.mjs` picks, on the fetcher 8 legs only, written into the leg's own checkout with the age
+     * kept strict, so a younger dependency they bring still fails the install. They are the maintainer's own packages,
+     * published by fetcher's release workflow from reviewed commits with provenance, and the legs hold no secret and no
+     * write permission: the attack the guard is for, a poisoned third-party package installed at once, hardly applies,
+     * while the day would make CoSec wait after each fetcher release before testing on it. The committed workspace sets
+     * no exemption, and nothing else runs the script.
+     */
+    @Test
+    fun `only the fetcher 8 legs exempt the three fetcher packages from the release age`() {
+        val yaml = Projects.root.resolve("typescript/pnpm-workspace.yaml").readText()
+        yaml.lines().assert().contains("minimumReleaseAge: 1440")
+        ("minimumReleaseAgeExclude" in yaml).assert().describedAs("the committed workspace exempts nothing").isFalse()
+        val script = Projects.root.resolve("typescript/scripts/fetcher-line.mjs").readText()
+        Regex("""export const FETCHER = \[([^]]*)]""").find(script)!!.groupValues[1]
+            .split(',').map { it.trim().trim('\'') }.filter { it.isNotEmpty() }
+            .assert().describedAs("the packages the script exempts")
+            .containsExactly("@ahoo-wang/fetcher", "@ahoo-wang/fetcher-eventbus", "@ahoo-wang/fetcher-storage")
+        val workflows = Projects.root.resolve(".github/workflows")
+        Files.list(workflows).use { files ->
+            files.toList().filter { "fetcher-line.mjs" in it.readText() }.map { it.fileName.toString() }
+        }.assert().describedAs("the workflows that run the script").containsExactly("ci.yml")
+        val ci = workflows.resolve("ci.yml").readText()
+        val runs = ci.lines().withIndex().filter { "node scripts/fetcher-line.mjs" in it.value }
+        runs.size.assert().describedAs("the steps that run the script").isEqualTo(2)
+        for ((index, _) in runs) {
+            ci.lines()[index - 1].trim().assert().describedAs("the condition of the step that exempts")
+                .isEqualTo("if: matrix.fetcher == '8'")
         }
     }
 

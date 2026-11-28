@@ -11,8 +11,10 @@ the data migration, what 8.0 decides differently, responses, authentication, sto
 observability. This page is the single home of migration steps. Release notes for every version are on
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases).
 
-A deployment that already runs an 8.0 preview (an `8.0.0-alpha` or `8.0.0-beta`) reads
-[Upgrading between 8.0 previews](./upgrading-previews.md) instead of this page.
+A deployment that runs an 8.0 pre-release (an alpha, beta or release candidate of 8.0.0) is not covered by this page:
+the pre-releases promised nothing to each other. Their upgrade notes, newest first, are kept as they stood at the last
+candidate ([Upgrading between 8.0 previews, as of 8.0.0-rc.2](https://github.com/Ahoo-Wang/CoSec/blob/v8.0.0-rc.2/wiki/operations/upgrading-previews.md)); from `8.0.0-rc.2` (or `8.0.0-rc.1`) to `8.0.0`, read the
+[release notes of 8.0.0](https://github.com/Ahoo-Wang/CoSec/releases/tag/v8.0.0).
 
 ## Upgrading a running deployment {#upgrading-a-running-deployment}
 
@@ -23,17 +25,16 @@ from 7.x is the next section.
 
 ### What is promised {#what-is-promised}
 
-From 8.0.0 GA, two adjacent minor versions of 8.x (8.n and 8.n+1) run mixed, whichever you upgrade first:
+From 8.0.0 on, two adjacent minor versions of 8.x (8.n and 8.n+1) run mixed, whichever you upgrade first:
 
 - a request that both versions, each run alone, admit is not refused while they run mixed;
 - a request that both refuse is not permitted while they run mixed;
 - a rollback of one minor version is supported, with the exceptions under [What is not supported](#what-is-not-supported).
 
 Two versions further apart (8.n with 8.n+2) are not promised: finish one upgrade before you start the next. The 8.0
-previews (the alphas, betas and release candidates of 8.0.0) promise nothing to each other: each preview's order of upgrade is in
-[Upgrading between 8.0 previews](./upgrading-previews.md). A preview before 8.0.0-beta.9 refuses every identity
-member it does not know with `400` `invalid-request`, so a service of such a preview behind a newer gateway refuses
-what that gateway adds.
+pre-releases (the alphas, betas and release candidates of 8.0.0) promise nothing to each other or to 8.0.0. A
+pre-release before 8.0.0-beta.9 refuses every identity member it does not know with `400` `invalid-request`, so a
+service of such a pre-release behind a newer gateway refuses what that gateway adds.
 
 ### How the promise is kept {#how-the-promise-is-kept}
 
@@ -228,7 +229,7 @@ example, is a usage error before anything is read or written, never ignored.
 | `partition plan` | Converts twice, with `--partition platform` and `by-owner`, and writes one plan per tenant to submit through the control plane. Writes nothing to Redis. |
 | `repair-references` | Adds to the back-reference index what every document's head refers to and the index misses, removes what no head has, and completes the app list. |
 | `verify-chain` | Walks each document's revision chain and names a revision whose record is missing, the trace a write lost in a Redis failover leaves, and a revision index that does not follow the head's chain. Writes nothing. |
-| `check-patterns` | Names every pattern of the stored heads that the next preview does not compile (`DOC-15`), with where it is and how to write it. Writes nothing. |
+| `check-patterns` | Names every pattern of the stored heads that this version does not compile, or reads with another meaning (`DOC-15`), in a store 8.0.0-beta.8 or an earlier pre-release wrote, with where it is and how to write it. Writes nothing. |
 
 #### Convert
 
@@ -513,8 +514,8 @@ cosec-migrate check-patterns --to-redis redis://localhost:6379 [--cluster] [--ke
   [--document platform|app:<id>|tenant:<id>] [--prefix tenant:acme]
 ```
 
-Before upgrading from 8.0.0-beta.8, run it with the new release's `cosec-migrate` against the store of the version
-you run. It reads the head of every document the store lists, or of the one `--document` names, or of those whose key
+Only for a store that 8.0.0-beta.8 or an earlier pre-release wrote: before moving it to this version, run it with this
+version's `cosec-migrate` against the store of the version you run. It reads the head of every document the store lists, or of the one `--document` names, or of those whose key
 starts with `--prefix`, as that version stored it (only each document's current revision: the history is not read,
 and a rollback to an older revision publishes it again, compiled then), then the operations of each of that document's
 open changes, which are also the candidates of the staged and shadowing ones, and compiles each action and resource of
@@ -1329,14 +1330,19 @@ longer can: a second bean of one of these types fails startup (for `ControlHttp`
 `DefaultControlPlane`, `ControlHttp`, `ControlHttpRequest` and `ControlHttpResponse` are `@InternalCoSecApi`, and
 so are `ControlPlane` and the `Operator` every one of its methods takes: the control plane is not a library an application
 calls, and an application writes through its HTTP API
-([Roles from an external source](../scenarios/external-source.md)). `ControlStore`, `ChangeOptions`, the change listeners,
-`Revisions`, `ControlSnapshot` and the maintenance beans stay replaceable.
+([Roles from an external source](../scenarios/external-source.md)). Of the control plane, an application implements
+only change listeners ([Change listeners](../architecture/extending.md#change-listeners)): its storage (`ControlStore`
+and its records, the shadow window ports), `ChangeOptions` and `Revisions` are `@InternalCoSecApi` too
+([Control store](../architecture/extending.md#control-store)).
 
 #### Policy test suites
 
 The 8.0 test kit is the `cosec-testkit` module. `PolicyTestKit.load(dir)` reads documents laid out as
 `cosec-migrate convert` writes them, and `tests(dir)` returns a JUnit 5 dynamic test for each scenario file, for a
-`@TestFactory` ([Testing policies](../policies/testing.md)). A 7.x suite's `policies`, `appPermissions` and role grants
+`@TestFactory` ([Testing policies](../policies/testing.md)). `PolicyTestKit` is `@ExperimentalCoSecApi` in 8.0, so a
+suite opts in with `@file:OptIn(ExperimentalCoSecApi::class)`; the kit's request contexts for testing application code
+(`PermittedRequest`, `IdentityHeader`, `CoSecTestBindings`) are stable and need none
+([Testing your application](../policies/testing.md#testing-your-application)). A 7.x suite's `policies`, `appPermissions` and role grants
 become the converted documents; each of its `cases` becomes one scenario file:
 
 | 7.x case | 8.0 scenario |

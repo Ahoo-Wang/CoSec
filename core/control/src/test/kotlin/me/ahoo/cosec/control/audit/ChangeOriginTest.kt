@@ -67,7 +67,7 @@ class ChangeOriginTest {
         ChangeRequestCodec.decode(ChangeRequestCodec.encode(ChangeSamples.minimal)).origin.assert().isNull()
 
         val event = ChangeEvent(
-            "e", java.time.Instant.EPOCH, ChangeEvent.Kind.PUBLISHED, stored.author, stored.id, stored.key,
+            "e", java.time.Instant.EPOCH, ChangeEvent.Kind.PUBLISHED, stored.author, stored.id.value, stored.key,
             null, null, origin = origin,
         )
         val json = CoSecJson.mapper.readTree(ChangeEventJson.write(event)).get("origin")

@@ -97,7 +97,7 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   only around the whole prefix.
 - **`CoSec does not read ... cosec.authorization.snapshot.key-prefix`** (or `cosec.authorization.cache.key-prefix`,
   `cosec.api-key.key-prefix`): one `cosec.key-prefix` replaced them (SNP-9), and they fail startup as unknown keys. Which
-  families move, from where to where, is at https://cosec.ahoo.me/operations/upgrading-previews#from-8-0-0-alpha-2. Have the token
+  families move, from where to where, is at https://github.com/Ahoo-Wang/CoSec/blob/v8.0.0-rc.2/wiki/operations/upgrading-previews.md (section "From 8.0.0-alpha.2"). Have the token
   revocations and API keys copied to the new keys first (`COPY`, or `RENAME`, which keeps the expiry): a revocation
   left under the old prefix is no longer read, so the token it revoked would be accepted again. Then set
   `cosec.key-prefix` to the snapshot documents' prefix and remove the old properties; never suggest only renaming them.
@@ -521,12 +521,11 @@ Capture the installed versions (`npm ls @ahoo-wang/cosec-fetcher @ahoo-wang/cose
 the server's CoSec version, the error's `name` with its `problem` and `status` (never its `exchange`, which holds the
 `Authorization` header), and the order of the calls on the wire (`<path> <status>`). Wiring: `$cosec-client`.
 
-- **The install warns `deprecated ... Placeholder. Install the beta` and the import does not resolve**: installed
-  without a tag before 8.0 GA, which gets `latest`, a `0.0.0` placeholder with no code. Install the server's line:
-  `@beta`, `@rc`, or the exact version.
-- **The client is `8.0.0-beta.n` and the server a release candidate (or the other way)**: a tag stays on its line,
-  so `@beta` still installs the last beta once RCs are out. Install `@rc` or the server's exact version; the client is
-  tested against the `contract/` of its own version.
+- **The install warns `deprecated ... Placeholder` and the import does not resolve**: the install asked for `0.0.0`
+  (a pinned `0.0.0`, or an old lock file), a placeholder with no code. Install a version of 8.x, the server's.
+- **The client is a pre-release (`@beta`, `@rc`) and the server a release (or the other way)**: those tags stay on the
+  last pre-releases of 8.0. Install the server's exact version; the client is tested against the `contract/` of its own
+  version.
 - **The old `@ahoo-wang/fetcher-cosec` (or `@ahoo-wang/fetcher-react`'s security hooks) against an 8.0 server**: it
   speaks CoSec 7's contract. What shows: `403 scope-rejected` on every request of a host with an app though the client
   sets `appId` (8.0 reads no app header; the app is the token's `aud`); users signed out when the refresh route
@@ -602,8 +601,14 @@ or a request that bypassed the gateway:
   surrogate (IDN-10), a blank `sub`, `tenant` or `rid` (IDN-38), over
   `cosec.pipeline.identity.max-size` (8KB), sent more than once, or a scope that does not resolve here.
 - 431, or a 400 without CoSec's problem body: the web server refused the headers before CoSec read them
-  (`server.max-http-request-header-size`). On a host that reads the identity it is derived, 16 KB at the defaults,
-  unless set; a value set below that is named at startup at WARN with both numbers (IDN-43).
+  (`server.max-http-request-header-size`; Reactor Netty and Jetty answer 431, Tomcat 400). On a host that reads the
+  identity it is derived, 16 KB at the defaults, unless set, however the mode is set. The startup line names the limit
+  in effect: `derived from`, the headers really are over it; `below ... as the operator set it`, raise it or unset it;
+  `not derived`, something other than CoSec set or created `ServerProperties` first: set the property explicitly
+  (IDN-43). In 8.0.0-beta.9 a host whose own environment post-processor set the mode late kept 8 KB while the line
+  said `derived`. A check that reads `server.max-http-request-header-size` from the `Environment` finds null when the
+  limit is derived, and one that falls back to Spring Boot's default reports 8192 while the server applies 16 KB: read
+  the bound `ServerProperties.maxHttpRequestHeaderSize`, or the startup line.
 - 503 `unavailable`: a member the header's `crit` names that the service does not know (IDN-41): a later CoSec
   version wrote it and this service is older; counted as `cosec.identity.refused{problem=unavailable}`, never a store
   outage. Upgrade the service.

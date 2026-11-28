@@ -30,7 +30,9 @@ import kotlin.reflect.jvm.kotlinFunction
  * UA-1, UA-2: what decides whether a revoked token, or a role removed from a user, still counts is never a default
  * argument. A reader of revocations ([RevocationReader], [TokenRevocation]) or a refresh's membership lookup
  * ([MembershipRefresh]) left out would mean "nothing is revoked" or "keep the old roles" without the caller saying so;
- * `RevocationReader.NONE` and `MembershipRefresh.CLAIMS` stay available, written where they are chosen.
+ * `RevocationReader.NONE` and `MembershipRefresh.CLAIMS` stay available, written where they are chosen. So is whether a
+ * token is accepted while its revocations cannot be read (`acceptUnavailableRevocations`, PIP-7): the one exception to
+ * failing closed is stated by whoever builds the authenticator, and a stable default could never become fail-closed.
  */
 class SafeDefaultsTest {
     private val api = KotlinApi()
@@ -51,6 +53,8 @@ class SafeDefaultsTest {
     fun `the scan reads the token API`() {
         TokenAuthenticator::class.primaryConstructor!!.parameters.single { it.name == "revocations" }
             .isOptional.assert().isFalse()
+        TokenAuthenticator::class.primaryConstructor!!.parameters.single { it.name == "acceptUnavailableRevocations" }
+            .isOptional.assert().isFalse()
         PermittedRequest::withToken.parameters.single { it.name == "revocations" }.isOptional.assert().isFalse()
         val factory = Class.forName("me.ahoo.cosec.login.token.RefreshTokenAuthenticationKt").declaredMethods
             .single { it.name == "RefreshTokenAuthentication" && !it.isSynthetic }.kotlinFunction!!
@@ -66,7 +70,9 @@ class SafeDefaultsTest {
             else -> emptyList()
         }
         return callables.filter { api.exposed(it, opted) }.flatMap { callable ->
-            callable.parameters.filter { it.isOptional && (it.type.classifier as? KClass<*>) in DECISIVE }
+            callable.parameters.filter {
+                it.isOptional && ((it.type.classifier as? KClass<*>) in DECISIVE || it.name in DECISIVE_NAMES)
+            }
                 .map { "$name.${callable.name}(${it.name})" }
         }
     }
@@ -77,6 +83,9 @@ class SafeDefaultsTest {
 
     private companion object {
         val DECISIVE: Set<KClass<*>> = setOf(RevocationReader::class, TokenRevocation::class, MembershipRefresh::class)
+
+        /** Choices that fail open, found by name: a `Boolean` says nothing by its type. */
+        val DECISIVE_NAMES: Set<String> = setOf("acceptUnavailableRevocations")
 
         const val CLASS = 1
         const val FILE = 2

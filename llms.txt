@@ -34,7 +34,6 @@ Key facts: any matching DENY overrides every ALLOW; a request nothing allows is 
 - [Configuration](https://cosec.ahoo.me/operations/configuration): every `cosec.*` property with its default
 - [Storage and Caching](https://cosec.ahoo.me/operations/storage): snapshot documents in Redis, the `noeviction` requirement, publishing (control plane, `cosec-migrate`), revisions and rollback, behavior when Redis is unavailable
 - [Upgrading](https://cosec.ahoo.me/operations/upgrading): breaking changes and migration steps per version, including 7.x to 8.0 with `cosec-migrate`
-- [Upgrading between 8.0 previews](https://cosec.ahoo.me/operations/upgrading-previews): what changed from each 8.0 alpha and beta to the next, for a deployment that already runs one
 - [Observability](https://cosec.ahoo.me/operations/observability): decision listeners, audit events, OpenTelemetry spans, Micrometer metrics, Kafka, logs
 - [Troubleshooting](https://cosec.ahoo.me/operations/troubleshooting): problem types, diagnosing 400/401/403/429/503, documents that do not compile, snapshot lag, startup failures, rate limits
 

@@ -80,7 +80,7 @@ class IssuerSkewTest {
 
     @Test
     fun `the authenticator names a token not valid yet, and a signature that fails stays invalid`() = runBlocking<Unit> {
-        val authenticator = TokenAuthenticator(verifier, RevocationReader.NONE)
+        val authenticator = TokenAuthenticator(verifier, RevocationReader.NONE, acceptUnavailableRevocations = false)
         val ahead = token { withIssuedAt(Instant.now().plusSeconds(9)) }
         val early = authenticator.authenticate(Credentials(ahead, null))
         (early as AuthnResult.Rejected).reason.assert().isEqualTo(AuthnResult.RejectReason.TOKEN_NOT_YET_VALID)
@@ -102,7 +102,7 @@ class IssuerSkewTest {
 
             override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant = revokedAt
         }
-        val authenticator = TokenAuthenticator(verifier, revocations)
+        val authenticator = TokenAuthenticator(verifier, revocations, acceptUnavailableRevocations = false)
         val within = authenticator.authenticate(Credentials(token { withIssuedAt(revokedAt.plusSeconds(3)) }, null))
         (within as AuthnResult.Rejected).reason.assert().isEqualTo(AuthnResult.RejectReason.TOKEN_REVOKED)
         val beyond = authenticator.authenticate(Credentials(token { withIssuedAt(revokedAt.plusSeconds(9)) }, null))

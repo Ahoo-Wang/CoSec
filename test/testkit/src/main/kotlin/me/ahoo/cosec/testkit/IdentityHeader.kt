@@ -54,7 +54,6 @@ import java.time.Instant
  * Every form reads what it wrote back as a service does before returning it, so it never hands out a header a
  * service would refuse as malformed.
  */
-@ExperimentalCoSecApi
 object IdentityHeader {
     /** The header's name, `CoSec-Identity`. */
     const val NAME: String = IdentityCodec.HEADER
@@ -232,7 +231,13 @@ object IdentityHeader {
             // A routed request: a gateway forwards the identity only to a route that receives it (RC1-49).
             requestAttributes = mapOf(IdentityIssuer.FORWARD_ATTRIBUTE to "true"),
         )
-        val outcome = PermittingHost.pipeline(TokenAuthenticator(verifier, revocations)) {
+        val outcome = PermittingHost.pipeline(
+            TokenAuthenticator(
+                verifier,
+                revocations,
+                acceptUnavailableRevocations = false,
+            )
+        ) {
             forwardIdentity { this.claims = claims }
         }.use { runBlocking { it.evaluate(facts) } }
         check(outcome.status != INTERNAL_ERROR) {

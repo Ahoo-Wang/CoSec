@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.cocache
 
@@ -23,7 +23,6 @@ import me.ahoo.cocache.core.ForeignFormatException
 import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.memory.InMemoryBackend
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.control.AppListCodec
 import me.ahoo.cosec.cocache.control.ChangeRequestCacheCodec

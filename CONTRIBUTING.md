@@ -28,7 +28,7 @@ CoSec uses trunk-based development, with maintenance branches for earlier major 
 | Branch | Line | Takes |
 |---|---|---|
 | `main` | The next major version (8.0) | All changes; always releasable |
-| `7.x` | 7.x, cut at `v7.0.0` | Security and critical fixes only, until 6 months after 8.0.0 GA |
+| `7.x` | 7.x, cut at `v7.0.0` | Security and critical fixes only, until 2027-05-26 (6 months after 8.0.0, released 2026-11-26) |
 | `release/6.1.x` | 6.1.x | Security fixes only |
 
 - Work happens on short-lived topic branches named after the change type, e.g. `feat/tenant-scoped-cache`
@@ -61,11 +61,10 @@ Mark breaking changes with `!` after the type (`feat!: ...`) or a `BREAKING CHAN
 description. They are listed under 💥 Breaking Changes and require a major version.
 
 **ABI dumps and `!`.** Every published library module keeps its public ABI in `api/<project>.api` (see section 4).
-From 8.0 GA on, a pull request that removes or changes a line of a dump is a breaking change and its title carries `!`.
+From 8.0.0 on, a pull request that removes or changes a line of a dump is a breaking change and its title carries `!`.
 The one exception is a line of an `@ExperimentalCoSecApi` declaration: removing or changing it is not a breaking change
 and needs no `!`; the description names the experimental declarations it changes. A dump change that only adds lines
-needs no `!` either. Before GA, through the release candidates, the dumps already show every change, and the rule does
-not apply yet. Nothing checks the title against the dumps: the author and the reviewer do.
+needs no `!` either. Nothing checks the title against the dumps: the author and the reviewer do.
 
 ## 4. Coding conventions
 
@@ -135,7 +134,7 @@ line (`main` for 8.0, `7.x` for 7.x patches), then publish a GitHub release tagg
 On `main`, the same pull request sets `newTag` in [k8s/base/kustomization.yaml](k8s/base/kustomization.yaml) and in
 [k8s/control/kustomization.yaml](k8s/control/kustomization.yaml) to the new version: the gateway and the control images are
 tagged with release versions, never with a `-SNAPSHOT` one (`ControlManifestsTest` holds the two tags equal).
-Release candidates (`vX.Y.Z-RCn`) are released the same way, and only with the maintainer's confirmation. Publishing the release triggers the
+Release candidates (`vX.Y.Z-rc.n`) are released the same way, and only with the maintainer's confirmation. A pre-release is spelled in lowercase, `-alpha.n`, `-beta.n` or `-rc.n`: semantic versioning orders pre-release identifiers in ASCII, so an uppercase `-RC1` would sort below `-beta.9` for npm, whose packages carry the same version (`TypeScriptWorkspaceTest` holds the spelling). Publishing the release triggers the
 [Packages Deploy](.github/workflows/package-deploy.yml) workflow (Maven Central and GitHub Packages).
 Publishing the release also publishes the TypeScript packages (`@ahoo-wang/cosec-fetcher`, `@ahoo-wang/cosec-react`) to npm under the same version: the `npm-publish` job of that workflow fails before it builds anything unless the tag, `gradle.properties` and both `package.json` files agree, and a pre-release goes to the `alpha`, `beta` or `rc` dist-tag, never `latest` ([`typescript/AGENTS.md`](typescript/AGENTS.md#releasing)).
 Release notes are generated from pull request labels ([.github/release.yml](.github/release.yml)).

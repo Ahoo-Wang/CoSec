@@ -92,7 +92,14 @@ class SwitchBehindGatewayTest {
     private val tokens = TokenCompositeAuthentication.of(listOf(switching), converter, families)
 
     private val gateway = Pipeline
-        .builder(TokenAuthenticator(verifier, RevocationReader.NONE), SuspendingSnapshotSource(EMPTY))
+        .builder(
+            TokenAuthenticator(
+                verifier,
+                RevocationReader.NONE,
+                acceptUnavailableRevocations = false,
+            ),
+            SuspendingSnapshotSource(EMPTY)
+        )
         .engine(PERMITTING)
         .identity(IdentityIssuer())
         .build()

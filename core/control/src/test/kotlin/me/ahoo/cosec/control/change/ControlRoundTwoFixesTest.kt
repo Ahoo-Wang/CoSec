@@ -773,7 +773,7 @@ class ControlRoundTwoFixesTest {
         back.errors.map { it.message }.assert().contains(
             "a break-glass binding is created only by a break-glass request"
         )
-        audit.events.filter { it.change == back.id }.map { it.kind }.assert().contains(
+        audit.events.filter { it.change == back.id.value }.map { it.kind }.assert().contains(
             ChangeEvent.Kind.BREAK_GLASS_REQUESTED
         )
         // Once it has expired, its lifetime is wrong as well.

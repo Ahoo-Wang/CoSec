@@ -565,7 +565,9 @@ Every request with a token checks revocation, without blocking. Four properties 
   worse. Keep access tokens short-lived so this window stays small, or set
   `cosec.authentication.revocation.fail-closed: true` to answer `503` instead. Each token so accepted is counted
   (`cosec.revocation.unchecked`, [Metrics](../operations/observability.md#metrics)) and logged at `WARN`, at most every
-  10 seconds.
+  10 seconds. The starter states the choice from that property; a `TokenAuthenticator` you build states it too, as its
+  third parameter, `acceptUnavailableRevocations`, which has no default (`PIP-7`): `true` accepts as above, `false`
+  answers `503` ([Authenticators](../architecture/extending.md#authenticators)).
 - **A refresh fails while Redis cannot be read.** A token is never issued on a revocation read that failed (`IDN-14`):
   issued then, it would be named by no revocation, neither the old token's nor its principal's, and outlive both.
   `RefreshTokenAuthentication` throws the `RevocationUnavailableException`; answer it `503`, as the served route does.

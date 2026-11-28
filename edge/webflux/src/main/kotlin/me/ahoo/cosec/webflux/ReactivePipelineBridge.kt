@@ -11,13 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.webflux
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.reactor.mono
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.call.ResumeDispatcher

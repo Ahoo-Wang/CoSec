@@ -36,29 +36,28 @@ description: "CoSec 8.0 改变什么、发布前处于什么状态，以及 7.x 
 
 ## 8.0 的现状 {#where-8-0-stands}
 
-上述架构已经合入 `main`，7.x 的代码已经移除。当前的预览版是 `8.0.0-beta.9`，契约完整的 beta：8.0 的读方与写方怎样对待它不认识的东西已经定下，候选发布版再把它固定到整个 8.x。身份头与存储记录的读方忽略它不认识的成员，除非写方把它列为必须理解；每个凭证都说明它属于人还是工作负载，由这个种类而不是方法名决定谁能审批、谁能用应急访问；将来的模式语法需要的字符已被保留；每个读存储的进程都报告自己的发布版本；每次构建都对着上一个发布版测试（[预览版之间的升级](../operations/upgrading-previews.md#from-8-0-0-beta-8)）。它基于 Spring Boot 4.2 与 CoCache 8.2 构建。接下来是候选发布版。候选发布版之前还差什么，见 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md)，由它负责跟踪；本页只写你可以依赖什么。
+8.0 已正式发布：[`8.0.0`](https://github.com/Ahoo-Wang/CoSec/releases/tag/v8.0.0)。上述架构就是 `main` 上的代码，7.x 的代码已从中移除。应用编译时面对的公共面已经定下：哪些稳定、哪些在整个 8.0 里仍是实验性的、哪些是 CoSec 自己的（[稳定性等级](../architecture/extending.md#stability-levels)）。每次构建都对着上一个发布版测试，两者共用一个存储与一个网络。它基于 Spring Boot 4.2 与 CoCache 8.2 构建。接下来 8.1 及以后的事，见 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md)，由它负责跟踪；本页只写你可以依赖什么。
 
 ## 发布策略 {#release-policy}
 
-- **8.0 的预发布版（alpha 和 beta，最新为 `8.0.0-beta.9`）是预览版，不承诺兼容性。** 公共 API、`cosec.*` 属性、文档与线上格式（`schema: 2`、`CoSec-Identity`）
-  以及授权语义，在之后的任何 alpha 或 RC 中都可能改变，预览版之间不提供迁移路径。请在生产以外试用，暂时不要在它上面构建。
-- 候选发布版要等上述检查完成：对整个系统的两轮审查（RC 安全审查，然后按模块审查）及其发现全部修复，以及 ABI 校验（GA 时冻结公共 API，RFC 0011 D4）。此后 8.0 才遵循语义化版本。
+- **从 8.0.0 起遵循语义化版本。** 公共 API、`cosec.*` 属性或授权语义只在主版本中删除或改变；ABI 校验让公共 API 与它的转储一致（RFC 0011 D4）。标为 `@ExperimentalCoSecApi` 的部分可能在次版本中改变，发布说明会写明。
+- **两个相邻次版本可以混合运行。** 从 8.0.0 起，8.n 与 8.n+1 可以在一个部署里并存，先升级哪一边都可以，并支持回滚一个次版本（[承诺什么](../operations/upgrading.md#what-is-promised)）。
+- **8.0 的预发布版本是预览版。** 8.0.0 的 alpha、beta 与候选发布版彼此之间、对 8.0.0 都不作任何承诺：运行其中之一的部署按发布说明升级到 8.0.0，不在上面的承诺之内。
 - **8.0 不比 7.0 慢。** 性能预算以 7.0 的实测数字设定：编译执行的授权吞吐与 Pipeline 吞吐不低于 7.0 的 100 %，分配不高于 7.0
   （RFC 0008 §3.8）。预算先在端到端切片上测量；在从 7.x 切换的变更合入之前，这些预算已经达标。
 
-## 给 7.x 用户 {#for-7-x-users-today}
+## 给 7.x 用户 {#for-7-x-users}
 
-- `7.x` 接收安全和关键修复，直到 8.0 GA 之后 6 个月；`release/6.1.x` 只接收安全修复
+- **升级到 8.0。** [升级](../operations/upgrading.md)先给出 7.x 部署的检查清单，再按领域给出每一处变化；`cosec-migrate` 转换 7.x 的数据。服务、网关与客户端一起迁移：顺序见该页。
+- `7.x` 接收安全和关键修复，直到 2027-05-26，即 8.0.0（2026-11-26 发布）之后 6 个月；`release/6.1.x` 只接收安全修复
   （[`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md)）。
-- 最新的修复是 [7.0.2](https://github.com/Ahoo-Wang/CoSec/releases/tag/v7.0.2)：策略解码器现在拒绝格式错误的策略
-  （未知字段、应为列表处写了标量、重复键），不再把它们编译成范围更大的策略。升级前先读它的升级说明：已存入 Redis 的策略在重新发布之前，可能让请求失败。
+- 7.x 最新的修复是 [7.0.2](https://github.com/Ahoo-Wang/CoSec/releases/tag/v7.0.2)：策略解码器拒绝格式错误的策略
+  （未知字段、应为列表处写了标量、重复键），不再把它们编译成范围更大的策略。升级之前请运行 7.0.2，并读它的升级说明：已存入 Redis 的策略在重新发布之前，可能让请求失败。
 - 最新的安全公告是
   [GHSA-2293-jx8h-56m8](https://github.com/Ahoo-Wang/CoSec/security/advisories/GHSA-2293-jx8h-56m8)，已在 7.0.1 与 6.1.2 中修复。
-- 现在该做的：生产环境继续用 7.0.2，即最新的 7.0.x。想评估 8.0，在测试环境中试用最新的预发布版（`8.0.0-beta.9`，需要 Java 21），配合[升级](../operations/upgrading.md)；
-  RC 之前还会有改动。
 
 ## 如何跟进 {#how-to-follow}
 
 - [RFC 索引](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/rfc)：设计、决定与待决问题。
-- [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md)：工作的现状、候选发布版的门槛，以及留到 8.1 的事项。
+- [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md)：工作的现状，以及 8.1 的计划。
 - GitHub 上的 [Issues](https://github.com/Ahoo-Wang/CoSec/issues) 与 [Pull Requests](https://github.com/Ahoo-Wang/CoSec/pulls)。
