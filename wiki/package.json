@@ -17,7 +17,7 @@
     "check:docs": "node .vitepress/check-docs.mjs && node scripts/check-legacy.mjs && node scripts/check-contract.mjs && node scripts/check-problem-pages.mjs"
   },
   "devDependencies": {
-    "mermaid": "^12.2.0",
+    "mermaid": "^12.3.0",
     "svg-pan-zoom": "^3.6.2",
     "vitepress": "^1.6.4",
     "vitepress-plugin-mermaid": "^2.0.17"
