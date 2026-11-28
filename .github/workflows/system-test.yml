@@ -216,7 +216,7 @@ jobs:
         if: ${{ !cancelled() && matrix.leg == 'control-host' }}
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
-          version: 11.28.13
+          version: 12.23.0
 
       - name: Set up Node
         if: ${{ !cancelled() && matrix.leg == 'control-host' }}
